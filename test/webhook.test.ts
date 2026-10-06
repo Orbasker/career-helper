@@ -1,0 +1,50 @@
+import { webhookCallback } from "grammy";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createPgServices } from "../src/app/postgres/index.js";
+import { createBot } from "../src/bot/bot.js";
+import { webhookSecret } from "../src/bot/telegram-env.js";
+import { messages } from "../src/bot/views.js";
+import { createTestDb } from "./support/db.js";
+import { BOT_INFO, captureApiCalls, textUpdate, type ApiCall } from "./support/telegram.js";
+
+const TOKEN = "123:test";
+let close: () => Promise<void>;
+let calls: ApiCall[];
+let handle: (request: Request) => Promise<Response>;
+
+beforeEach(async () => {
+  const testDb = await createTestDb();
+  close = testDb.close;
+  const bot = createBot(TOKEN, createPgServices(testDb.db), { botInfo: BOT_INFO });
+  calls = captureApiCalls(bot);
+  handle = webhookCallback(bot, "std/http", { secretToken: webhookSecret(TOKEN) });
+});
+
+afterEach(async () => {
+  await close();
+});
+
+const post = (secret: string) =>
+  new Request("https://example.test/api/telegram", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-telegram-bot-api-secret-token": secret },
+    body: JSON.stringify(textUpdate("/help")),
+  });
+
+describe("telegram webhook", () => {
+  it("rejects requests without the derived secret", async () => {
+    const response = await handle(post("wrong"));
+    expect(response.status).toBe(401);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("handles updates signed with the derived secret", async () => {
+    const response = await handle(post(webhookSecret(TOKEN)));
+    expect(response.status).toBe(200);
+    expect(calls.map((c) => c.payload.text)).toEqual([messages.help]);
+  });
+
+  it("derives a secret Telegram accepts", () => {
+    expect(webhookSecret(TOKEN)).toMatch(/^[A-Za-z0-9_-]{1,256}$/);
+  });
+});
