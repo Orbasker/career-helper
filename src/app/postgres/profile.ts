@@ -8,7 +8,18 @@ import type { ProfileView } from "../services.js";
 
 export type ApplyMode = "draft" | "confirmed";
 
-export async function loadSnapshot(db: Db, userId: string): Promise<ProfileSnapshot> {
+/** `verifiedOnly` limits experiences and facts to what the user confirmed; otherwise only rejected ones are hidden. */
+export async function loadSnapshot(
+  db: Db,
+  userId: string,
+  { verifiedOnly = false }: { verifiedOnly?: boolean } = {},
+): Promise<ProfileSnapshot> {
+  const experienceVisible = verifiedOnly
+    ? eq(workExperiences.verificationStatus, "verified")
+    : ne(workExperiences.verificationStatus, "rejected");
+  const factVisible = verifiedOnly
+    ? eq(careerFacts.verificationStatus, "verified")
+    : ne(careerFacts.verificationStatus, "rejected");
   const [profile] = await db
     .select({
       headline: careerProfiles.headline,
@@ -34,7 +45,7 @@ export async function loadSnapshot(db: Db, userId: string): Promise<ProfileSnaps
       isCurrent: workExperiences.isCurrent,
     })
     .from(workExperiences)
-    .where(and(eq(workExperiences.userId, userId), ne(workExperiences.verificationStatus, "rejected")))
+    .where(and(eq(workExperiences.userId, userId), experienceVisible))
     .orderBy(desc(workExperiences.isCurrent), sql`${workExperiences.startDate} desc nulls last`, asc(workExperiences.createdAt));
   const facts = await db
     .select({
@@ -44,7 +55,7 @@ export async function loadSnapshot(db: Db, userId: string): Promise<ProfileSnaps
       workExperienceId: careerFacts.workExperienceId,
     })
     .from(careerFacts)
-    .where(and(eq(careerFacts.userId, userId), ne(careerFacts.verificationStatus, "rejected")))
+    .where(and(eq(careerFacts.userId, userId), factVisible))
     .orderBy(asc(careerFacts.createdAt));
   const prefs = await db
     .select({
