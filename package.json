@@ -13,6 +13,7 @@
     "bot": "bun src/main.ts",
     "bot:dev": "bun --watch src/main.ts",
     "ingest": "bun scripts/ingest.ts",
+    "match": "bun scripts/match.ts",
     "vercel-build": "tsc && bun scripts/vercel-build.ts"
   },
   "dependencies": {
