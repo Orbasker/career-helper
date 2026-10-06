@@ -1,9 +1,10 @@
-import { webhookCallback } from "grammy";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createPgServices } from "../src/app/postgres/index.js";
 import { createBot } from "../src/bot/bot.js";
 import { webhookSecret } from "../src/bot/telegram-env.js";
+import { createWebhookHandler } from "../src/bot/webhook.js";
 import { messages } from "../src/bot/views.js";
+import { FakeProfileAssistant } from "./support/assistant.js";
 import { createTestDb } from "./support/db.js";
 import { BOT_INFO, captureApiCalls, textUpdate, type ApiCall } from "./support/telegram.js";
 
@@ -11,13 +12,15 @@ const TOKEN = "123:test";
 let close: () => Promise<void>;
 let calls: ApiCall[];
 let handle: (request: Request) => Promise<Response>;
+let background: Promise<unknown>[];
 
 beforeEach(async () => {
   const testDb = await createTestDb();
   close = testDb.close;
-  const bot = createBot(TOKEN, createPgServices(testDb.db), { botInfo: BOT_INFO });
+  const bot = createBot(TOKEN, createPgServices(testDb.db, new FakeProfileAssistant()), { botInfo: BOT_INFO });
   calls = captureApiCalls(bot);
-  handle = webhookCallback(bot, "std/http", { secretToken: webhookSecret(TOKEN) });
+  background = [];
+  handle = createWebhookHandler(bot, webhookSecret(TOKEN), (task) => background.push(task));
 });
 
 afterEach(async () => {
@@ -35,12 +38,15 @@ describe("telegram webhook", () => {
   it("rejects requests without the derived secret", async () => {
     const response = await handle(post("wrong"));
     expect(response.status).toBe(401);
+    expect(background).toHaveLength(0);
     expect(calls).toHaveLength(0);
   });
 
-  it("handles updates signed with the derived secret", async () => {
+  it("acknowledges signed updates immediately and handles them in the background", async () => {
     const response = await handle(post(webhookSecret(TOKEN)));
     expect(response.status).toBe(200);
+    expect(background).toHaveLength(1);
+    await Promise.all(background);
     expect(calls.map((c) => c.payload.text)).toEqual([messages.help]);
   });
 

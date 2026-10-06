@@ -25,9 +25,9 @@ export class PgUserService implements UserService {
       })
       .returning({ id: users.id });
     const [profile] = await this.db
-      .select({ id: careerProfiles.id })
+      .select({ status: careerProfiles.status })
       .from(careerProfiles)
       .where(eq(careerProfiles.userId, user!.id));
-    return { userId: user!.id, hasProfile: profile !== undefined };
+    return { userId: user!.id, hasProfile: profile?.status === "confirmed" };
   }
 }

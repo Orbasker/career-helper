@@ -36,6 +36,7 @@ import {
   PREFERENCE_KINDS,
   PREFERENCE_ORIGINS,
   PREFERENCE_STATUSES,
+  PROFILE_SOURCE_KINDS,
   PROFILE_STATUSES,
   SENIORITY_LEVELS,
   STAGE_OUTCOMES,
@@ -48,6 +49,7 @@ export const workMode = pgEnum("work_mode", WORK_MODES);
 export const employmentType = pgEnum("employment_type", EMPLOYMENT_TYPES);
 export const seniorityLevel = pgEnum("seniority_level", SENIORITY_LEVELS);
 export const profileStatus = pgEnum("profile_status", PROFILE_STATUSES);
+export const profileSourceKind = pgEnum("profile_source_kind", PROFILE_SOURCE_KINDS);
 export const verificationStatus = pgEnum("verification_status", VERIFICATION_STATUSES);
 export const factOrigin = pgEnum("fact_origin", FACT_ORIGINS);
 export const careerFactKind = pgEnum("career_fact_kind", CAREER_FACT_KINDS);
@@ -98,12 +100,29 @@ export const careerProfiles = pgTable("career_profiles", {
   summary: text("summary"),
   currentSeniority: seniorityLevel("current_seniority"),
   managementScope: text("management_scope"),
+  linkedinUrl: text("linkedin_url"),
   openToAdjacentRoles: boolean("open_to_adjacent_roles").notNull().default(true),
   revision: integer("revision").notNull().default(1),
   confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
+
+export const profileSources = pgTable(
+  "profile_sources",
+  {
+    id: id(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: profileSourceKind("kind").notNull(),
+    fileRef: text("file_ref"),
+    fileName: text("file_name"),
+    content: text("content").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("profile_sources_user_idx").on(t.userId, t.createdAt)],
+);
 
 export const workExperiences = pgTable(
   "work_experiences",

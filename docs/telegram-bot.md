@@ -6,15 +6,37 @@
 
 | Trigger | Service call | Result |
 | --- | --- | --- |
-| `/start` (no profile) | `onboarding.start` | Asks for CV text, target roles, hard constraints; saves the master CV text, proposed preferences and a draft profile. |
-| `/start` (has profile) | — | Welcome back + main menu. |
+| `/start` (no confirmed profile) | `onboarding.start` | Clears any unconfirmed draft and starts profile onboarding (below). |
+| `/start` (confirmed profile) | — | Welcome back + main menu. |
+| `/profile` or **👤 My profile** | `conversation.showProfile` | Current confirmed profile: roles, facts, skills, preferences. |
 | `/new` or **What's new?** | `matches.latest` | Up to 5 `ready`/`notified` matches with a **Details** button. |
 | **Details** | `matches.details` | Job, fit evidence, transferable skills, gaps, source link, feedback and CV buttons. |
 | 👍 / 👎 | `feedback.record` | Appends feedback; 👎 dismisses the match. |
 | **Tailor my CV** | `cv.requestTailored` | Creates a `requested` CV version (one open request per match). |
-| Any other text | `conversation.handleText` | Answers the current onboarding question, otherwise stored as a proposed preference. |
+| Document | `onboarding.addDocument` | During onboarding: stores the CV / LinkedIn PDF text as a `profile_source`. |
+| Any other text | `conversation.handleText` | Onboarding answer, review correction, or a natural-language profile edit. |
 
-Callback data is `job:<matchId>`, `fb:<i|n>:<matchId>`, `cv:<matchId>` (≤ 64 bytes). Only private chats are handled.
+### Onboarding
+
+`conversation_states.step` walks through:
+
+1. `linkedin` — LinkedIn URL (or *skip*). LinkedIn can't be fetched directly, so the bot asks for the profile's **Save to PDF** export instead.
+2. `documents` — CV / LinkedIn PDF (PDF, DOCX, TXT) or pasted text, repeatable. **Analyze** (`ob:analyze`) starts extraction.
+3. `analyzing` — `ProfileAssistant.extract` turns all sources into unverified `work_experiences` / `career_facts` and `proposed` preferences, plus up to 4 follow-up questions for missing high-value info.
+4. `questions` — each answer is interpreted into draft changes; *skip* moves on.
+5. `review` — the full draft is shown; free-text corrections update the draft. **Confirm profile** (`ob:confirm`) verifies all facts, activates preferences and marks the profile `confirmed`.
+
+### Continuous editing
+
+Once confirmed, any free text is interpreted against the current profile (`ProfileAssistant.interpret`). Proposed changes are shown as a diff with **Apply** / **Cancel** (`pe:a:<token>` / `pe:c:<token>`) and stored in `conversation_states` (`flow = profile_edit`) until the user decides; nothing becomes durable before **Apply**. Applying bumps `career_profiles.revision`. Corrected facts are rejected and replaced (never edited in place), removed preferences become `retired`, and replacements are linked through `supersedes_id`.
+
+The LLM only sees per-request aliases (`e1`, `f2`, `p3`) for the user's own items, and every write is scoped by `user_id`, so an edit can never touch another user's data.
+
+### LLM
+
+`src/ai/profile-assistant.ts` calls `anthropic/claude-sonnet-5.5` through Vercel AI Gateway (AI SDK structured output). On Vercel it authenticates with OIDC automatically; locally run `vercel env pull` (for `VERCEL_OIDC_TOKEN`) or set `AI_GATEWAY_API_KEY`. Tests use a fake assistant.
+
+Callback data is `job:<matchId>`, `fb:<i|n>:<matchId>`, `cv:<matchId>`, `ob:analyze`, `ob:confirm`, `pe:<a|c>:<token>` (≤ 64 bytes). Only private chats are handled.
 
 ## Running locally
 
@@ -28,7 +50,7 @@ Local polling refuses to start if the token already has a webhook (polling would
 
 ## Deploying on Vercel
 
-Production runs as a webhook: Telegram POSTs updates to `api/telegram.ts`, which verifies the `X-Telegram-Bot-Api-Secret-Token` header (derived from the bot token) before handling them.
+Production runs as a webhook: Telegram POSTs updates to `api/telegram.ts`, which verifies the `X-Telegram-Bot-Api-Secret-Token` header (derived from the bot token), acknowledges immediately and handles the update in the background with `waitUntil`, so slow LLM calls never hit Telegram's webhook timeout.
 
 `bun run vercel-build` typechecks and, on production builds only (`VERCEL_ENV=production`, i.e. merges to `main`), applies database migrations and registers the webhook at `https://$VERCEL_PROJECT_PRODUCTION_URL/api/telegram`. Preview builds skip both because they share the production database.
 
