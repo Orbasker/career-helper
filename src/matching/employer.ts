@@ -19,14 +19,18 @@ export function employerRelation(jobCompany: string | null, history: readonly Em
   if (!company) return null;
   const sameCompany = (employer: string) => {
     const name = normalizeCompany(employer);
-    if (!name) return false;
-    const [shorter, longer] = name.length <= company.length ? [name, company] : [company, name];
-    return longer === shorter || longer.startsWith(`${shorter} `);
+    return name !== null && sameNormalizedCompany(name, company);
   };
   const current = history.find((e) => e.isCurrent && sameCompany(e.employer));
   if (current) return { kind: "current", employer: current.employer };
   const former = history.find((e) => sameCompany(e.employer));
   return former ? { kind: "former", employer: former.employer } : null;
+}
+
+/** Two normalized company names refer to the same company when one equals the other or starts it as whole words. */
+export function sameNormalizedCompany(a: string, b: string): boolean {
+  const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
+  return longer === shorter || longer.startsWith(`${shorter} `);
 }
 
 /** Verified employers per user, for flagging jobs at companies they know from the inside. */

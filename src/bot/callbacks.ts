@@ -8,6 +8,7 @@ export type CallbackAction =
   | { type: "cv_decision"; versionId: string; approve: boolean }
   | { type: "cv_document"; versionId: string }
   | { type: "site_remove"; siteId: string }
+  | { type: "connections_delete" }
   | { type: "onboarding_analyze" }
   | { type: "onboarding_confirm" }
   | { type: "edit_apply"; token: string }
@@ -43,6 +44,8 @@ export function encodeCallback(action: CallbackAction): string {
       return `cvf:${action.versionId}`;
     case "site_remove":
       return `st:x:${action.siteId}`;
+    case "connections_delete":
+      return "cn:delete";
     case "onboarding_analyze":
       return "ob:analyze";
     case "onboarding_confirm":
@@ -64,6 +67,7 @@ export function decodeCallback(data: string): CallbackAction | null {
   const parts = data.split(":");
   if (data === "ob:analyze") return { type: "onboarding_analyze" };
   if (data === "ob:confirm") return { type: "onboarding_confirm" };
+  if (data === "cn:delete") return { type: "connections_delete" };
   if (parts.length === 3 && parts[0] === "pe" && TOKEN.test(parts[2]!)) {
     if (parts[1] === "a") return { type: "edit_apply", token: parts[2]! };
     if (parts[1] === "c") return { type: "edit_cancel", token: parts[2]! };

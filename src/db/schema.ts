@@ -239,6 +239,24 @@ export const userJobSites = pgTable(
   (t) => [uniqueIndex("user_job_sites_user_domain_uq").on(t.userId, t.domain)],
 );
 
+export const connections = pgTable(
+  "connections",
+  {
+    id: id(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    fullName: text("full_name").notNull(),
+    profileUrl: text("profile_url"),
+    company: text("company"),
+    normalizedCompany: text("normalized_company"),
+    position: text("position"),
+    connectedOn: date("connected_on"),
+    importedAt: timestamp("imported_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("connections_user_company_idx").on(t.userId, t.normalizedCompany)],
+);
+
 export const rawJobRecords = pgTable(
   "raw_job_records",
   {

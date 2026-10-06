@@ -6,6 +6,8 @@ import {
   MY_PROFILE_LABEL,
   WHATS_NEW_LABEL,
   addSiteReply,
+  connectionsImportReply,
+  connectionsView,
   cvDraftViews,
   feedbackReasonView,
   mainMenu,
@@ -19,6 +21,9 @@ import {
 } from "./views.js";
 
 export const LATEST_MATCHES_LIMIT = 5;
+
+const CONNECTIONS_FILE = /\.(csv|zip)$/i;
+const FORGET_CONNECTIONS = /\b(delete|remove|forget|erase)\b.*\b(my )?(linkedin )?(connections|contacts)\b/i;
 
 /** "search on example.co.il", "also look at https://jobs.example.com" and similar requests to add a job site. */
 const SITE_REQUEST = /\b(?:search|look|check)\b[^.?!\n]*?\b(?:on|in|at)\s+((?:https?:\/\/)?(?:[\w-]+\.)+[a-z]{2,}(?:\/\S*)?)/i;
@@ -145,6 +150,11 @@ export function createBot(
     await ctx.reply(addSiteReply(await services.sites.add(ctx.userId, input)), { ...html, reply_markup: mainMenu });
   };
   bot.command("sites", showSites);
+  const showConnections = async (ctx: BotContext) => {
+    const view = connectionsView(await services.connections.summary(ctx.userId));
+    await ctx.reply(view.text, { ...html, reply_markup: view.keyboard ?? mainMenu });
+  };
+  bot.command("connections", showConnections);
   bot.command("stats", async (ctx) => {
     if (!ctx.from || !options.adminTelegramIds?.includes(ctx.from.id)) {
       await ctx.reply(messages.help, { ...html, reply_markup: mainMenu });
@@ -172,11 +182,18 @@ export function createBot(
     await typing(ctx);
     const file = await ctx.getFile();
     if (!file.file_path) throw new Error("Telegram returned a file without a path");
+    const fileName = document.file_name ?? null;
+    const data = await io.downloadFile(file.file_path);
+    if (fileName && CONNECTIONS_FILE.test(fileName)) {
+      const outcome = await services.connections.import(ctx.userId, { data, fileName });
+      await ctx.reply(connectionsImportReply(outcome), { ...html, reply_markup: mainMenu });
+      return;
+    }
     const reply = await services.onboarding.addDocument(ctx.userId, {
       fileRef: document.file_id,
-      fileName: document.file_name ?? null,
+      fileName,
       mimeType: document.mime_type ?? null,
-      data: await io.downloadFile(file.file_path),
+      data,
     });
     await sendReplies(ctx, [reply]);
   });
@@ -266,6 +283,13 @@ export function createBot(
         }
         return;
       }
+      case "connections_delete": {
+        const deleted = await services.connections.forget(ctx.userId);
+        await ctx.answerCallbackQuery();
+        await ctx.editMessageReplyMarkup().catch(() => undefined);
+        await ctx.reply(deleted ? messages.connectionsDeleted : messages.connectionsNone, { ...html, reply_markup: mainMenu });
+        return;
+      }
       case "site_remove": {
         const removed = await services.sites.remove(ctx.userId, action.siteId);
         await ctx.answerCallbackQuery({ text: removed ? messages.siteRemoved : messages.expired });
@@ -321,6 +345,11 @@ export function createBot(
       await ctx.reply(messages.help, { ...html, reply_markup: mainMenu });
       return;
     }
+    if (FORGET_CONNECTIONS.test(ctx.message.text)) {
+      const deleted = await services.connections.forget(ctx.userId);
+      await ctx.reply(deleted ? messages.connectionsDeleted : messages.connectionsNone, { ...html, reply_markup: mainMenu });
+      return;
+    }
     const siteRequest = ctx.message.text.match(SITE_REQUEST);
     if (siteRequest && ctx.hasProfile) {
       await addSite(ctx, siteRequest[1]!);
@@ -346,6 +375,7 @@ export const BOT_COMMANDS = [
   { command: "new", description: "Latest job matches" },
   { command: "profile", description: "Your career profile" },
   { command: "sites", description: "Job sites I search for you" },
+  { command: "connections", description: "Who you know at matched companies" },
   { command: "start", description: "Set up your career profile" },
   { command: "help", description: "What I can do" },
 ];
