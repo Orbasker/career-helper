@@ -2,7 +2,9 @@ import { InlineKeyboard, Keyboard } from "grammy";
 import { formatMonth } from "../domain/dates.js";
 import type { CareerFactKind, MatchRecommendation, PreferenceKind, ProfileSourceKind } from "../domain/enums.js";
 import type {
+  AddSiteOutcome,
   CvDraftView,
+  JobSiteView,
   MatchDetails,
   MatchSummary,
   PreferenceProposalView,
@@ -84,10 +86,19 @@ export const messages = {
     "<b>What I can do</b>",
     "• /new — your latest matches",
     "• /profile — your career profile",
+    "• /sites — job sites I search for you (add one with /addsite example.co.il)",
     "• /start — set up your profile",
     "• Tell me anything to update your profile (e.g. \"no more than 40 minutes commute\", \"add that I managed X\").",
   ].join("\n"),
   error: "Something went wrong on my side. Please try again in a moment.",
+  noSites:
+    "Besides the company job boards I check every day, I search the web for jobs that fit your profile.\n\nAdd your favourite job sites and I'll search them too: send <b>/addsite</b> followed by the site, e.g. <i>/addsite example.co.il</i>.",
+  sitesIntro: "<b>Job sites I search for you</b>\nI also search the open web and the company job boards I check every day.",
+  sitesOutro: "Add another with <b>/addsite</b> followed by the site. Tap a site to remove it.",
+  siteUsage: "Send <b>/addsite</b> followed by the site, e.g. <i>/addsite example.co.il</i>.",
+  siteInvalid: "That doesn't look like a website. Send something like <i>/addsite example.co.il</i>.",
+  siteLimit: "You already have 20 sites, the most I can search. Remove one with /sites first.",
+  siteRemoved: "Removed. I won't search that site anymore.",
 };
 
 export function employerNote(match: Pick<MatchSummary, "employerRelation">): string | null {
@@ -231,6 +242,29 @@ export function cvDraftViews(draft: CvDraftView): View[] {
       .text("✅ Approve", encodeCallback({ type: "cv_decision", versionId, approve: true }))
       .text("🗑 Discard", encodeCallback({ type: "cv_decision", versionId, approve: false })),
   );
+}
+
+export function sitesView(sites: JobSiteView[]): { text: string; keyboard?: InlineKeyboard } {
+  if (sites.length === 0) return { text: messages.noSites };
+  const keyboard = new InlineKeyboard();
+  for (const site of sites) keyboard.text(`✖️ ${site.domain}`, encodeCallback({ type: "site_remove", siteId: site.id })).row();
+  const list = sites.map((s) => `• ${escapeHtml(s.domain)}`).join("\n");
+  return { text: `${messages.sitesIntro}\n\n${list}\n\n${messages.sitesOutro}`, keyboard };
+}
+
+export function addSiteReply(outcome: AddSiteOutcome): string {
+  switch (outcome.kind) {
+    case "added":
+      return `Added <b>${escapeHtml(outcome.site.domain)}</b> ✅ I'll search it for jobs that fit you in my next daily search.`;
+    case "exists":
+      return `I'm already searching <b>${escapeHtml(outcome.site.domain)}</b> for you.`;
+    case "board":
+      return "That's a company job board, so I added it to the boards I check every day ✅";
+    case "invalid":
+      return messages.siteInvalid;
+    case "limit":
+      return messages.siteLimit;
+  }
 }
 
 const SOURCE_LABELS: Record<ProfileSourceKind, string> = {

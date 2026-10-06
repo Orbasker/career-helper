@@ -69,7 +69,7 @@ export type PreferenceStatus = (typeof PREFERENCE_STATUSES)[number];
 export const PREFERENCE_ORIGINS = ["onboarding", "user_stated", "inferred_from_feedback"] as const;
 export type PreferenceOrigin = (typeof PREFERENCE_ORIGINS)[number];
 
-export const JOB_SOURCE_KINDS = ["api", "rss", "scraper", "manual"] as const;
+export const JOB_SOURCE_KINDS = ["api", "rss", "scraper", "manual", "web_search"] as const;
 export type JobSourceKind = (typeof JOB_SOURCE_KINDS)[number];
 
 export const DEDUP_METHODS = ["deterministic_key", "similarity", "manual"] as const;

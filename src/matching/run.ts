@@ -8,6 +8,7 @@ import { applyHardFilters, type HardFilterResult } from "./hard-filters.js";
 import { RELEVANCE_THRESHOLD, buildRelevanceProfile, scoreRelevance, type RelevanceResult } from "./relevance.js";
 
 export const DEFAULT_MAX_JOB_AGE_DAYS = 30;
+const WRITE_BATCH_SIZE = 200;
 
 export interface CheapMatchingOptions {
   now?: () => Date;
@@ -91,53 +92,67 @@ async function matchUser(
     .where(and(isNull(matches.id), gte(jobs.collectedAt, cutoff)))
     .orderBy(asc(jobs.collectedAt), asc(jobs.id));
 
-  for (const job of candidates) {
+  const results = candidates.map((job) => {
     const hard = applyHardFilters(job, snapshot.preferences);
     const relevance = hard.passed ? scoreRelevance(job, relevanceProfile, threshold) : null;
-    const passed = relevance?.passed ?? false;
+    return { job, hard, relevance, passed: relevance?.passed ?? false };
+  });
 
+  for (let i = 0; i < results.length; i += WRITE_BATCH_SIZE) {
+    const batch = results.slice(i, i + WRITE_BATCH_SIZE);
     const inserted = await db.transaction(async (tx) => {
-      const [match] = await tx
+      const rows = await tx
         .insert(matches)
-        .values({
-          userId,
-          duplicateGroupId: job.groupId,
-          jobId: job.jobId,
-          status: passed ? "pending" : "filtered_out",
-          stageReached: relevance ? "cheap_relevance" : "hard_filter",
-          relevanceScore: relevance?.score ?? null,
-        })
+        .values(
+          batch.map(({ job, relevance, passed }) => ({
+            userId,
+            duplicateGroupId: job.groupId,
+            jobId: job.jobId,
+            status: passed ? ("pending" as const) : ("filtered_out" as const),
+            stageReached: relevance ? ("cheap_relevance" as const) : ("hard_filter" as const),
+            relevanceScore: relevance?.score ?? null,
+          })),
+        )
         .onConflictDoNothing({ target: [matches.userId, matches.duplicateGroupId] })
-        .returning({ id: matches.id });
-      if (!match) return false;
+        .returning({ id: matches.id, groupId: matches.duplicateGroupId });
+      const matchIds = new Map(rows.map((r) => [r.groupId, r.id]));
+      const kept = batch.filter((r) => matchIds.has(r.job.groupId));
 
-      await tx.insert(matchEvaluations).values({
-        matchId: match.id,
-        stage: "hard_filter",
-        outcome: hard.passed ? "passed" : "rejected",
-        explanation: explainHardFilter(hard),
-        evidence: { ...EMPTY_EVIDENCE, failedConstraintIds: hard.failures.map((f) => f.preferenceId) },
-        profileRevision,
+      const evaluations = kept.flatMap(({ job, hard, relevance }) => {
+        const matchId = matchIds.get(job.groupId)!;
+        const stages: (typeof matchEvaluations.$inferInsert)[] = [
+          {
+            matchId,
+            stage: "hard_filter",
+            outcome: hard.passed ? "passed" : "rejected",
+            explanation: explainHardFilter(hard),
+            evidence: { ...EMPTY_EVIDENCE, failedConstraintIds: hard.failures.map((f) => f.preferenceId) },
+            profileRevision,
+          },
+        ];
+        if (relevance) {
+          stages.push({
+            matchId,
+            stage: "cheap_relevance",
+            outcome: relevance.passed ? "passed" : "rejected",
+            score: relevance.score,
+            explanation: explainRelevance(relevance, threshold),
+            evidence: { ...EMPTY_EVIDENCE, matchedTerms: relevance.matchedTerms },
+            profileRevision,
+          });
+        }
+        return stages;
       });
-      if (relevance) {
-        await tx.insert(matchEvaluations).values({
-          matchId: match.id,
-          stage: "cheap_relevance",
-          outcome: relevance.passed ? "passed" : "rejected",
-          score: relevance.score,
-          explanation: explainRelevance(relevance, threshold),
-          evidence: { ...EMPTY_EVIDENCE, matchedTerms: relevance.matchedTerms },
-          profileRevision,
-        });
-      }
-      return true;
+      if (evaluations.length) await tx.insert(matchEvaluations).values(evaluations);
+      return kept;
     });
-    if (!inserted) continue;
 
-    report.evaluated++;
-    if (!hard.passed) report.filteredByConstraints++;
-    else if (!passed) report.filteredByRelevance++;
-    else report.passed++;
+    for (const { hard, passed } of inserted) {
+      report.evaluated++;
+      if (!hard.passed) report.filteredByConstraints++;
+      else if (!passed) report.filteredByRelevance++;
+      else report.passed++;
+    }
   }
 }
 
