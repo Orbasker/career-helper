@@ -8,7 +8,7 @@ Code: `src/pipeline/`. Entry points: `api/cron/daily.ts` (Vercel Cron) and `bun 
 | --- | --- | --- |
 | Collect, normalize, deduplicate | `runIngestion` (`docs/job-ingestion.md`) | A failing source is reported; the other sources still run. |
 | Hard filter, cheap relevance | `runCheapMatching` (`docs/matching.md`) | Only groups the user has no match for yet. |
-| Deep match | `runDeepMatching` | Up to 50 matches. No new evaluation starts after a 3-minute budget, so the run finishes within Vercel's function timeout. |
+| Deep match | `runDeepMatching` | Up to 50 matches. No new evaluation starts more than 3.5 minutes after the run began, so notifications still go out within Vercel's 300s function timeout even after a long ingestion. |
 | Notify | `runNotifications` (`notify.ts`) | One Telegram digest per user. |
 
 The stages write their results to the database as they go (`jobs`, `matches`, `match_evaluations`).

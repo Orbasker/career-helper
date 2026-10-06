@@ -235,6 +235,29 @@ describe("runDailyPipeline", () => {
     expect(notifier.digests.map((d) => d.chatId).sort()).toEqual([10, 20]);
   });
 
+  it("skips deep matching once the run is past its cutoff, but still notifies", async () => {
+    await createUser();
+    await run([boardAdapter(() => POSTINGS)], { threshold: { minRecommendation: "strong_fit", minConfidence: "low" } });
+    notifier.digests = [];
+    await db.update(matches).set({ status: "pending", stageReached: "cheap_relevance" }).where(eq(matches.status, "filtered_out"));
+
+    let clock = now().getTime();
+    const slowAdapter: JobSourceAdapter<Posting> = {
+      ...boardAdapter(() => POSTINGS),
+      *collect() {
+        clock += 240_000;
+      },
+    };
+    const report = await runDailyPipeline(
+      db,
+      { adapters: [slowAdapter], matcher: new TitleMatcher(VERDICTS), notifier },
+      { now: () => new Date(clock), log },
+    );
+
+    expect(report.deepMatching).toMatchObject({ ok: true, report: { evaluated: 0 } });
+    expect(report.notifications).toMatchObject({ ok: true, report: { matchesNotified: 1 } });
+  });
+
   it("counts matches shown by What's new? as delivered", async () => {
     const userId = await createUser();
     await run([boardAdapter(() => POSTINGS)], { threshold: { minRecommendation: "strong_fit", minConfidence: "low" } });

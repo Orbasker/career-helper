@@ -13,11 +13,12 @@ export interface DailyPipelineDeps {
   notifier: Notifier;
 }
 
-export const DEFAULT_DEEP_MATCH_BUDGET_MS = 180_000;
+/** No deep match starts later than this after the run began, leaving time to notify within the 300s function limit. */
+export const DEFAULT_DEEP_MATCH_CUTOFF_MS = 210_000;
 
 export interface DailyPipelineOptions extends NotificationOptions {
   deepMatchLimit?: number;
-  deepMatchBudgetMs?: number;
+  deepMatchCutoffMs?: number;
   log?: IngestLogger;
 }
 
@@ -42,6 +43,7 @@ export async function runDailyPipeline(
 ): Promise<DailyPipelineReport> {
   const log = options.log ?? jsonLogger;
   const now = options.now ?? (() => new Date());
+  const deepMatchDeadline = new Date(now().getTime() + (options.deepMatchCutoffMs ?? DEFAULT_DEEP_MATCH_CUTOFF_MS));
   let failed = false;
 
   const stage = async <T>(name: string, run: () => Promise<T>, hasErrors: (report: T) => boolean) => {
@@ -73,7 +75,7 @@ export async function runDailyPipeline(
       runDeepMatching(db, deps.matcher, {
         now,
         limit: options.deepMatchLimit,
-        deadline: new Date(now().getTime() + (options.deepMatchBudgetMs ?? DEFAULT_DEEP_MATCH_BUDGET_MS)),
+        deadline: deepMatchDeadline,
       }),
     (r) => r.errors.length > 0,
   );
