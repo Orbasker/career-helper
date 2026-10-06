@@ -9,12 +9,15 @@
     "typecheck": "tsc",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "bun src/db/migrate.ts"
+    "db:migrate": "bun src/db/migrate.ts",
+    "bot": "bun src/main.ts",
+    "bot:dev": "bun --watch src/main.ts"
   },
   "dependencies": {
     "@neon/config": "^1.8.4",
     "@neon/env": "^1.5.1",
     "drizzle-orm": "^0.45.3",
+    "grammy": "^1.46.0",
     "pg": "^8.23.1"
   },
   "devDependencies": {
