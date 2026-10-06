@@ -1,4 +1,5 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { AiCvTailorer, CV_TAILORING_PROMPT_VERSION } from "../src/ai/cv-tailorer.js";
 import { AiDeepMatcher, DECISION_MODEL, DEEP_MATCH_PROMPT_VERSION, EXPLANATION_MODEL } from "../src/ai/deep-matcher.js";
 import { runCvEval } from "../src/cv/cv-eval.js";
@@ -50,6 +51,7 @@ if (comparison.fixed.length) console.log(`Fixed: ${comparison.fixed.join(", ")}`
 if (comparison.regressions.length) console.log(`REGRESSIONS: ${comparison.regressions.join(", ")}`);
 
 if (args.includes("--save-baseline")) {
+  mkdirSync(dirname(BASELINE), { recursive: true });
   writeFileSync(BASELINE, `${JSON.stringify(snapshot, null, 2)}\n`);
   console.log(`Saved ${BASELINE}`);
 } else if (comparison.regressions.length) {

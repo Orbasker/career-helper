@@ -1,0 +1,22 @@
+{
+  "createdAt": "2026-10-06T20:23:26.914Z",
+  "models": {
+    "decisionModel": "typesafe-ai/jev",
+    "explanationModel": "anthropic/claude-sonnet-5.5",
+    "cvModel": "anthropic/claude-sonnet-5.5",
+    "deepMatchPrompt": "deep-match-v3",
+    "cvPrompt": "cv-tailoring-v1"
+  },
+  "suites": {
+    "matching": {
+      "passed": 12,
+      "total": 12,
+      "failing": []
+    },
+    "cv": {
+      "passed": 4,
+      "total": 4,
+      "failing": []
+    }
+  }
+}
