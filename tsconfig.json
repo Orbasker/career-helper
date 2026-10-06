@@ -10,5 +10,5 @@
     "noEmit": true,
     "types": ["node", "bun"]
   },
-  "include": ["src", "test", "neon.ts", "drizzle.config.ts", "vitest.config.ts"]
+  "include": ["src", "test", "api", "scripts", "neon.ts", "drizzle.config.ts", "vitest.config.ts"]
 }

@@ -23,3 +23,13 @@ neon env pull          # or copy .env.example to .env.local and fill it in
 bun run db:migrate
 bun run bot            # long polling; Bun loads .env.local automatically
 ```
+
+Local polling refuses to start if the token already has a webhook (polling would delete it), so use a separate dev bot token locally.
+
+## Deploying on Vercel
+
+Production runs as a webhook: Telegram POSTs updates to `api/telegram.ts`, which verifies the `X-Telegram-Bot-Api-Secret-Token` header (derived from the bot token) before handling them.
+
+`bun run vercel-build` typechecks and, on production builds only (`VERCEL_ENV=production`, i.e. merges to `main`), applies database migrations and registers the webhook at `https://$VERCEL_PROJECT_PRODUCTION_URL/api/telegram`. Preview builds skip both because they share the production database.
+
+Required Vercel env vars: `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `TELEGRAM_BOT_TOKEN`.
