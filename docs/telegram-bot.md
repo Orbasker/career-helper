@@ -9,7 +9,7 @@
 | `/start` (no confirmed profile) | `onboarding.start` | Clears any unconfirmed draft and starts profile onboarding (below). |
 | `/start` (confirmed profile) | — | Welcome back + main menu. |
 | `/profile` or **👤 My profile** | `conversation.showProfile` | Current confirmed profile: roles, facts, skills, preferences. |
-| `/new` or **What's new?** | `matches.latest` | Up to 5 `ready`/`notified` matches with a **Details** button. |
+| `/new` or **What's new?** | `matches.whatsNew` | Up to 5 matches with a **Details** button: undelivered `ready` matches first (best recommendation first), then recent `notified` ones. The `ready` matches shown become `notified`, so the daily digest does not repeat them. |
 | **Details** | `matches.details` | Job, fit evidence, transferable skills, gaps, source link, feedback and CV buttons. |
 | 👍 / 👎 | `feedback.record` | Appends feedback; 👎 dismisses the match. |
 | **Tailor my CV** | `cv.requestTailored` | Creates a `requested` CV version (one open request per match). |
@@ -54,4 +54,4 @@ Production runs as a webhook: Telegram POSTs updates to `api/telegram.ts`, which
 
 `bun run vercel-build` typechecks and, on production builds only (`VERCEL_ENV=production`, i.e. merges to `main`), applies database migrations and registers the webhook at `https://$VERCEL_PROJECT_PRODUCTION_URL/api/telegram`. Preview builds skip both because they share the production database.
 
-Required Vercel env vars: `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `TELEGRAM_BOT_TOKEN`.
+Required Vercel env vars: `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `TELEGRAM_BOT_TOKEN`, `CRON_SECRET` (daily pipeline, see `docs/pipeline.md`).

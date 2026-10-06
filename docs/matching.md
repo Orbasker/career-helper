@@ -39,7 +39,7 @@ A recall-oriented score in `[0, 1]`. A job passes when it scores at least `RELEV
 
 Only jobs collected in the last `maxJobAgeDays` (default 30) are considered. Re-running only evaluates groups the user has no match for yet. Matches are not re-evaluated when the profile changes.
 
-Run it manually with `bun run match` against `DATABASE_URL`. It exits non-zero if any user failed. It is not scheduled yet: the daily pipeline (ANI-88) will run it after ingestion.
+Run it manually with `bun run match` against `DATABASE_URL`. It exits non-zero if any user failed. The daily pipeline (`docs/pipeline.md`) runs it after ingestion.
 
 ## Deep match (`deep-match.ts`, `src/ai/deep-matcher.ts`)
 
@@ -65,7 +65,7 @@ There is deliberately no numeric score: `score` stays null, and the prompt forbi
 
 **Grounding.** The language model only sees aliases (`f3`, `e1`). `groundVerdict` maps them back to real ids and drops what it can't verify: claims that cite no known fact or experience, and excerpts that don't appear in the posting. A recommended match left with no grounded evidence drops to `low` confidence.
 
-`runDeepMatching(db, matcher, { limit })` takes `pending` matches at `cheap_relevance` for confirmed profiles, highest relevance first (default limit 50):
+`runDeepMatching(db, matcher, { limit, deadline })` takes `pending` matches at `cheap_relevance` for confirmed profiles, highest relevance first (default limit 50). No new evaluation starts after `deadline`; the rest stay pending for the next run.
 
 | Recommendation | `status` | `stage_reached` |
 | --- | --- | --- |

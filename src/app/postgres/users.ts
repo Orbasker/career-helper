@@ -19,6 +19,8 @@ export class PgUserService implements UserService {
         target: users.telegramUserId,
         set: {
           telegramChatId: identity.chatId,
+          // Messaging the bot means the user can receive digests again after blocking it.
+          notificationsEnabled: true,
           displayName: sql`coalesce(excluded.display_name, ${users.displayName})`,
           locale: sql`coalesce(excluded.locale, ${users.locale})`,
         },

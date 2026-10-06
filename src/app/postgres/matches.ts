@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { feedback, jobs, matchEvaluations, matches } from "../../db/schema.js";
 import type { Db } from "../../db/types.js";
 import type { MatchDetails, MatchService, MatchSummary } from "../services.js";
@@ -17,14 +17,23 @@ const summaryColumns = {
 export class PgMatchService implements MatchService {
   constructor(private readonly db: Db) {}
 
-  async latest(userId: string, limit: number): Promise<MatchSummary[]> {
-    return this.db
-      .select(summaryColumns)
+  async whatsNew(userId: string, limit: number): Promise<MatchSummary[]> {
+    const rows = await this.db
+      .select({ ...summaryColumns, status: matches.status })
       .from(matches)
       .innerJoin(jobs, eq(jobs.id, matches.jobId))
       .where(and(eq(matches.userId, userId), inArray(matches.status, VISIBLE_STATUSES)))
-      .orderBy(desc(matches.createdAt))
+      .orderBy(sql`${matches.status} = 'ready' desc`, asc(matches.recommendation), desc(matches.createdAt))
       .limit(limit);
+
+    const unseen = rows.filter((r) => r.status === "ready").map((r) => r.matchId);
+    if (unseen.length > 0) {
+      await this.db
+        .update(matches)
+        .set({ status: "notified", notifiedAt: new Date() })
+        .where(and(inArray(matches.id, unseen), eq(matches.status, "ready")));
+    }
+    return rows.map(({ status: _, ...summary }) => summary);
   }
 
   async details(userId: string, matchId: string): Promise<MatchDetails | null> {
