@@ -31,6 +31,8 @@ export interface DeepMatcher {
 export interface DeepMatchingOptions {
   now?: () => Date;
   limit?: number;
+  /** No new evaluation starts after this time; the rest stay pending for the next run. */
+  deadline?: Date;
 }
 
 export interface DeepMatchingReport {
@@ -80,6 +82,7 @@ export async function runDeepMatching(
 
   const snapshots = new Map<string, Promise<ProfileSnapshot>>();
   for (const { matchId, userId, profileRevision, ...job } of pending) {
+    if (options.deadline && now() >= options.deadline) break;
     try {
       let snapshot = snapshots.get(userId);
       if (!snapshot) {

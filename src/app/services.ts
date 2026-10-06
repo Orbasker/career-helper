@@ -107,7 +107,8 @@ export interface OnboardingService {
 }
 
 export interface MatchService {
-  latest(userId: string, limit: number): Promise<MatchSummary[]>;
+  /** Unseen matches first, best recommendation first, then delivered ones; returned unseen matches count as delivered. */
+  whatsNew(userId: string, limit: number): Promise<MatchSummary[]>;
   details(userId: string, matchId: string): Promise<MatchDetails | null>;
 }
 

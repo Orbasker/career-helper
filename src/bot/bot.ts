@@ -68,7 +68,7 @@ export function createBot(
   });
 
   const sendLatest = async (ctx: BotContext) => {
-    const latest = await services.matches.latest(ctx.userId, LATEST_MATCHES_LIMIT);
+    const latest = await services.matches.whatsNew(ctx.userId, LATEST_MATCHES_LIMIT);
     if (latest.length === 0) {
       await ctx.reply(messages.noMatches, { ...html, reply_markup: mainMenu });
       return;

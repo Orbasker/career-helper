@@ -81,6 +81,29 @@ export function matchListItem(match: MatchSummary): { text: string; keyboard: In
   };
 }
 
+const DIGEST_BUTTON_TITLE_LENGTH = 40;
+const DIGEST_EXPLANATION_LENGTH = 300;
+const clip = (text: string, max: number) => (text.length > max ? `${text.slice(0, max)}…` : text);
+
+export function digestView(matches: MatchSummary[], remaining: number): { text: string; keyboard: InlineKeyboard } {
+  const heading = matches.length === 1 ? "<b>1 new job match for you</b>" : `<b>${matches.length} new job matches for you</b>`;
+  const items = matches.map((match, i) => {
+    const meta = [match.company, match.location].filter((v): v is string => Boolean(v)).map(escapeHtml);
+    const lines = [`${i + 1}. <b>${escapeHtml(match.title)}</b>${meta.length > 0 ? ` — ${meta.join(" · ")}` : ""}`];
+    if (match.recommendation) lines.push(`<i>${RECOMMENDATION_LABELS[match.recommendation]}</i>`);
+    if (match.explanation) lines.push(escapeHtml(clip(match.explanation, DIGEST_EXPLANATION_LENGTH)));
+    return lines.join("\n");
+  });
+  const outro = remaining > 0 ? [`<i>+${remaining} more — tap <b>${WHATS_NEW_LABEL}</b> to see them.</i>`] : [];
+
+  const keyboard = new InlineKeyboard();
+  matches.forEach((match, i) => {
+    const label = `${i + 1}. ${clip(match.title, DIGEST_BUTTON_TITLE_LENGTH)}`;
+    keyboard.text(label, encodeCallback({ type: "job_details", matchId: match.matchId })).row();
+  });
+  return { text: [heading, ...items, ...outro].join("\n\n"), keyboard };
+}
+
 export function matchDetailsView(match: MatchDetails): { text: string; keyboard: InlineKeyboard } {
   const { text: header } = matchListItem(match);
   const sections = [header];

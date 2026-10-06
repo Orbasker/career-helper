@@ -462,6 +462,23 @@ describe("runDeepMatching", () => {
     expect(pending).toHaveLength(2);
   });
 
+  it("starts no evaluation after the deadline", async () => {
+    await setup([
+      { id: "a", title: "People Operations Lead" },
+      { id: "b", title: "HR Business Partner" },
+    ]);
+    let clock = now().getTime();
+    const matcher = new FakeMatcher(() => {
+      clock += 60_000;
+      return verdict("good_fit");
+    });
+
+    const report = await runDeepMatching(db, matcher, { now: () => new Date(clock), deadline: new Date(clock + 30_000) });
+
+    expect(report).toMatchObject({ evaluated: 1, errors: [] });
+    expect(await db.select().from(matches).where(eq(matches.status, "pending"))).toHaveLength(1);
+  });
+
   it("skips matches that did not pass cheap relevance or belong to unconfirmed profiles", async () => {
     const { userId } = await setup([
       { id: "fit", title: "People Operations Lead" },

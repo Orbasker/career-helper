@@ -81,7 +81,5 @@ where key = 'greenhouse';
 
 `runIngestion(db, adapters)` (`run.ts`) ingests each source in turn; any error in one source is caught, reported and never stops the others. It then runs `deduplicateJobs`. It logs one JSON line per source (`event: "ingest.source"`: counts, `durationMs`, invalid/failed records, errors), one for deduplication (`event: "dedup.run"`: processed, joined by key / similarity, new groups, canonical changes, error) and a run summary (`event: "ingest.run"`).
 
-- **Scheduled** — Vercel Cron calls `GET /api/cron/ingest` daily at 05:00 UTC (`vercel.json`). The handler requires `Authorization: Bearer $CRON_SECRET`, which Vercel sends automatically when `CRON_SECRET` is set, and returns per-source and dedup metrics.
+- **Scheduled** — ingestion is the first stage of the daily pipeline (`docs/pipeline.md`).
 - **Manual** — `bun run ingest [source...]` runs all sources or the given keys against `DATABASE_URL` and exits non-zero if any source or deduplication had errors.
-
-Required Vercel env var: `CRON_SECRET` (in addition to the bot's).

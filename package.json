@@ -16,6 +16,7 @@
     "match": "bun scripts/match.ts",
     "match:deep": "bun scripts/deep-match.ts",
     "eval:deep-match": "bun scripts/eval-deep-match.ts",
+    "daily": "bun scripts/daily.ts",
     "vercel-build": "tsc && bun scripts/vercel-build.ts"
   },
   "dependencies": {
