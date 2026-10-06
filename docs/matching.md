@@ -84,3 +84,16 @@ The evaluation records `model` (`typesafe-ai/jev + anthropic/claude-sonnet-5.5`)
 - **Clear negatives** must be `not_recommended`: backend engineer, financial controller and field sales; an HRBP role paying below the salary must-have; a technical recruiter role the user dislikes.
 
 Each case also fails when a recommended verdict has no grounded evidence, or when the explanation states a numeric fit score. Run `bun run eval:deep-match [decisionModel] [explanationModel]` against the real models. They default to `DECISION_MODEL` and `EXPLANATION_MODEL`, and the script exits non-zero on any failure.
+
+## Current and former employers (`employer.ts`)
+
+`employerRelation(jobCompany, history)` checks whether a job is at a company the user works at now or worked at before. It compares the job's company with the user's verified `work_experiences` employers: names are normalized and must match on whole words, so "Via" matches "Via Transportation, Inc." but not "Viasat". A current role wins over a former one.
+
+This does not change the recommendation. It is shown in the match list, the details and the digest:
+
+- **Current employer:** "🏢 Internal opportunity at Via, where you work today", with a nudge to talk to their manager or HR.
+- **Former employer:** "↩️ You worked at Juganu before".
+
+The deep matcher also tells the explanation model about it (an `<employer>` note, prompt `deep-match-v3`), so the explanation frames the job as an internal move or a return.
+
+The flag is only as current as the profile. If the user changes jobs, they update it by telling the bot (e.g. "I left Via in 2025, I now work at X").

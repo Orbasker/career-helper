@@ -90,10 +90,21 @@ export const messages = {
   error: "Something went wrong on my side. Please try again in a moment.",
 };
 
+export function employerNote(match: Pick<MatchSummary, "employerRelation">): string | null {
+  const relation = match.employerRelation;
+  if (!relation) return null;
+  const employer = escapeHtml(relation.employer);
+  return relation.kind === "current"
+    ? `🏢 <b>Internal opportunity at ${employer}</b>, where you work today. Internal moves are often easier: you already know the product and the people, so ask your manager or HR about it.`
+    : `↩️ <b>You worked at ${employer} before.</b> That's an advantage: mention it, and reach out to former colleagues there.`;
+}
+
 export function matchListItem(match: MatchSummary): { text: string; keyboard: InlineKeyboard } {
   const lines = [`<b>${escapeHtml(match.title)}</b>`];
   const meta = [match.company, match.location].filter((v): v is string => Boolean(v)).map(escapeHtml);
   if (meta.length > 0) lines.push(meta.join(" · "));
+  const note = employerNote(match);
+  if (note) lines.push(note);
   if (match.recommendation) lines.push(`<i>${RECOMMENDATION_LABELS[match.recommendation]}</i>`);
   if (match.explanation) lines.push(escapeHtml(match.explanation));
   return {
@@ -111,6 +122,8 @@ export function digestView(matches: MatchSummary[], remaining: number): { text: 
   const items = matches.map((match, i) => {
     const meta = [match.company, match.location].filter((v): v is string => Boolean(v)).map(escapeHtml);
     const lines = [`${i + 1}. <b>${escapeHtml(match.title)}</b>${meta.length > 0 ? ` — ${meta.join(" · ")}` : ""}`];
+    const note = employerNote(match);
+    if (note) lines.push(note);
     if (match.recommendation) lines.push(`<i>${RECOMMENDATION_LABELS[match.recommendation]}</i>`);
     if (match.explanation) lines.push(escapeHtml(clip(match.explanation, DIGEST_EXPLANATION_LENGTH)));
     return lines.join("\n");

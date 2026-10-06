@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { feedback, jobs, matchEvaluations, matches } from "../../db/schema.js";
 import type { Db } from "../../db/types.js";
+import { employerRelation, loadEmployerHistory } from "../../matching/employer.js";
 import type { MatchDetails, MatchService, MatchSummary } from "../services.js";
 
 const VISIBLE_STATUSES = ["ready", "notified"] as const;
@@ -33,7 +34,8 @@ export class PgMatchService implements MatchService {
         .set({ status: "notified", notifiedAt: new Date() })
         .where(and(inArray(matches.id, unseen), eq(matches.status, "ready")));
     }
-    return rows.map(({ status: _, ...summary }) => summary);
+    const history = (await loadEmployerHistory(this.db, [userId])).get(userId) ?? [];
+    return rows.map(({ status: _, ...summary }) => ({ ...summary, employerRelation: employerRelation(summary.company, history) }));
   }
 
   async details(userId: string, matchId: string): Promise<MatchDetails | null> {
@@ -64,9 +66,11 @@ export class PgMatchService implements MatchService {
       .orderBy(desc(feedback.createdAt))
       .limit(1);
 
+    const history = (await loadEmployerHistory(this.db, [userId])).get(userId) ?? [];
     const evidence = evaluation?.evidence;
     return {
       ...row,
+      employerRelation: employerRelation(row.company, history),
       fitEvidence: evidence?.fitEvidence.map((e) => e.claim) ?? [],
       gaps: evidence?.gaps ?? [],
       transferableSkills: evidence?.transferableSkills ?? [],

@@ -257,15 +257,29 @@ describe("AiDeepMatcher", () => {
 
     const verdict = await matcher.evaluate({ profile: snapshot, job: peopleOpsJob });
 
-    expect(matcher).toMatchObject({ model: "jev-mock + sonnet-mock", promptVersion: "deep-match-v2" });
+    expect(matcher).toMatchObject({ model: "jev-mock + sonnet-mock", promptVersion: "deep-match-v3" });
     expect(Object.keys(jev.calls[0]!.questions)).toEqual(["recommendation", "mustHave1", "outsidePath"]);
     expect(jev.calls[0]!.questions.mustHave1).toMatchObject({ type: "boolean" });
     expect(JSON.stringify(jev.calls[0]!.questions.mustHave1)).toContain("At least 25k ILS");
     expect(JSON.stringify(jev.calls[0]!.state)).toContain("[f1] (responsibility) Led hiring and onboarding");
     expect(llm.prompts[0]).toContain("good_fit:");
     expect(llm.prompts[0]).toContain("Title: People Operations Lead");
+    expect(llm.prompts[0]).not.toContain("the hiring company.</employer>");
     expect(verdict).toMatchObject({ recommendation: "good_fit", confidence: "high" });
     expect(verdict.evidence.fitEvidence[0]?.careerFactIds).toEqual(["fact-1"]);
+  });
+
+  it("tells the LLM when the job is at the candidate's current employer", async () => {
+    const jev = decisionModel(() => ({
+      recommendation: choice("good_fit", 0.85),
+      mustHave1: { type: "boolean", probability: 0.1 },
+      outsidePath: { type: "boolean", probability: 0.2 },
+    }));
+    const llm = languageModel(JSON.stringify(output()));
+
+    await new AiDeepMatcher(jev.model, llm.model).evaluate({ profile: snapshot, job: { ...peopleOpsJob, company: "Acme Inc." } });
+
+    expect(llm.prompts[0]).toContain("The candidate currently works at Acme, the hiring company.");
   });
 
   it("rejects on a must-have without calling the LLM", async () => {

@@ -11,6 +11,7 @@ import type {
 } from "../domain/enums.js";
 import type { ProfileChange, ProfileSnapshot } from "../domain/profile.js";
 import type { FeedbackReasonTag } from "../learning/infer.js";
+import type { EmployerRelation } from "../matching/employer.js";
 
 export interface TelegramIdentity {
   telegramUserId: number;
@@ -31,6 +32,7 @@ export interface MatchSummary {
   location: string | null;
   recommendation: MatchRecommendation | null;
   explanation: string | null;
+  employerRelation: EmployerRelation | null;
 }
 
 export interface MatchDetails extends MatchSummary {
