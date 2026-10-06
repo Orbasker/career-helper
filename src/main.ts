@@ -1,16 +1,14 @@
 import { parseEnv } from "@neon/env";
 import config from "../neon.js";
-import { AiCvTailorer } from "./ai/cv-tailorer.js";
-import { AiProfileAssistant } from "./ai/profile-assistant.js";
-import { createPgServices } from "./app/postgres/index.js";
-import { BOT_COMMANDS, createBot } from "./bot/bot.js";
+import { BOT_COMMANDS } from "./bot/bot.js";
+import { createProductionBot } from "./bot/production.js";
 import { ALLOWED_UPDATES, telegramBotToken } from "./bot/telegram-env.js";
 import { createDb } from "./db/client.js";
 
 const token = telegramBotToken();
 const { postgres } = parseEnv(config, ["DATABASE_URL"]);
 const { db, pool } = createDb(postgres.databaseUrl);
-const bot = createBot(token, createPgServices(db, new AiProfileAssistant(), new AiCvTailorer()));
+const bot = createProductionBot(token, db);
 
 const webhook = await bot.api.getWebhookInfo();
 if (webhook.url) {

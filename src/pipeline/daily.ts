@@ -1,3 +1,5 @@
+import { eq } from "drizzle-orm";
+import { pipelineRuns } from "../db/schema.js";
 import type { Db } from "../db/types.js";
 import type { JobDiscoverer } from "../discovery/plan.js";
 import { runDiscovery, type DiscoveryOptions, type DiscoveryReport } from "../discovery/run.js";
@@ -55,6 +57,12 @@ export async function runDailyPipeline(
   const deepMatchDeadline = new Date(startedAt + (options.deepMatchCutoffMs ?? DEFAULT_DEEP_MATCH_CUTOFF_MS));
   const discoveryDeadline = new Date(startedAt + (options.discovery?.cutoffMs ?? DEFAULT_DISCOVERY_CUTOFF_MS));
   let failed = false;
+  const runId = await db
+    .insert(pipelineRuns)
+    .values({ startedAt: new Date(startedAt) })
+    .returning({ id: pipelineRuns.id })
+    .then(([row]) => row?.id ?? null)
+    .catch((error) => (log({ event: "pipeline.audit_failed", error: errorMessage(error) }), null));
 
   const stage = async <T>(name: string, run: () => Promise<T>, hasErrors: (report: T) => boolean) => {
     let result: StageResult<T>;
@@ -105,5 +113,12 @@ export async function runDailyPipeline(
 
   const report: DailyPipelineReport = { discovery, ingestion, cheapMatching, deepMatching, notifications, failed };
   log({ event: "pipeline.run", failed });
+  if (runId) {
+    await db
+      .update(pipelineRuns)
+      .set({ finishedAt: now(), failed, report: report as unknown as Record<string, unknown> })
+      .where(eq(pipelineRuns.id, runId))
+      .catch((error) => log({ event: "pipeline.audit_failed", error: errorMessage(error) }));
+  }
   return report;
 }

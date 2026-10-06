@@ -41,11 +41,17 @@ export function telegramFiles(token: string): BotIo {
 
 const MENU_REPLIES = new Set<ProfileReply["kind"]>(["onboarding_done", "edit_applied", "edit_cancelled", "profile"]);
 
+export interface BotOptions {
+  /** Telegram user ids allowed to use operator commands such as /stats. */
+  adminTelegramIds?: readonly number[];
+}
+
 export function createBot(
   token: string,
   services: AppServices,
   config?: BotConfig<BotContext>,
   io: BotIo = telegramFiles(token),
+  options: BotOptions = {},
 ): Bot<BotContext> {
   const bot = new Bot<BotContext>(token, config);
   const html = { parse_mode: "HTML" as const, link_preview_options: { is_disabled: true } };
@@ -139,6 +145,14 @@ export function createBot(
     await ctx.reply(addSiteReply(await services.sites.add(ctx.userId, input)), { ...html, reply_markup: mainMenu });
   };
   bot.command("sites", showSites);
+  bot.command("stats", async (ctx) => {
+    if (!ctx.from || !options.adminTelegramIds?.includes(ctx.from.id)) {
+      await ctx.reply(messages.help, { ...html, reply_markup: mainMenu });
+      return;
+    }
+    const days = Math.min(90, Math.max(1, Number.parseInt(ctx.match, 10) || 7));
+    await ctx.reply(await services.stats.report(days), html);
+  });
   bot.command("addsite", async (ctx) => {
     const input = ctx.match.trim();
     if (!input) {

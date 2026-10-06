@@ -1,5 +1,6 @@
 import type { CvTailorer } from "../../cv/tailoring.js";
 import { SOURCE_ADAPTERS } from "../../ingestion/sources/index.js";
+import { buildStats, formatStats, type SpendLookup } from "../../observability/report.js";
 import type { Db } from "../../db/types.js";
 import type { AppServices, ProfileAssistant } from "../services.js";
 import { PgConversationService } from "./conversation.js";
@@ -10,7 +11,12 @@ import { PgOnboardingService } from "./onboarding.js";
 import { PgSiteService } from "./sites.js";
 import { PgUserService } from "./users.js";
 
-export function createPgServices(db: Db, assistant: ProfileAssistant, tailorer: CvTailorer): AppServices {
+export function createPgServices(
+  db: Db,
+  assistant: ProfileAssistant,
+  tailorer: CvTailorer,
+  options: { spend?: SpendLookup } = {},
+): AppServices {
   const onboarding = new PgOnboardingService(db, assistant);
   return {
     users: new PgUserService(db),
@@ -20,5 +26,6 @@ export function createPgServices(db: Db, assistant: ProfileAssistant, tailorer: 
     cv: new PgCvService(db, tailorer),
     conversation: new PgConversationService(db, onboarding, assistant),
     sites: new PgSiteService(db, SOURCE_ADAPTERS),
+    stats: { report: async (days) => formatStats(await buildStats(db, { days, spend: options.spend }), { html: true }) },
   };
 }

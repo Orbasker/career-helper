@@ -222,6 +222,11 @@ export interface SiteService {
   remove(userId: string, siteId: string): Promise<boolean>;
 }
 
+export interface StatsService {
+  /** Operator report for the last `days` days, formatted for Telegram. */
+  report(days: number): Promise<string>;
+}
+
 export interface AppServices {
   users: UserService;
   onboarding: OnboardingService;
@@ -230,4 +235,5 @@ export interface AppServices {
   cv: CvService;
   conversation: ConversationService;
   sites: SiteService;
+  stats: StatsService;
 }

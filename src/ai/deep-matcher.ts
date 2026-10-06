@@ -12,6 +12,7 @@ import type { ConfidenceLevel, MatchRecommendation, PreferenceKind } from "../do
 import type { PreferenceSnapshot, ProfileSnapshot } from "../domain/profile.js";
 import type { FitEvidence } from "../domain/types.js";
 import { employerRelation } from "../matching/employer.js";
+import { noopRecorder, tracked, type ModelCallRecorder } from "./tracking.js";
 import { isRecommended, type DeepMatcher, type DeepMatchJob, type DeepMatchVerdict } from "../matching/deep-match.js";
 
 export const DECISION_MODEL = "typesafe-ai/jev";
@@ -98,6 +99,7 @@ export class AiDeepMatcher implements DeepMatcher {
   constructor(
     private readonly decisionModel: Experimental_DecisionModel = DECISION_MODEL,
     private readonly explanationModel: LanguageModel = EXPLANATION_MODEL,
+    private readonly recorder: ModelCallRecorder = noopRecorder,
   ) {
     this.model = `${modelName(decisionModel)} + ${modelName(explanationModel)}`;
   }
@@ -116,12 +118,15 @@ export class AiDeepMatcher implements DeepMatcher {
       };
     }
 
-    const { output } = await generateText({
-      model: this.explanationModel,
-      instructions: EXPLANATION_INSTRUCTIONS,
-      prompt: `<candidate>\n${profileText}\n</candidate>\n\n<job>\n${jobText}\n</job>${employerNote(profile, job)}\n\n<recommendation>${decision.recommendation}: ${RECOMMENDATIONS[decision.recommendation]}</recommendation>`,
-      output: Output.object({ schema: explanationSchema }),
-    });
+    const { output } = await tracked(this.recorder, "deep_match.explain", modelName(this.explanationModel), (providerOptions) =>
+      generateText({
+        providerOptions,
+        model: this.explanationModel,
+        instructions: EXPLANATION_INSTRUCTIONS,
+        prompt: `<candidate>\n${profileText}\n</candidate>\n\n<job>\n${jobText}\n</job>${employerNote(profile, job)}\n\n<recommendation>${decision.recommendation}: ${RECOMMENDATIONS[decision.recommendation]}</recommendation>`,
+        output: Output.object({ schema: explanationSchema }),
+      }),
+    );
     return groundVerdict(decision, output, aliases, job);
   }
 
@@ -132,11 +137,14 @@ export class AiDeepMatcher implements DeepMatcher {
     };
     for (const [id, { question }] of vetoQuestions) questions[id] = question;
 
-    const { answers } = await experimental_decide({
-      model: this.decisionModel,
-      state: { candidate: profileText, job: jobText },
-      questions,
-    });
+    const { answers } = await tracked(this.recorder, "deep_match.decide", modelName(this.decisionModel), (providerOptions) =>
+      experimental_decide({
+        providerOptions,
+        model: this.decisionModel,
+        state: { candidate: profileText, job: jobText },
+        questions,
+      }),
+    );
     const probabilities = new Map<string, number>();
     for (const id of vetoQuestions.keys()) {
       const answer = answers[id];

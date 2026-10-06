@@ -4,6 +4,7 @@ import { EMPLOYMENT_TYPES, WORK_MODES } from "../domain/enums.js";
 import type { PostingCheck } from "../discovery/page.js";
 import type { JobCandidate, JobDiscoverer, SearchPlan } from "../discovery/plan.js";
 import { EXPLANATION_MODEL } from "./deep-matcher.js";
+import { noopRecorder, tracked, type ModelCallRecorder } from "./tracking.js";
 
 const MAX_RESULTS_PER_SEARCH = 10;
 
@@ -42,7 +43,10 @@ const extractionSchema = z.object({
 export class AiJobDiscoverer implements JobDiscoverer {
   readonly model: string;
 
-  constructor(private readonly languageModel: LanguageModel = EXPLANATION_MODEL) {
+  constructor(
+    private readonly languageModel: LanguageModel = EXPLANATION_MODEL,
+    private readonly recorder: ModelCallRecorder = noopRecorder,
+  ) {
     this.model = typeof languageModel === "string" ? languageModel : languageModel.modelId;
   }
 
@@ -55,20 +59,23 @@ export class AiJobDiscoverer implements JobDiscoverer {
       ...(plan.domains.length ? { searchDomainFilter: plan.domains.slice(0, 20) } : {}),
     });
     const scope = plan.domains.length ? `Search only these sites: ${plan.domains.join(", ")}.` : "Search the open web.";
-    const { output, steps } = await generateText({
-      model: this.languageModel,
-      instructions: SEARCH_INSTRUCTIONS,
-      prompt: [
-        scope,
-        `Queries:\n${plan.queries.map((q) => `- ${q}`).join("\n")}`,
-        plan.avoid.length ? `The candidate wants to avoid: ${plan.avoid.join("; ")}.` : "",
-      ]
-        .filter(Boolean)
-        .join("\n\n"),
-      tools: { search },
-      stopWhen: stepCountIs(plan.queries.length + 2),
-      output: Output.object({ schema: candidatesSchema }),
-    });
+    const { output, steps } = await tracked(this.recorder, "discovery.search", this.model, (providerOptions) =>
+      generateText({
+        providerOptions,
+        model: this.languageModel,
+        instructions: SEARCH_INSTRUCTIONS,
+        prompt: [
+          scope,
+          `Queries:\n${plan.queries.map((q) => `- ${q}`).join("\n")}`,
+          plan.avoid.length ? `The candidate wants to avoid: ${plan.avoid.join("; ")}.` : "",
+        ]
+          .filter(Boolean)
+          .join("\n\n"),
+        tools: { search },
+        stopWhen: stepCountIs(plan.queries.length + 2),
+        output: Output.object({ schema: candidatesSchema }),
+      }),
+    );
     const seen = new Set(steps.flatMap((step) => step.toolResults.flatMap((result) => resultUrls(result.output))));
     return output.postings
       .map((p) => ({ url: p.url.trim(), title: p.title.trim(), company: p.company?.trim() || null }))
@@ -76,12 +83,15 @@ export class AiJobDiscoverer implements JobDiscoverer {
   }
 
   async extract({ url, text }: { url: string; text: string }): Promise<PostingCheck> {
-    const { output } = await generateText({
-      model: this.languageModel,
-      instructions: EXTRACT_INSTRUCTIONS,
-      prompt: `<url>${url}</url>\n\n<page>\n${text}\n</page>`,
-      output: Output.object({ schema: extractionSchema }),
-    });
+    const { output } = await tracked(this.recorder, "discovery.extract", this.model, (providerOptions) =>
+      generateText({
+        providerOptions,
+        model: this.languageModel,
+        instructions: EXTRACT_INSTRUCTIONS,
+        prompt: `<url>${url}</url>\n\n<page>\n${text}\n</page>`,
+        output: Output.object({ schema: extractionSchema }),
+      }),
+    );
     if (!output.isJobPosting) return { kind: "none" };
     if (!output.isOpen) return { kind: "closed" };
     const title = output.title?.trim();

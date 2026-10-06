@@ -22,7 +22,7 @@ The stages write their results to the database as they go (`jobs`, `matches`, `m
 - Telegram sends are retried up to 3 times on rate limits (using `retry_after`), 5xx errors and network errors. Other errors are not retried.
 - The run is `failed` when any stage threw or reported errors. The manual script then exits non-zero.
 
-Each stage logs one JSON line (`event: "pipeline.<stage>"`), and the run ends with `event: "pipeline.run"`. The cron endpoint returns the full report.
+Each stage logs one JSON line (`event: "pipeline.<stage>"`), and the run ends with `event: "pipeline.run"`. The cron endpoint returns the full report, and every run is stored in `pipeline_runs` (see `docs/observability.md`).
 
 ## Idempotency and no repeated notifications
 
