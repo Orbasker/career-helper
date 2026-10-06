@@ -1,7 +1,7 @@
-import { Bot, type Context, type BotConfig } from "grammy";
+import { Bot, InlineKeyboard, InputFile, type Context, type BotConfig } from "grammy";
 import { MAX_DOCUMENT_BYTES } from "../app/documents.js";
 import type { AppServices, ProfileReply } from "../app/services.js";
-import { decodeCallback } from "./callbacks.js";
+import { decodeCallback, encodeCallback } from "./callbacks.js";
 import {
   MY_PROFILE_LABEL,
   WHATS_NEW_LABEL,
@@ -58,6 +58,22 @@ export function createBot(
 
   const sendViews = async (ctx: BotContext, views: View[]) => {
     for (const view of views) await ctx.reply(view.text, { ...html, reply_markup: view.keyboard });
+  };
+
+  const sendCvDocument = async (ctx: BotContext, versionId: string) => {
+    const file = await services.cv.document(ctx.userId, versionId).catch((error) => {
+      console.error("cv document failed", { versionId, error });
+      return null;
+    });
+    if (!file) {
+      const retry = new InlineKeyboard().text("📄 Send document", encodeCallback({ type: "cv_document", versionId }));
+      await ctx.reply(messages.cvDocumentFailed, { ...html, reply_markup: retry });
+      return;
+    }
+    const document = file.kind === "cached" ? file.fileRef : new InputFile(file.data, file.fileName);
+    const sent = await ctx.replyWithDocument(document, { caption: messages.cvDocumentCaption });
+    const fileRef = sent?.document?.file_id;
+    if (file.kind === "rendered" && fileRef) await services.cv.saveDocumentRef(ctx.userId, versionId, fileRef);
   };
 
   const typing = (ctx: BotContext) => ctx.replyWithChatAction("typing").catch(() => undefined);
@@ -214,12 +230,18 @@ export function createBot(
         }
         return;
       }
+      case "cv_document": {
+        await ctx.answerCallbackQuery();
+        await sendCvDocument(ctx, action.versionId);
+        return;
+      }
       case "cv_decision": {
         const decision = await services.cv.decide(ctx.userId, action.versionId, action.approve);
         await ctx.answerCallbackQuery();
         await ctx.editMessageReplyMarkup().catch(() => undefined);
         const reply = { approved: messages.cvApproved, discarded: messages.cvDiscarded, not_found: messages.expired }[decision];
         await ctx.reply(reply, { ...html, reply_markup: mainMenu });
+        if (decision === "approved") await sendCvDocument(ctx, action.versionId);
         return;
       }
       case "onboarding_analyze": {

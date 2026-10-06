@@ -20,6 +20,7 @@ describe("callback data", () => {
     { type: "proposal_decision", preferenceId: feedbackId, accept: true },
     { type: "cv_decision", versionId: feedbackId, approve: true },
     { type: "cv_decision", versionId: feedbackId, approve: false },
+    { type: "cv_document", versionId: feedbackId },
     { type: "proposal_decision", preferenceId: feedbackId, accept: false },
   ])("round-trips %o within Telegram's 64-byte limit", (action) => {
     const data = encodeCallback(action);

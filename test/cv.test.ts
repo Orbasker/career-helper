@@ -355,6 +355,27 @@ describe("CV tailoring flow", () => {
     expect(version!.failureReason).toMatch(/verified career facts/);
   });
 
+  it("renders an approved version once and then reuses the sent Telegram file", async () => {
+    await db.update(users).set({ displayName: "Dana" }).where(eq(users.id, userId));
+    const versionId = await requestId();
+    await service.tailor(userId, versionId);
+    expect(await service.document(userId, versionId)).toBeNull();
+
+    await service.decide(userId, versionId, true);
+    const rendered = await service.document(userId, versionId);
+    expect(rendered).toMatchObject({ kind: "rendered", fileName: "CV - Dana - People Operations Lead.docx" });
+    expect(rendered?.kind === "rendered" && rendered.data.byteLength).toBeGreaterThan(1000);
+
+    await service.saveDocumentRef(userId, versionId, "tg-file-1");
+    expect(await service.document(userId, versionId)).toEqual({
+      kind: "cached",
+      fileRef: "tg-file-1",
+      fileName: "CV - Dana - People Operations Lead.docx",
+    });
+    const [other] = await db.insert(users).values({ telegramUserId: 98, telegramChatId: 98 }).returning();
+    expect(await service.document(other!.id, versionId)).toBeNull();
+  });
+
   it("reports an open request, resends an open draft and allows a new request after a failure or a stale request", async () => {
     const first = await requestId();
     expect(await service.requestTailored(userId, matchId)).toEqual({ kind: "in_progress" });
@@ -404,6 +425,9 @@ describe("CV tailoring flow", () => {
 
       await tap(approve);
       expect(sent().map((c) => c.payload.text)).toEqual([messages.cvApproved]);
+      const upload = calls.find((c) => c.method === "sendDocument")!;
+      expect(upload.payload.caption).toBe(messages.cvDocumentCaption);
+      expect(upload.payload.document.filename).toBe("CV - Dana - People Operations Lead.docx");
       const [version] = await db.select().from(cvVersions);
       expect(version!.status).toBe("approved");
     });

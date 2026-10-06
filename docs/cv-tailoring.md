@@ -42,7 +42,7 @@ The text is written in the language of the user's facts.
 
 The bot sends the draft (summary, roles with bullets, skills, education, languages, application note) with **Approve** / **Discard** (`cvd:<a|x>:<versionId>`):
 
-- **Approve** moves the version to `approved` (with `approved_at`). ANI-90 renders approved versions.
+- **Approve** moves the version to `approved` (with `approved_at`) and sends the CV as a Word document (see below).
 - **Discard** moves it to `rejected`. Tapping **Tailor my CV** again starts a new version.
 
 | State when the user taps **Tailor my CV** | Result |
@@ -52,3 +52,22 @@ The bot sends the draft (summary, roles with bullets, skills, education, languag
 | `requested` for longer | Marked `failed` and replaced by a new request |
 | `draft` | The draft is sent again |
 | Tailoring threw | Version `failed` with `failure_reason`; the user can retry |
+
+## Document (DOCX)
+
+`src/cv/render-docx.ts` renders an approved version with the `docx` library. Content and layout are kept separate:
+
+- `PgCvService.document` assembles the content from the stored version:
+  - name from `users.display_name`;
+  - headline and LinkedIn URL from `career_profiles`;
+  - roles from verified `work_experiences`;
+  - every other line from `cv_version_items`.
+- `renderCvDocx` only lays that content out. It never generates or changes text, and the same content always produces the same document.
+
+The template is A4 and uses Arial. In order: name, headline, contact line, then Summary, Experience (title — employer, dates as `MM/YYYY – Present`, bullets), Skills (one line), Education, Certifications, Languages and Additional. Empty sections are left out. The application note is not part of the CV; it is shown in the draft message.
+
+**Hebrew:** when the CV text has more Hebrew than Latin letters, the headings and "Present" are in Hebrew. Every paragraph with Hebrew text is right-to-left and right-aligned, and lines that are only Latin text (e.g. `Python`) stay left-to-right. Arial covers both scripts.
+
+After **Approve**, the bot sends the file (`CV - <name> - <job title>.docx`) and stores the Telegram `file_id` in `cv_versions.rendered_file_ref`, so later sends reuse it instead of rendering again. If rendering fails, the version stays approved and the bot offers a **Send document** button (`cvf:<versionId>`) to retry.
+
+PDF is not produced yet.

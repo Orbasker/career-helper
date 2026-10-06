@@ -6,6 +6,7 @@ export type CallbackAction =
   | { type: "feedback"; matchId: string; verdict: FeedbackVerdict }
   | { type: "tailor_cv"; matchId: string }
   | { type: "cv_decision"; versionId: string; approve: boolean }
+  | { type: "cv_document"; versionId: string }
   | { type: "onboarding_analyze" }
   | { type: "onboarding_confirm" }
   | { type: "edit_apply"; token: string }
@@ -37,6 +38,8 @@ export function encodeCallback(action: CallbackAction): string {
       return `cv:${action.matchId}`;
     case "cv_decision":
       return `cvd:${action.approve ? "a" : "x"}:${action.versionId}`;
+    case "cv_document":
+      return `cvf:${action.versionId}`;
     case "onboarding_analyze":
       return "ob:analyze";
     case "onboarding_confirm":
@@ -81,6 +84,7 @@ export function decodeCallback(data: string): CallbackAction | null {
   const matchId = id;
   if (parts.length === 2 && parts[0] === "job") return { type: "job_details", matchId };
   if (parts.length === 2 && parts[0] === "cv") return { type: "tailor_cv", matchId };
+  if (parts.length === 2 && parts[0] === "cvf") return { type: "cv_document", versionId: matchId };
   if (parts.length === 3 && parts[0] === "fb") {
     const verdict = (Object.keys(VERDICT_CODES) as FeedbackVerdict[]).find((v) => VERDICT_CODES[v] === parts[1]);
     if (verdict) return { type: "feedback", matchId, verdict };

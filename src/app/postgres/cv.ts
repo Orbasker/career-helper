@@ -1,9 +1,10 @@
 import { and, asc, eq, inArray, lt } from "drizzle-orm";
 import type { CvTailorer } from "../../cv/tailoring.js";
-import { careerFacts, careerProfiles, cvVersionItems, cvVersions, jobs, masterCvs, matches } from "../../db/schema.js";
+import { cvFileName, renderCvDocx } from "../../cv/render-docx.js";
+import { careerFacts, careerProfiles, cvVersionItems, cvVersions, jobs, masterCvs, matches, users } from "../../db/schema.js";
 import type { Db } from "../../db/types.js";
 import { errorMessage } from "../../ingestion/ingest.js";
-import type { CvDecision, CvDraftView, CvRequestOutcome, CvService, CvTailorOutcome } from "../services.js";
+import type { CvDecision, CvDocumentFile, CvDraftView, CvRequestOutcome, CvService, CvTailorOutcome } from "../services.js";
 import { loadSnapshot } from "./profile.js";
 
 export const STALE_REQUEST_MS = 10 * 60_000;
@@ -105,11 +106,51 @@ export class PgCvService implements CvService {
   }
 
   async draft(userId: string, versionId: string): Promise<CvDraftView | null> {
+    return this.view(userId, versionId, "draft");
+  }
+
+  async document(userId: string, versionId: string): Promise<CvDocumentFile | null> {
+    const [owner] = await this.db
+      .select({ name: users.displayName, headline: careerProfiles.headline, linkedinUrl: careerProfiles.linkedinUrl, fileRef: cvVersions.renderedFileRef })
+      .from(cvVersions)
+      .innerJoin(users, eq(users.id, cvVersions.userId))
+      .innerJoin(careerProfiles, eq(careerProfiles.userId, cvVersions.userId))
+      .where(and(eq(cvVersions.id, versionId), eq(cvVersions.userId, userId), eq(cvVersions.status, "approved")));
+    const view = owner && (await this.view(userId, versionId, "approved"));
+    if (!owner || !view) return null;
+
+    const name = owner.name ?? "Candidate";
+    const fileName = cvFileName(name, view.jobTitle);
+    if (owner.fileRef) return { kind: "cached", fileRef: owner.fileRef, fileName };
+    const { summary, experiences, skills, education, certifications, languages, other } = view;
+    const data = await renderCvDocx({
+      name,
+      headline: owner.headline,
+      contact: owner.linkedinUrl ? [owner.linkedinUrl] : [],
+      summary,
+      experiences,
+      skills,
+      education,
+      certifications,
+      languages,
+      other,
+    });
+    return { kind: "rendered", data, fileName };
+  }
+
+  async saveDocumentRef(userId: string, versionId: string, fileRef: string): Promise<void> {
+    await this.db
+      .update(cvVersions)
+      .set({ renderedFileRef: fileRef })
+      .where(and(eq(cvVersions.id, versionId), eq(cvVersions.userId, userId), eq(cvVersions.status, "approved")));
+  }
+
+  private async view(userId: string, versionId: string, status: "draft" | "approved"): Promise<CvDraftView | null> {
     const [version] = await this.db
       .select({ jobTitle: jobs.title, company: jobs.company, applicationNote: cvVersions.applicationNote })
       .from(cvVersions)
       .innerJoin(jobs, eq(jobs.id, cvVersions.jobId))
-      .where(and(eq(cvVersions.id, versionId), eq(cvVersions.userId, userId), eq(cvVersions.status, "draft")));
+      .where(and(eq(cvVersions.id, versionId), eq(cvVersions.userId, userId), eq(cvVersions.status, status)));
     if (!version) return null;
 
     const items = await this.db
