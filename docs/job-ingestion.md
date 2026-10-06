@@ -60,6 +60,8 @@ Each job keeps its own row and `source_url`, so a group holds every source's URL
 
 ## Sources
 
+Besides the boards below, the agent web search and users' own sites find postings anywhere on the web (`docs/discovery.md`).
+
 All three are official, unauthenticated job-board APIs that ATS vendors publish for embedding a company's open roles; we fetch each configured board once per run (no scraping, no per-posting requests).
 
 | Key | API | Company / work mode / employment type |

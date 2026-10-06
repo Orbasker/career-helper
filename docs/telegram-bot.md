@@ -16,6 +16,7 @@
 | **Yes** / **No** on a proposal | `feedback.decideProposal` | Activates or rejects a preference learned from feedback. |
 | **Tailor my CV** | `cv.requestTailored`, `cv.tailor` | Creates a CV version for the match and sends the tailored draft for review (see `docs/cv-tailoring.md`). |
 | **Approve** / **Discard** on a CV draft | `cv.decide` | Moves the draft to `approved` or `rejected`. |
+| `/sites`, `/addsite <site>`, "search on <site>" | `sites.list` / `sites.add` / `sites.remove` | The user's own job sites for the agent to search (see `docs/discovery.md`). |
 | Document | `onboarding.addDocument` | During onboarding: stores the CV / LinkedIn PDF text as a `profile_source`. |
 | Any other text | `conversation.handleText` | Onboarding answer, review correction, or a natural-language profile edit. |
 
@@ -39,7 +40,7 @@ The LLM only sees per-request aliases (`e1`, `f2`, `p3`) for the user's own item
 
 `src/ai/profile-assistant.ts` calls `anthropic/claude-sonnet-5.5` through Vercel AI Gateway (AI SDK structured output). On Vercel it authenticates with OIDC automatically; locally run `vercel env pull` (for `VERCEL_OIDC_TOKEN`) or set `AI_GATEWAY_API_KEY`. Tests use a fake assistant.
 
-Callback data is `job:<matchId>`, `fb:<i|n>:<matchId>`, `cv:<matchId>`, `ob:analyze`, `ob:confirm`, `pe:<a|c>:<token>`, `fr:<r|s|l|w|c|p|o>:<feedbackId>`, `pp:<a|r>:<preferenceId>`, `cvd:<a|x>:<versionId>` (≤ 64 bytes). Only private chats are handled.
+Callback data is `job:<matchId>`, `fb:<i|n>:<matchId>`, `cv:<matchId>`, `ob:analyze`, `ob:confirm`, `pe:<a|c>:<token>`, `fr:<r|s|l|w|c|p|o>:<feedbackId>`, `pp:<a|r>:<preferenceId>`, `cvd:<a|x>:<versionId>`, `cvf:<versionId>`, `st:x:<siteId>` (≤ 64 bytes). Only private chats are handled.
 
 ## Running locally
 

@@ -202,6 +202,26 @@ export interface ProfileAssistant {
   interpret(input: { snapshot: ProfileSnapshot; message: string; question: string | null }): Promise<ProfileInterpretation>;
 }
 
+export interface JobSiteView {
+  id: string;
+  domain: string;
+  url: string;
+}
+
+export type AddSiteOutcome =
+  | { kind: "added"; site: JobSiteView }
+  | { kind: "exists"; site: JobSiteView }
+  | { kind: "board"; board: string }
+  | { kind: "invalid" }
+  | { kind: "limit" };
+
+export interface SiteService {
+  list(userId: string): Promise<JobSiteView[]>;
+  /** Saves a site to search; a supported ATS board link is added as a basic board source instead. */
+  add(userId: string, input: string): Promise<AddSiteOutcome>;
+  remove(userId: string, siteId: string): Promise<boolean>;
+}
+
 export interface AppServices {
   users: UserService;
   onboarding: OnboardingService;
@@ -209,4 +229,5 @@ export interface AppServices {
   feedback: FeedbackService;
   cv: CvService;
   conversation: ConversationService;
+  sites: SiteService;
 }

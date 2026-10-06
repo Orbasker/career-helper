@@ -225,6 +225,20 @@ export const jobSources = pgTable("job_sources", {
   updatedAt: updatedAt(),
 });
 
+export const userJobSites = pgTable(
+  "user_job_sites",
+  {
+    id: id(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    domain: text("domain").notNull(),
+    url: text("url").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("user_job_sites_user_domain_uq").on(t.userId, t.domain)],
+);
+
 export const rawJobRecords = pgTable(
   "raw_job_records",
   {

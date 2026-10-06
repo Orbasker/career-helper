@@ -1,4 +1,6 @@
 import type { Db } from "../db/types.js";
+import type { JobDiscoverer } from "../discovery/plan.js";
+import { runDiscovery, type DiscoveryOptions, type DiscoveryReport } from "../discovery/run.js";
 import type { JobSourceAdapter } from "../ingestion/adapter.js";
 import type { DedupReport } from "../ingestion/dedup.js";
 import { errorMessage } from "../ingestion/ingest.js";
@@ -9,22 +11,28 @@ import { runNotifications, type NotificationOptions, type NotificationReport, ty
 
 export interface DailyPipelineDeps {
   adapters: readonly JobSourceAdapter<any>[];
+  /** Omitted to run only the basic board sources. */
+  discoverer?: JobDiscoverer;
   matcher: DeepMatcher;
   notifier: Notifier;
 }
 
 /** No deep match starts later than this after the run began, leaving time to notify within the 300s function limit. */
 export const DEFAULT_DEEP_MATCH_CUTOFF_MS = 210_000;
+/** No web search or page fetch starts later than this after the run began, leaving time for the other stages. */
+export const DEFAULT_DISCOVERY_CUTOFF_MS = 90_000;
 
 export interface DailyPipelineOptions extends NotificationOptions {
   deepMatchLimit?: number;
   deepMatchCutoffMs?: number;
+  discovery?: Omit<DiscoveryOptions, "now" | "deadline"> & { cutoffMs?: number };
   log?: IngestLogger;
 }
 
 export type StageResult<T> = { ok: true; report: T } | { ok: false; error: string };
 
 export interface DailyPipelineReport {
+  discovery: StageResult<DiscoveryReport> | null;
   ingestion: StageResult<{ sources: ReturnType<typeof summarize>[]; dedup: DedupReport; failed: boolean }>;
   cheapMatching: StageResult<CheapMatchingReport>;
   deepMatching: StageResult<DeepMatchingReport>;
@@ -33,7 +41,7 @@ export interface DailyPipelineReport {
 }
 
 /**
- * Collect → normalize → deduplicate → hard filter → cheap relevance → deep match → notify. Every stage is
+ * Discover → collect → normalize → deduplicate → hard filter → cheap relevance → deep match → notify. Every stage is
  * idempotent and runs even when an earlier one failed, so work left over from previous runs still progresses.
  */
 export async function runDailyPipeline(
@@ -43,7 +51,9 @@ export async function runDailyPipeline(
 ): Promise<DailyPipelineReport> {
   const log = options.log ?? jsonLogger;
   const now = options.now ?? (() => new Date());
-  const deepMatchDeadline = new Date(now().getTime() + (options.deepMatchCutoffMs ?? DEFAULT_DEEP_MATCH_CUTOFF_MS));
+  const startedAt = now().getTime();
+  const deepMatchDeadline = new Date(startedAt + (options.deepMatchCutoffMs ?? DEFAULT_DEEP_MATCH_CUTOFF_MS));
+  const discoveryDeadline = new Date(startedAt + (options.discovery?.cutoffMs ?? DEFAULT_DISCOVERY_CUTOFF_MS));
   let failed = false;
 
   const stage = async <T>(name: string, run: () => Promise<T>, hasErrors: (report: T) => boolean) => {
@@ -60,6 +70,14 @@ export async function runDailyPipeline(
     return result;
   };
 
+  const { discoverer } = deps;
+  const discovery = discoverer
+    ? await stage(
+        "discovery",
+        () => runDiscovery(db, discoverer, deps.adapters, { ...options.discovery, now, deadline: discoveryDeadline }),
+        (r) => r.errors.some((e) => !e.scope.startsWith("page:")),
+      )
+    : null;
   const ingestion = await stage(
     "ingestion",
     async () => {
@@ -85,7 +103,7 @@ export async function runDailyPipeline(
     (r) => r.errors.length > 0,
   );
 
-  const report: DailyPipelineReport = { ingestion, cheapMatching, deepMatching, notifications, failed };
+  const report: DailyPipelineReport = { discovery, ingestion, cheapMatching, deepMatching, notifications, failed };
   log({ event: "pipeline.run", failed });
   return report;
 }

@@ -7,6 +7,7 @@ export type CallbackAction =
   | { type: "tailor_cv"; matchId: string }
   | { type: "cv_decision"; versionId: string; approve: boolean }
   | { type: "cv_document"; versionId: string }
+  | { type: "site_remove"; siteId: string }
   | { type: "onboarding_analyze" }
   | { type: "onboarding_confirm" }
   | { type: "edit_apply"; token: string }
@@ -40,6 +41,8 @@ export function encodeCallback(action: CallbackAction): string {
       return `cvd:${action.approve ? "a" : "x"}:${action.versionId}`;
     case "cv_document":
       return `cvf:${action.versionId}`;
+    case "site_remove":
+      return `st:x:${action.siteId}`;
     case "onboarding_analyze":
       return "ob:analyze";
     case "onboarding_confirm":
@@ -74,6 +77,7 @@ export function decodeCallback(data: string): CallbackAction | null {
     const tag = (Object.keys(REASON_CODES) as FeedbackReasonTag[]).find((t) => REASON_CODES[t] === parts[1]);
     if (tag) return { type: "feedback_reason", feedbackId: id, tag };
   }
+  if (parts.length === 3 && parts[0] === "st" && parts[1] === "x") return { type: "site_remove", siteId: id };
   if (parts.length === 3 && parts[0] === "cvd" && (parts[1] === "a" || parts[1] === "x")) {
     return { type: "cv_decision", versionId: id, approve: parts[1] === "a" };
   }

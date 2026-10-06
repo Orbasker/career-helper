@@ -6,6 +6,7 @@ Code: `src/pipeline/`. Entry points: `api/cron/daily.ts` (Vercel Cron) and `bun 
 
 | Stage | Code | Notes |
 | --- | --- | --- |
+| Discover | `runDiscovery` (`docs/discovery.md`) | Agent web search and user sites; new postings are ingested as `web_search`, links to ATS boards become basic boards. Nothing new starts after 90s. |
 | Collect, normalize, deduplicate | `runIngestion` (`docs/job-ingestion.md`) | A failing source is reported; the other sources still run. |
 | Hard filter, cheap relevance | `runCheapMatching` (`docs/matching.md`) | Only groups the user has no match for yet. |
 | Deep match | `runDeepMatching` | Up to 50 matches. No new evaluation starts more than 3.5 minutes after the run began, so notifications still go out within Vercel's 300s function timeout even after a long ingestion. |

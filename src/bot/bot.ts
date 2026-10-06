@@ -5,6 +5,7 @@ import { decodeCallback, encodeCallback } from "./callbacks.js";
 import {
   MY_PROFILE_LABEL,
   WHATS_NEW_LABEL,
+  addSiteReply,
   cvDraftViews,
   feedbackReasonView,
   mainMenu,
@@ -13,10 +14,14 @@ import {
   messages,
   profileReplyViews,
   proposalView,
+  sitesView,
   type View,
 } from "./views.js";
 
 export const LATEST_MATCHES_LIMIT = 5;
+
+/** "search on example.co.il", "also look at https://jobs.example.com" and similar requests to add a job site. */
+const SITE_REQUEST = /\b(?:search|look|check)\b[^.?!\n]*?\b(?:on|in|at)\s+((?:https?:\/\/)?(?:[\w-]+\.)+[a-z]{2,}(?:\/\S*)?)/i;
 
 export type BotContext = Context & { userId: string; hasProfile: boolean };
 
@@ -125,6 +130,23 @@ export function createBot(
   bot.command("new", sendLatest);
   bot.hears(WHATS_NEW_LABEL, sendLatest);
   bot.command("profile", showProfile);
+
+  const showSites = async (ctx: BotContext) => {
+    const view = sitesView(await services.sites.list(ctx.userId));
+    await ctx.reply(view.text, { ...html, reply_markup: view.keyboard ?? mainMenu });
+  };
+  const addSite = async (ctx: BotContext, input: string) => {
+    await ctx.reply(addSiteReply(await services.sites.add(ctx.userId, input)), { ...html, reply_markup: mainMenu });
+  };
+  bot.command("sites", showSites);
+  bot.command("addsite", async (ctx) => {
+    const input = ctx.match.trim();
+    if (!input) {
+      await ctx.reply(messages.siteUsage, html);
+      return;
+    }
+    await addSite(ctx, input);
+  });
   bot.hears(MY_PROFILE_LABEL, showProfile);
 
   bot.on("message:document", async (ctx) => {
@@ -230,6 +252,13 @@ export function createBot(
         }
         return;
       }
+      case "site_remove": {
+        const removed = await services.sites.remove(ctx.userId, action.siteId);
+        await ctx.answerCallbackQuery({ text: removed ? messages.siteRemoved : messages.expired });
+        const view = sitesView(await services.sites.list(ctx.userId));
+        await ctx.editMessageText(view.text, { ...html, reply_markup: view.keyboard }).catch(() => undefined);
+        return;
+      }
       case "cv_document": {
         await ctx.answerCallbackQuery();
         await sendCvDocument(ctx, action.versionId);
@@ -278,6 +307,11 @@ export function createBot(
       await ctx.reply(messages.help, { ...html, reply_markup: mainMenu });
       return;
     }
+    const siteRequest = ctx.message.text.match(SITE_REQUEST);
+    if (siteRequest && ctx.hasProfile) {
+      await addSite(ctx, siteRequest[1]!);
+      return;
+    }
     if (await services.feedback.takeReasonText(ctx.userId, ctx.message.text)) {
       await ctx.reply(messages.feedbackReasonTextSaved, { ...html, reply_markup: mainMenu });
       return;
@@ -297,6 +331,7 @@ export function createBot(
 export const BOT_COMMANDS = [
   { command: "new", description: "Latest job matches" },
   { command: "profile", description: "Your career profile" },
+  { command: "sites", description: "Job sites I search for you" },
   { command: "start", description: "Set up your career profile" },
   { command: "help", description: "What I can do" },
 ];
