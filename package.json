@@ -18,9 +18,13 @@
     "@neon/config": "^1.8.4",
     "@neon/env": "^1.5.1",
     "@vercel/functions": "^3.9.11",
+    "ai": "^7.0.128",
     "drizzle-orm": "^0.45.3",
     "grammy": "^1.46.0",
-    "pg": "^8.23.1"
+    "mammoth": "^1.13.0",
+    "pg": "^8.23.1",
+    "unpdf": "^1.8.1",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",

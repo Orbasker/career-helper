@@ -29,7 +29,7 @@ export type ProfileStatus = (typeof PROFILE_STATUSES)[number];
 export const VERIFICATION_STATUSES = ["unverified", "verified", "rejected"] as const;
 export type VerificationStatus = (typeof VERIFICATION_STATUSES)[number];
 
-export const FACT_ORIGINS = ["cv_upload", "conversation", "manual_edit"] as const;
+export const FACT_ORIGINS = ["cv_upload", "linkedin_import", "conversation", "manual_edit"] as const;
 export type FactOrigin = (typeof FACT_ORIGINS)[number];
 
 export const CAREER_FACT_KINDS = [
@@ -42,6 +42,9 @@ export const CAREER_FACT_KINDS = [
   "other",
 ] as const;
 export type CareerFactKind = (typeof CAREER_FACT_KINDS)[number];
+
+export const PROFILE_SOURCE_KINDS = ["cv", "linkedin_export", "pasted_text"] as const;
+export type ProfileSourceKind = (typeof PROFILE_SOURCE_KINDS)[number];
 
 export const PREFERENCE_KINDS = ["hard_constraint", "soft_preference", "dislike", "target_role"] as const;
 export type PreferenceKind = (typeof PREFERENCE_KINDS)[number];
@@ -60,7 +63,7 @@ export const PREFERENCE_DIMENSIONS = [
 ] as const;
 export type PreferenceDimension = (typeof PREFERENCE_DIMENSIONS)[number];
 
-export const PREFERENCE_STATUSES = ["proposed", "active", "rejected", "superseded"] as const;
+export const PREFERENCE_STATUSES = ["proposed", "active", "rejected", "superseded", "retired"] as const;
 export type PreferenceStatus = (typeof PREFERENCE_STATUSES)[number];
 
 export const PREFERENCE_ORIGINS = ["onboarding", "user_stated", "inferred_from_feedback"] as const;
@@ -96,5 +99,5 @@ export type CvVersionStatus = (typeof CV_VERSION_STATUSES)[number];
 export const CV_SECTIONS = ["summary", "experience", "skills", "education", "certifications", "languages", "other"] as const;
 export type CvSection = (typeof CV_SECTIONS)[number];
 
-export const CONVERSATION_FLOWS = ["idle", "onboarding", "preference_update", "cv_request"] as const;
+export const CONVERSATION_FLOWS = ["idle", "onboarding", "preference_update", "profile_edit", "cv_request"] as const;
 export type ConversationFlow = (typeof CONVERSATION_FLOWS)[number];

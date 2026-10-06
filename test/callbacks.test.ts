@@ -9,13 +9,17 @@ describe("callback data", () => {
     { type: "feedback", matchId, verdict: "interested" },
     { type: "feedback", matchId, verdict: "not_interested" },
     { type: "tailor_cv", matchId },
+    { type: "onboarding_analyze" },
+    { type: "onboarding_confirm" },
+    { type: "edit_apply", token: "aZ_9-xYw" },
+    { type: "edit_cancel", token: "aZ_9-xYw" },
   ])("round-trips %o within Telegram's 64-byte limit", (action) => {
     const data = encodeCallback(action);
     expect(Buffer.byteLength(data)).toBeLessThanOrEqual(64);
     expect(decodeCallback(data)).toEqual(action);
   });
 
-  it.each(["", "job:not-a-uuid", `fb:x:${matchId}`, `unknown:${matchId}`, `job:extra:${matchId}`])(
+  it.each(["", "job:not-a-uuid", `fb:x:${matchId}`, `unknown:${matchId}`, `job:extra:${matchId}`, "pe:x:abcdefgh", "pe:a:no spaces", "ob:other"])(
     "rejects %s",
     (data) => {
       expect(decodeCallback(data)).toBeNull();

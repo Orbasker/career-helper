@@ -15,6 +15,13 @@
       "when": 1791303000851,
       "tag": "0001_cv_items_require_verified_facts",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791304284525,
+      "tag": "0002_profile_onboarding",
+      "breakpoints": true
     }
   ]
 }

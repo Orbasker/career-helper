@@ -5,7 +5,6 @@ import { createBot } from "../src/bot/bot.js";
 import { encodeCallback } from "../src/bot/callbacks.js";
 import { WHATS_NEW_LABEL, messages } from "../src/bot/views.js";
 import {
-  careerProfiles,
   cvVersions,
   duplicateGroups,
   feedback,
@@ -13,11 +12,10 @@ import {
   jobs,
   matchEvaluations,
   matches,
-  masterCvs,
-  preferences,
   rawJobRecords,
   users,
 } from "../src/db/schema.js";
+import { FakeProfileAssistant } from "./support/assistant.js";
 import { createTestDb, type TestDb } from "./support/db.js";
 import { BOT_INFO, TELEGRAM_USER_ID, callbackUpdate, captureApiCalls, textUpdate, type ApiCall } from "./support/telegram.js";
 
@@ -28,7 +26,7 @@ let calls: ApiCall[];
 
 beforeEach(async () => {
   ({ db, close } = await createTestDb());
-  bot = createBot("test-token", createPgServices(db), { botInfo: BOT_INFO });
+  bot = createBot("test-token", createPgServices(db, new FakeProfileAssistant()), { botInfo: BOT_INFO });
   calls = captureApiCalls(bot);
 });
 
@@ -100,31 +98,6 @@ async function seedMatch(userId: string, title = "People Operations Manager") {
 }
 
 describe("telegram bot", () => {
-  it("runs onboarding from /start and stores the answers", async () => {
-    await send(textUpdate("/start"));
-    expect(sent()).toEqual([messages.welcomeNew, expect.stringContaining("CV")]);
-
-    await send(textUpdate("HR manager at Acme, 2018-2024"));
-    expect(sent()[0]).toContain("roles");
-    await send(textUpdate("HR business partner, operations manager"));
-    expect(sent()[0]).toContain("constraints");
-    await send(textUpdate("Remote or Tel Aviv only"));
-    expect(sent()).toEqual([messages.onboardingDone]);
-
-    const userId = await currentUserId();
-    const [cv] = await db.select().from(masterCvs).where(eq(masterCvs.userId, userId));
-    expect(cv!.originalText).toBe("HR manager at Acme, 2018-2024");
-    const prefs = await db.select().from(preferences).where(eq(preferences.userId, userId));
-    expect(prefs.map((p) => [p.kind, p.status, p.label])).toEqual([
-      ["target_role", "proposed", "HR business partner, operations manager"],
-      ["hard_constraint", "proposed", "Remote or Tel Aviv only"],
-    ]);
-    expect(await db.select().from(careerProfiles)).toHaveLength(1);
-
-    await send(textUpdate("/start"));
-    expect(sent()).toEqual([messages.welcomeBack]);
-  });
-
   it("lists latest matches and opens details with evidence", async () => {
     await send(textUpdate("/help"));
     const matchId = await seedMatch(await currentUserId());
@@ -183,13 +156,6 @@ describe("telegram bot", () => {
     await send(callbackUpdate(encodeCallback({ type: "tailor_cv", matchId })));
     expect(sent()).toEqual([messages.cvAlreadyRequested]);
     expect(await db.select().from(cvVersions)).toHaveLength(1);
-  });
-
-  it("stores free text outside onboarding as a proposed preference", async () => {
-    await send(textUpdate("No more than 40 minutes commute"));
-    expect(sent()).toEqual([messages.preferenceNoted]);
-    const [pref] = await db.select().from(preferences);
-    expect(pref).toMatchObject({ origin: "user_stated", status: "proposed", label: "No more than 40 minutes commute" });
   });
 
   it("ignores group chats", async () => {

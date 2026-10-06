@@ -1,10 +1,13 @@
 import { InlineKeyboard, Keyboard } from "grammy";
-import type { MatchRecommendation } from "../domain/enums.js";
-import type { MatchDetails, MatchSummary } from "../app/services.js";
+import { formatMonth } from "../domain/dates.js";
+import type { CareerFactKind, MatchRecommendation, PreferenceKind, ProfileSourceKind } from "../domain/enums.js";
+import type { MatchDetails, MatchSummary, ProfileReply, ProfileView } from "../app/services.js";
 import { encodeCallback } from "./callbacks.js";
 
 export const WHATS_NEW_LABEL = "What's new?";
+export const MY_PROFILE_LABEL = "👤 My profile";
 const DESCRIPTION_PREVIEW_LENGTH = 1200;
+const MAX_MESSAGE_LENGTH = 3800;
 
 const RECOMMENDATION_LABELS: Record<MatchRecommendation, string> = {
   strong_fit: "Strong fit",
@@ -17,15 +20,41 @@ export function escapeHtml(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-export const mainMenu = new Keyboard().text(WHATS_NEW_LABEL).resized().persistent();
+export const mainMenu = new Keyboard().text(WHATS_NEW_LABEL).text(MY_PROFILE_LABEL).resized().persistent();
 
 export const messages = {
   welcomeBack: "Welcome back! Tap <b>What's new?</b> for your latest matches, or just tell me what you'd like to change in your preferences.",
-  welcomeNew: "Hi! I'm your career agent. I'll find jobs that fit your experience — including adjacent roles — and help tailor your CV. Let's start with a few questions.",
-  onboardingDone: "Thanks — your profile draft is saved. I'll start looking for matches and let you know when something fits.",
+  welcomeNew: "Hi! I'm your career agent. I'll find jobs that fit your experience — including adjacent roles — and help tailor your CV. Let's build your career profile first.",
+  askLinkedin: "First, send me your <b>LinkedIn profile URL</b> (e.g. linkedin.com/in/your-name), or reply <i>skip</i>.",
+  askDocuments: [
+    "Now send me your <b>CV / resume</b> (PDF, DOCX or TXT).",
+    "",
+    "LinkedIn doesn't let me read profiles directly. To import yours too, open your LinkedIn profile → <b>More</b> → <b>Save to PDF</b> and send me that file.",
+    "",
+    "No documents? Just paste or type a summary of your work history. Tap <b>Analyze</b> when you've sent everything.",
+  ].join("\n"),
+  linkedinSaved: "Saved your LinkedIn URL ✅",
+  linkedinSkipped: "No LinkedIn URL saved — you can add it later.",
+  documentTooLarge: "That file is too large (max 10 MB). Please send a smaller PDF, DOCX or TXT file.",
+  unreadableDocument: "I couldn't read text from that file. Please send a PDF, DOCX or TXT file (not a scanned image), or paste the text.",
+  needSource: "I need at least one CV, LinkedIn PDF or a short written summary of your experience before I can analyze it.",
+  analyzing: "Reading your documents and building your profile… this can take a minute.",
+  analysisFailed: "Sorry, I couldn't analyze your documents this time. Tap <b>Analyze</b> to try again, or send more details.",
+  busy: "I'm still working on your profile — I'll message you when it's ready. If nothing arrives in a few minutes, send /start to begin again.",
+  reviewIntro: "<b>Here's what I extracted.</b> Please check it carefully — nothing is saved as fact until you confirm.",
+  reviewUpdated: "<b>Updated.</b> Here's your profile now:",
+  reviewOutro: "Reply with any corrections in your own words (e.g. <i>\"I left Acme in 2023\"</i>, <i>\"remove the Python skill\"</i>, <i>\"I managed 8 people there\"</i>), or tap <b>Confirm profile</b>.",
+  onboardingDone: "Your profile is confirmed ✅ I'll start looking for matches and let you know when something fits.\n\nYou can update your profile anytime — just tell me, e.g. <i>\"I'm no longer interested in recruiting roles\"</i> or <i>\"add that I managed the payroll migration\"</i>.",
+  profileOutro: "To change anything, just tell me in your own words.",
+  editProposed: "<b>I'll make these changes to your profile:</b>",
+  editApplied: "Done — your profile is updated ✅",
+  editCancelled: "OK, nothing changed.",
+  expired: "That action is no longer available.",
+  noChange: "I didn't find anything to change in your profile. Tell me what to add, correct or remove — e.g. <i>\"add that I managed a team of 5\"</i>.",
+  notOnboarded: "Let's set up your career profile first — send /start.",
+  documentNotExpected: "I only import documents while building your profile. To change your profile, just tell me what to add or correct.",
   noMatches: "No new matches right now. I'll message you when something relevant shows up.",
   matchNotFound: "I couldn't find that job anymore.",
-  preferenceNoted: "Got it — I've noted that preference. I'll confirm with you before it changes how I filter jobs.",
   feedbackInterested: "Marked as interested 👍",
   feedbackNotInterested: "Got it, I'll show fewer jobs like this.",
   cvRequested: "I'm preparing a tailored CV for this job. I'll send it here when it's ready for your review.",
@@ -33,8 +62,9 @@ export const messages = {
   help: [
     "<b>What I can do</b>",
     "• /new — your latest matches",
-    "• /start — restart onboarding",
-    "• Send me any message to update your preferences (e.g. \"no more than 40 minutes commute\").",
+    "• /profile — your career profile",
+    "• /start — set up your profile",
+    "• Tell me anything to update your profile (e.g. \"no more than 40 minutes commute\", \"add that I managed X\").",
   ].join("\n"),
   error: "Something went wrong on my side. Please try again in a moment.",
 };
@@ -78,4 +108,160 @@ export function matchDetailsView(match: MatchDetails): { text: string; keyboard:
     .row()
     .text("📝 Tailor my CV", encodeCallback({ type: "tailor_cv", matchId }));
   return { text: sections.join("\n\n"), keyboard };
+}
+
+const SOURCE_LABELS: Record<ProfileSourceKind, string> = {
+  cv: "your CV",
+  linkedin_export: "your LinkedIn export",
+  pasted_text: "your notes",
+};
+
+const FACT_SECTION_TITLES: Record<CareerFactKind, string> = {
+  skill: "Skills",
+  education: "Education",
+  certification: "Certifications",
+  language: "Languages",
+  responsibility: "Other experience",
+  achievement: "Achievements",
+  other: "Other",
+};
+
+const PREFERENCE_SECTION_TITLES: Record<PreferenceKind, string> = {
+  target_role: "Target roles",
+  hard_constraint: "Must-haves",
+  soft_preference: "Nice-to-haves",
+  dislike: "Avoid",
+};
+
+export interface View {
+  text: string;
+  keyboard?: InlineKeyboard;
+}
+
+const bullets = (items: string[]) => items.map((i) => `• ${escapeHtml(i)}`).join("\n");
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+function profileSections(profile: ProfileView): string[] {
+  const sections: string[] = [];
+  const header: string[] = [];
+  if (profile.headline) header.push(`<b>${escapeHtml(profile.headline)}</b>`);
+  if (profile.summary) header.push(escapeHtml(profile.summary));
+  if (profile.currentSeniority) header.push(`Seniority: ${capitalize(profile.currentSeniority)}`);
+  if (profile.managementScope) header.push(`Management scope: ${escapeHtml(profile.managementScope)}`);
+  header.push(`Open to adjacent roles: ${profile.openToAdjacentRoles ? "yes" : "no"}`);
+  if (profile.linkedinUrl) header.push(`LinkedIn: ${escapeHtml(profile.linkedinUrl)}`);
+  sections.push(header.join("\n"));
+
+  if (profile.experiences.length > 0) sections.push("<b>Experience</b>");
+  for (const e of profile.experiences) {
+    const dates = `${formatMonth(e.startDate) ?? "?"} – ${e.isCurrent ? "present" : (formatMonth(e.endDate) ?? "?")}`;
+    const meta = [dates, e.industry, e.location, e.managedHeadcount ? `managed ${e.managedHeadcount}` : null]
+      .filter((v): v is string => Boolean(v))
+      .map(escapeHtml)
+      .join(" · ");
+    const lines = [`<b>${escapeHtml(e.title)}</b> — ${escapeHtml(e.employer)}`, `<i>${meta}</i>`];
+    if (e.facts.length > 0) lines.push(bullets(e.facts));
+    sections.push(lines.join("\n"));
+  }
+
+  const factKinds = [...new Set(profile.otherFacts.map((f) => f.kind))];
+  for (const kind of factKinds) {
+    const items = profile.otherFacts.filter((f) => f.kind === kind).map((f) => f.statement);
+    sections.push(`<b>${FACT_SECTION_TITLES[kind]}</b>\n${bullets(items)}`);
+  }
+
+  const preferenceKinds = (Object.keys(PREFERENCE_SECTION_TITLES) as PreferenceKind[]).filter((k) =>
+    profile.preferences.some((p) => p.kind === k),
+  );
+  for (const kind of preferenceKinds) {
+    const items = profile.preferences.filter((p) => p.kind === kind).map((p) => p.label);
+    sections.push(`<b>${PREFERENCE_SECTION_TITLES[kind]}</b>\n${bullets(items)}`);
+  }
+  return sections;
+}
+
+function packMessages(sections: string[]): string[] {
+  const messages: string[] = [];
+  let current = "";
+  for (const section of sections) {
+    const piece = section.length > MAX_MESSAGE_LENGTH ? `${section.slice(0, MAX_MESSAGE_LENGTH)}…` : section;
+    if (current && current.length + piece.length + 2 > MAX_MESSAGE_LENGTH) {
+      messages.push(current);
+      current = piece;
+    } else {
+      current = current ? `${current}\n\n${piece}` : piece;
+    }
+  }
+  if (current) messages.push(current);
+  return messages;
+}
+
+function withFinalKeyboard(sections: string[], outro: string, keyboard?: InlineKeyboard): View[] {
+  const texts = packMessages([...sections, outro]);
+  return texts.map((text, i) => (i === texts.length - 1 && keyboard ? { text, keyboard } : { text }));
+}
+
+export const analyzeKeyboard = () =>
+  new InlineKeyboard().text("🔍 Analyze", encodeCallback({ type: "onboarding_analyze" }));
+
+export function profileReplyViews(reply: ProfileReply): View[] {
+  switch (reply.kind) {
+    case "ask_linkedin":
+      return [{ text: messages.askLinkedin }];
+    case "ask_documents":
+      return [{ text: `${reply.linkedinSaved ? messages.linkedinSaved : messages.linkedinSkipped}\n\n${messages.askDocuments}` }];
+    case "source_received": {
+      const name = reply.fileName ? ` (${escapeHtml(reply.fileName)})` : "";
+      return [
+        {
+          text: `Got ${SOURCE_LABELS[reply.source]}${name} ✅ Send more, or tap <b>Analyze</b> when you're done.`,
+          keyboard: analyzeKeyboard(),
+        },
+      ];
+    }
+    case "unreadable_document":
+      return [{ text: messages.unreadableDocument }];
+    case "need_source":
+      return [{ text: messages.needSource }];
+    case "analysis_failed":
+      return [{ text: messages.analysisFailed, keyboard: analyzeKeyboard() }];
+    case "busy":
+      return [{ text: messages.busy }];
+    case "question":
+      return [
+        {
+          text: `<i>Question ${reply.position} of ${reply.total}</i>\n${escapeHtml(reply.text)}\n\n<i>Reply \"skip\" to skip.</i>`,
+        },
+      ];
+    case "review":
+      return withFinalKeyboard(
+        [reply.note ? messages.reviewUpdated : messages.reviewIntro, ...profileSections(reply.profile)],
+        messages.reviewOutro,
+        new InlineKeyboard().text("✅ Confirm profile", encodeCallback({ type: "onboarding_confirm" })),
+      );
+    case "onboarding_done":
+      return [{ text: messages.onboardingDone }];
+    case "profile":
+      return withFinalKeyboard(profileSections(reply.profile), messages.profileOutro);
+    case "edit_proposed":
+      return withFinalKeyboard(
+        [messages.editProposed, reply.changes.map(escapeHtml).join("\n")],
+        "Apply these changes?",
+        new InlineKeyboard()
+          .text("✅ Apply", encodeCallback({ type: "edit_apply", token: reply.token }))
+          .text("✖️ Cancel", encodeCallback({ type: "edit_cancel", token: reply.token })),
+      );
+    case "edit_applied":
+      return [{ text: messages.editApplied }];
+    case "edit_cancelled":
+      return [{ text: messages.editCancelled }];
+    case "expired":
+      return [{ text: messages.expired }];
+    case "no_change":
+      return [{ text: reply.reply ? escapeHtml(reply.reply) : messages.noChange }];
+    case "not_onboarded":
+      return [{ text: messages.notOnboarded }];
+    case "document_not_expected":
+      return [{ text: messages.documentNotExpected }];
+  }
 }
