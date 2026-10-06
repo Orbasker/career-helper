@@ -12,6 +12,7 @@ export type PreferenceValue =
 export interface FitEvidence {
   claim: string;
   careerFactIds: string[];
+  workExperienceIds?: string[];
   jobExcerpt?: string;
 }
 
