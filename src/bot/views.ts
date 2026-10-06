@@ -76,7 +76,9 @@ export const messages = {
   cvFailed: "Sorry, I couldn't prepare the CV this time. Tap <b>Tailor my CV</b> again to retry.",
   cvDraftOutro:
     "Every line comes from your confirmed profile: I only chose, ordered and reworded it for this job. Approve to keep this version, or discard it.",
-  cvApproved: "Saved ✅ This is now your CV for this job.",
+  cvApproved: "Saved ✅ Here's your CV for this job as a Word document.",
+  cvDocumentCaption: "Your tailored CV. Every line comes from your confirmed profile.",
+  cvDocumentFailed: "Your CV is saved, but I couldn't create the document right now. Tap below to try again.",
   cvDiscarded: "Discarded. Tap <b>Tailor my CV</b> on the job to start over.",
   help: [
     "<b>What I can do</b>",

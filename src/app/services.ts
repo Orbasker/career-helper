@@ -114,6 +114,10 @@ export interface CvDraftView {
   applicationNote: string | null;
 }
 
+export type CvDocumentFile =
+  | { kind: "cached"; fileRef: string; fileName: string }
+  | { kind: "rendered"; data: Uint8Array; fileName: string };
+
 export type CvTailorOutcome = { kind: "draft"; draft: CvDraftView } | { kind: "failed" } | { kind: "not_found" };
 export type CvDecision = "approved" | "discarded" | "not_found";
 
@@ -163,6 +167,10 @@ export interface CvService {
   tailor(userId: string, versionId: string): Promise<CvTailorOutcome>;
   draft(userId: string, versionId: string): Promise<CvDraftView | null>;
   decide(userId: string, versionId: string, approve: boolean): Promise<CvDecision>;
+  /** The approved version as a DOCX: the stored Telegram file when it was sent before, otherwise freshly rendered. */
+  document(userId: string, versionId: string): Promise<CvDocumentFile | null>;
+  /** Remembers the Telegram file of a sent document so it is reused instead of re-rendered. */
+  saveDocumentRef(userId: string, versionId: string, fileRef: string): Promise<void>;
 }
 
 export interface ConversationService {
