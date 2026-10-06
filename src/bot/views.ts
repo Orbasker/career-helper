@@ -1,7 +1,14 @@
 import { InlineKeyboard, Keyboard } from "grammy";
 import { formatMonth } from "../domain/dates.js";
 import type { CareerFactKind, MatchRecommendation, PreferenceKind, ProfileSourceKind } from "../domain/enums.js";
-import type { MatchDetails, MatchSummary, PreferenceProposalView, ProfileReply, ProfileView } from "../app/services.js";
+import type {
+  CvDraftView,
+  MatchDetails,
+  MatchSummary,
+  PreferenceProposalView,
+  ProfileReply,
+  ProfileView,
+} from "../app/services.js";
 import type { FeedbackReasonTag } from "../learning/infer.js";
 import { encodeCallback } from "./callbacks.js";
 
@@ -64,8 +71,13 @@ export const messages = {
   feedbackReasonTextSaved: "Thanks, that helps.",
   proposalAccepted: "Done ✅ I'll use this for new matches.",
   proposalRejected: "OK, I won't use that.",
-  cvRequested: "I'm preparing a tailored CV for this job. I'll send it here when it's ready for your review.",
-  cvAlreadyRequested: "A tailored CV for this job is already in progress.",
+  cvRequested: "I'm preparing a tailored CV for this job. It takes about a minute; I'll send it here for your review.",
+  cvInProgress: "A tailored CV for this job is already being prepared.",
+  cvFailed: "Sorry, I couldn't prepare the CV this time. Tap <b>Tailor my CV</b> again to retry.",
+  cvDraftOutro:
+    "Every line comes from your confirmed profile: I only chose, ordered and reworded it for this job. Approve to keep this version, or discard it.",
+  cvApproved: "Saved ✅ This is now your CV for this job.",
+  cvDiscarded: "Discarded. Tap <b>Tailor my CV</b> on the job to start over.",
   help: [
     "<b>What I can do</b>",
     "• /new — your latest matches",
@@ -174,6 +186,36 @@ export function proposalView(proposal: PreferenceProposalView): { text: string; 
       .text("✅ Yes", encodeCallback({ type: "proposal_decision", preferenceId, accept: true }))
       .text("✖️ No", encodeCallback({ type: "proposal_decision", preferenceId, accept: false })),
   };
+}
+
+export function cvDraftViews(draft: CvDraftView): View[] {
+  const at = draft.company ? ` at ${escapeHtml(draft.company)}` : "";
+  const sections = [`<b>📝 Tailored CV for ${escapeHtml(draft.jobTitle)}${at}</b>`];
+  if (draft.summary.length) sections.push(`<b>Summary</b>\n${escapeHtml(draft.summary.join(" "))}`);
+  for (const e of draft.experiences) {
+    const dates = `${formatMonth(e.startDate) ?? "?"} – ${e.isCurrent ? "present" : (formatMonth(e.endDate) ?? "?")}`;
+    const lines = [`<b>${escapeHtml(e.title)}</b> — ${escapeHtml(e.employer)}`, `<i>${dates}</i>`];
+    if (e.bullets.length) lines.push(bullets(e.bullets));
+    sections.push(lines.join("\n"));
+  }
+  if (draft.skills.length) sections.push(`<b>Skills</b>\n${escapeHtml(draft.skills.join(" · "))}`);
+  const list: [string, string[]][] = [
+    ["Education", draft.education],
+    ["Certifications", draft.certifications],
+    ["Languages", draft.languages],
+    ["Other", draft.other],
+  ];
+  for (const [title, items] of list) if (items.length) sections.push(`<b>${title}</b>\n${bullets(items)}`);
+  if (draft.applicationNote) sections.push(`<b>Application note</b>\n${escapeHtml(draft.applicationNote)}`);
+
+  const { versionId } = draft;
+  return withFinalKeyboard(
+    sections,
+    messages.cvDraftOutro,
+    new InlineKeyboard()
+      .text("✅ Approve", encodeCallback({ type: "cv_decision", versionId, approve: true }))
+      .text("🗑 Discard", encodeCallback({ type: "cv_decision", versionId, approve: false })),
+  );
 }
 
 const SOURCE_LABELS: Record<ProfileSourceKind, string> = {

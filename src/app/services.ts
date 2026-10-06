@@ -94,7 +94,28 @@ export type ProfileReply =
   | { kind: "no_change"; reply: string | null }
   | { kind: "not_onboarded" };
 
-export type CvRequestOutcome = "requested" | "already_requested" | "not_found";
+export type CvRequestOutcome =
+  | { kind: "requested"; versionId: string }
+  | { kind: "in_progress" }
+  | { kind: "draft"; versionId: string }
+  | { kind: "not_found" };
+
+export interface CvDraftView {
+  versionId: string;
+  jobTitle: string;
+  company: string | null;
+  summary: string[];
+  experiences: { title: string; employer: string; startDate: string | null; endDate: string | null; isCurrent: boolean; bullets: string[] }[];
+  skills: string[];
+  education: string[];
+  certifications: string[];
+  languages: string[];
+  other: string[];
+  applicationNote: string | null;
+}
+
+export type CvTailorOutcome = { kind: "draft"; draft: CvDraftView } | { kind: "failed" } | { kind: "not_found" };
+export type CvDecision = "approved" | "discarded" | "not_found";
 
 export interface UserService {
   ensureUser(identity: TelegramIdentity): Promise<UserSession>;
@@ -136,7 +157,12 @@ export interface FeedbackService {
 }
 
 export interface CvService {
+  /** Opens a CV request for the match, or reports the open one; a request stuck for too long is failed and replaced. */
   requestTailored(userId: string, matchId: string): Promise<CvRequestOutcome>;
+  /** Generates the tailored draft for a `requested` version. */
+  tailor(userId: string, versionId: string): Promise<CvTailorOutcome>;
+  draft(userId: string, versionId: string): Promise<CvDraftView | null>;
+  decide(userId: string, versionId: string, approve: boolean): Promise<CvDecision>;
 }
 
 export interface ConversationService {

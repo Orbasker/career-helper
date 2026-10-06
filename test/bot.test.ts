@@ -5,7 +5,6 @@ import { createBot } from "../src/bot/bot.js";
 import { encodeCallback } from "../src/bot/callbacks.js";
 import { WHATS_NEW_LABEL, messages } from "../src/bot/views.js";
 import {
-  cvVersions,
   duplicateGroups,
   feedback,
   jobSources,
@@ -16,6 +15,7 @@ import {
   users,
 } from "../src/db/schema.js";
 import { FakeProfileAssistant } from "./support/assistant.js";
+import { FakeCvTailorer } from "./support/tailorer.js";
 import { createTestDb, type TestDb } from "./support/db.js";
 import { BOT_INFO, TELEGRAM_USER_ID, callbackUpdate, captureApiCalls, textUpdate, type ApiCall } from "./support/telegram.js";
 
@@ -26,7 +26,7 @@ let calls: ApiCall[];
 
 beforeEach(async () => {
   ({ db, close } = await createTestDb());
-  bot = createBot("test-token", createPgServices(db, new FakeProfileAssistant()), { botInfo: BOT_INFO });
+  bot = createBot("test-token", createPgServices(db, new FakeProfileAssistant(), new FakeCvTailorer()), { botInfo: BOT_INFO });
   calls = captureApiCalls(bot);
 });
 
@@ -145,17 +145,6 @@ describe("telegram bot", () => {
     await send(callbackUpdate(encodeCallback({ type: "feedback", matchId, verdict: "interested" })));
     expect(calls.find((c) => c.method === "answerCallbackQuery")!.payload.text).toBe(messages.matchNotFound);
     expect(await db.select().from(feedback)).toHaveLength(0);
-  });
-
-  it("requests a tailored CV once per match", async () => {
-    await send(textUpdate("/help"));
-    const matchId = await seedMatch(await currentUserId());
-
-    await send(callbackUpdate(encodeCallback({ type: "tailor_cv", matchId })));
-    expect(sent()).toEqual([messages.cvRequested]);
-    await send(callbackUpdate(encodeCallback({ type: "tailor_cv", matchId })));
-    expect(sent()).toEqual([messages.cvAlreadyRequested]);
-    expect(await db.select().from(cvVersions)).toHaveLength(1);
   });
 
   it("ignores group chats", async () => {

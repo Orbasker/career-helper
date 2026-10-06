@@ -5,6 +5,7 @@ export type CallbackAction =
   | { type: "job_details"; matchId: string }
   | { type: "feedback"; matchId: string; verdict: FeedbackVerdict }
   | { type: "tailor_cv"; matchId: string }
+  | { type: "cv_decision"; versionId: string; approve: boolean }
   | { type: "onboarding_analyze" }
   | { type: "onboarding_confirm" }
   | { type: "edit_apply"; token: string }
@@ -34,6 +35,8 @@ export function encodeCallback(action: CallbackAction): string {
       return `fb:${VERDICT_CODES[action.verdict]}:${action.matchId}`;
     case "tailor_cv":
       return `cv:${action.matchId}`;
+    case "cv_decision":
+      return `cvd:${action.approve ? "a" : "x"}:${action.versionId}`;
     case "onboarding_analyze":
       return "ob:analyze";
     case "onboarding_confirm":
@@ -67,6 +70,9 @@ export function decodeCallback(data: string): CallbackAction | null {
     if (parts[1] === REASON_TEXT_CODE) return { type: "feedback_reason_text", feedbackId: id };
     const tag = (Object.keys(REASON_CODES) as FeedbackReasonTag[]).find((t) => REASON_CODES[t] === parts[1]);
     if (tag) return { type: "feedback_reason", feedbackId: id, tag };
+  }
+  if (parts.length === 3 && parts[0] === "cvd" && (parts[1] === "a" || parts[1] === "x")) {
+    return { type: "cv_decision", versionId: id, approve: parts[1] === "a" };
   }
   if (parts.length === 3 && parts[0] === "pp" && (parts[1] === "a" || parts[1] === "r")) {
     return { type: "proposal_decision", preferenceId: id, accept: parts[1] === "a" };

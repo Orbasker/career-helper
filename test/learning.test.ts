@@ -23,6 +23,7 @@ import type { WorkMode } from "../src/domain/enums.js";
 import type { PreferenceSnapshot } from "../src/domain/profile.js";
 import { inferPreferences, type FeedbackSignal } from "../src/learning/infer.js";
 import { FakeProfileAssistant } from "./support/assistant.js";
+import { FakeCvTailorer } from "./support/tailorer.js";
 import { createTestDb, type TestDb } from "./support/db.js";
 import { BOT_INFO, TELEGRAM_USER_ID, callbackUpdate, captureApiCalls, textUpdate, type ApiCall } from "./support/telegram.js";
 
@@ -331,7 +332,7 @@ describe("feedback loop", () => {
     let calls: ApiCall[];
 
     beforeEach(() => {
-      bot = createBot("test-token", createPgServices(db, new FakeProfileAssistant()), { botInfo: BOT_INFO });
+      bot = createBot("test-token", createPgServices(db, new FakeProfileAssistant(), new FakeCvTailorer()), { botInfo: BOT_INFO });
       calls = captureApiCalls(bot);
     });
 

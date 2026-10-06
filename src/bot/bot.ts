@@ -5,6 +5,7 @@ import { decodeCallback } from "./callbacks.js";
 import {
   MY_PROFILE_LABEL,
   WHATS_NEW_LABEL,
+  cvDraftViews,
   feedbackReasonView,
   mainMenu,
   matchDetailsView,
@@ -12,6 +13,7 @@ import {
   messages,
   profileReplyViews,
   proposalView,
+  type View,
 } from "./views.js";
 
 export const LATEST_MATCHES_LIMIT = 5;
@@ -52,6 +54,10 @@ export function createBot(
         await ctx.reply(view.text, { ...html, reply_markup: view.keyboard ?? (menu ? mainMenu : undefined) });
       }
     }
+  };
+
+  const sendViews = async (ctx: BotContext, views: View[]) => {
+    for (const view of views) await ctx.reply(view.text, { ...html, reply_markup: view.keyboard });
   };
 
   const typing = (ctx: BotContext) => ctx.replyWithChatAction("typing").catch(() => undefined);
@@ -185,12 +191,35 @@ export function createBot(
       case "tailor_cv": {
         const outcome = await services.cv.requestTailored(ctx.userId, action.matchId);
         await ctx.answerCallbackQuery();
-        const reply = {
-          requested: messages.cvRequested,
-          already_requested: messages.cvAlreadyRequested,
-          not_found: messages.matchNotFound,
-        }[outcome];
-        await ctx.reply(reply, html);
+        switch (outcome.kind) {
+          case "not_found":
+            await ctx.reply(messages.matchNotFound, html);
+            return;
+          case "in_progress":
+            await ctx.reply(messages.cvInProgress, html);
+            return;
+          case "draft": {
+            const draft = await services.cv.draft(ctx.userId, outcome.versionId);
+            if (draft) await sendViews(ctx, cvDraftViews(draft));
+            return;
+          }
+          case "requested": {
+            await ctx.reply(messages.cvRequested, html);
+            await typing(ctx);
+            const result = await services.cv.tailor(ctx.userId, outcome.versionId);
+            if (result.kind === "draft") await sendViews(ctx, cvDraftViews(result.draft));
+            else await ctx.reply(messages.cvFailed, html);
+            return;
+          }
+        }
+        return;
+      }
+      case "cv_decision": {
+        const decision = await services.cv.decide(ctx.userId, action.versionId, action.approve);
+        await ctx.answerCallbackQuery();
+        await ctx.editMessageReplyMarkup().catch(() => undefined);
+        const reply = { approved: messages.cvApproved, discarded: messages.cvDiscarded, not_found: messages.expired }[decision];
+        await ctx.reply(reply, { ...html, reply_markup: mainMenu });
         return;
       }
       case "onboarding_analyze": {

@@ -5,6 +5,7 @@ import { webhookSecret } from "../src/bot/telegram-env.js";
 import { createWebhookHandler } from "../src/bot/webhook.js";
 import { messages } from "../src/bot/views.js";
 import { FakeProfileAssistant } from "./support/assistant.js";
+import { FakeCvTailorer } from "./support/tailorer.js";
 import { createTestDb } from "./support/db.js";
 import { BOT_INFO, captureApiCalls, textUpdate, type ApiCall } from "./support/telegram.js";
 
@@ -17,7 +18,7 @@ let background: Promise<unknown>[];
 beforeEach(async () => {
   const testDb = await createTestDb();
   close = testDb.close;
-  const bot = createBot(TOKEN, createPgServices(testDb.db, new FakeProfileAssistant()), { botInfo: BOT_INFO });
+  const bot = createBot(TOKEN, createPgServices(testDb.db, new FakeProfileAssistant(), new FakeCvTailorer()), { botInfo: BOT_INFO });
   calls = captureApiCalls(bot);
   background = [];
   handle = createWebhookHandler(bot, webhookSecret(TOKEN), (task) => background.push(task));

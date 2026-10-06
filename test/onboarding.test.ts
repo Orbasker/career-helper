@@ -16,6 +16,7 @@ import {
 } from "../src/db/schema.js";
 import type { ProfileChange } from "../src/domain/profile.js";
 import { FakeProfileAssistant } from "./support/assistant.js";
+import { FakeCvTailorer } from "./support/tailorer.js";
 import { createTestDb, type TestDb } from "./support/db.js";
 import {
   BOT_INFO,
@@ -80,7 +81,7 @@ beforeEach(async () => {
   assistant = new FakeProfileAssistant();
   assistant.extraction = { changes: EXTRACTION, followUpQuestions: ["Which roles are you targeting?", "Remote, hybrid or onsite?"] };
   fileContent = CV_TEXT;
-  bot = createBot("test-token", createPgServices(db, assistant), { botInfo: BOT_INFO }, {
+  bot = createBot("test-token", createPgServices(db, assistant, new FakeCvTailorer()), { botInfo: BOT_INFO }, {
     downloadFile: async () => new TextEncoder().encode(fileContent),
   });
   calls = captureApiCalls(bot);
