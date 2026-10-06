@@ -1,6 +1,30 @@
 {
+  "name": "career-agent",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "typecheck": "tsc",
+    "test": "vitest run",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "bun src/db/migrate.ts"
+  },
   "dependencies": {
     "@neon/config": "^1.8.4",
-    "@neon/env": "^1.5.1"
-  }
+    "@neon/env": "^1.5.1",
+    "drizzle-orm": "^0.45.3",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@types/node": "^26.6.4",
+    "@types/pg": "^8.23.1",
+    "drizzle-kit": "^0.31.11",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.3",
+    "@types/bun": "latest"
+  },
+  "packageManager": "bun@1.3.9"
 }
