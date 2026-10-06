@@ -5,11 +5,13 @@ import { decodeCallback } from "./callbacks.js";
 import {
   MY_PROFILE_LABEL,
   WHATS_NEW_LABEL,
+  feedbackReasonView,
   mainMenu,
   matchDetailsView,
   matchListItem,
   messages,
   profileReplyViews,
+  proposalView,
 } from "./views.js";
 
 export const LATEST_MATCHES_LIMIT = 5;
@@ -66,6 +68,13 @@ export function createBot(
     ctx.hasProfile = session.hasProfile;
     await next();
   });
+
+  const sendProposals = async (ctx: BotContext) => {
+    for (const proposal of await services.feedback.learn(ctx.userId)) {
+      const view = proposalView(proposal);
+      await ctx.reply(view.text, { ...html, reply_markup: view.keyboard });
+    }
+  };
 
   const sendLatest = async (ctx: BotContext) => {
     const latest = await services.matches.whatsNew(ctx.userId, LATEST_MATCHES_LIMIT);
@@ -144,6 +153,33 @@ export function createBot(
         });
         const details = await services.matches.details(ctx.userId, action.matchId);
         if (details) await ctx.editMessageReplyMarkup({ reply_markup: matchDetailsView(details).keyboard });
+        if (action.verdict === "not_interested") {
+          const view = feedbackReasonView(recorded.feedbackId);
+          await ctx.reply(view.text, { ...html, reply_markup: view.keyboard });
+          await sendProposals(ctx);
+        }
+        return;
+      }
+      case "feedback_reason": {
+        const saved = await services.feedback.addReasonTag(ctx.userId, action.feedbackId, action.tag);
+        await ctx.answerCallbackQuery({ text: saved ? messages.feedbackReasonNoted : messages.matchNotFound });
+        if (saved) await sendProposals(ctx);
+        return;
+      }
+      case "feedback_reason_text": {
+        const waiting = await services.feedback.awaitReasonText(ctx.userId, action.feedbackId);
+        await ctx.answerCallbackQuery();
+        await ctx.reply(waiting ? messages.feedbackReasonTextPrompt : messages.matchNotFound, html);
+        return;
+      }
+      case "proposal_decision": {
+        const outcome = await services.feedback.decideProposal(ctx.userId, action.preferenceId, action.accept);
+        await ctx.answerCallbackQuery();
+        await ctx.editMessageReplyMarkup().catch(() => undefined);
+        const reply = { accepted: messages.proposalAccepted, rejected: messages.proposalRejected, not_found: messages.expired }[
+          outcome
+        ];
+        await ctx.reply(reply, { ...html, reply_markup: mainMenu });
         return;
       }
       case "tailor_cv": {
@@ -189,6 +225,10 @@ export function createBot(
   bot.on("message:text", async (ctx) => {
     if (ctx.message.text.startsWith("/")) {
       await ctx.reply(messages.help, { ...html, reply_markup: mainMenu });
+      return;
+    }
+    if (await services.feedback.takeReasonText(ctx.userId, ctx.message.text)) {
+      await ctx.reply(messages.feedbackReasonTextSaved, { ...html, reply_markup: mainMenu });
       return;
     }
     await typing(ctx);

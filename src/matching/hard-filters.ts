@@ -1,7 +1,7 @@
 import type { SeniorityLevel } from "../domain/enums.js";
 import type { PreferenceSnapshot } from "../domain/profile.js";
 import type { PreferenceValue } from "../domain/types.js";
-import { normalizeLocation, normalizeText, normalizeTitle } from "../ingestion/normalize.js";
+import { normalizeCompany, normalizeLocation, normalizeText, normalizeTitle } from "../ingestion/normalize.js";
 import type { MatchJob } from "./types.js";
 
 export interface ConstraintFailure {
@@ -56,13 +56,20 @@ const SENIORITY_PATTERNS: [RegExp, SeniorityLevel][] = [
 ];
 
 /**
- * Applies the user's active hard constraints. A constraint only fails on explicit, contradicting job data:
- * unknown fields, and constraints with no reliable job field (compensation, terms, free text), always pass.
+ * Applies the user's active hard constraints and company dislikes. A constraint only fails on explicit, contradicting
+ * job data: unknown fields, and constraints with no reliable job field (compensation, terms, free text), always pass.
  */
 export function applyHardFilters(job: MatchJob, preferences: readonly PreferenceSnapshot[]): HardFilterResult {
   const failures: ConstraintFailure[] = [];
   for (const preference of preferences) {
-    if (preference.kind !== "hard_constraint" || preference.status !== "active") continue;
+    if (preference.status !== "active") continue;
+    if (preference.kind === "dislike" && preference.dimension === "company") {
+      if (isDislikedCompany(preference, job)) {
+        failures.push({ preferenceId: preference.id, label: preference.label, reason: `company is ${job.company}` });
+      }
+      continue;
+    }
+    if (preference.kind !== "hard_constraint") continue;
     if (structuredMatch(preference.value, job) !== false) continue;
     failures.push({ preferenceId: preference.id, label: preference.label, reason: failureReason(preference.value, job) });
   }
@@ -91,6 +98,12 @@ export function structuredMatch(value: PreferenceValue, job: MatchJob): boolean 
 export function inferSeniority(title: string): SeniorityLevel[] {
   const normalized = normalizeTitle(title) ?? "";
   return SENIORITY_PATTERNS.filter(([pattern]) => pattern.test(normalized)).map(([, level]) => level);
+}
+
+function isDislikedCompany(preference: PreferenceSnapshot, job: MatchJob): boolean {
+  const company = normalizeCompany(job.company);
+  if (!company || preference.value.type !== "terms") return false;
+  return preference.value.terms.some((term) => normalizeCompany(term) === company);
 }
 
 /** Remote postings satisfy any location; a country also covers its known cities. */

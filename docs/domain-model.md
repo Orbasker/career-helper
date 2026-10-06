@@ -11,7 +11,7 @@ Source of truth: `src/db/schema.ts` (Drizzle) and `src/domain/enums.ts`. Migrati
 | Preferences | `preferences`, `preference_evidence` | Hard constraints, soft preferences, dislikes, target roles. Inferred preferences start as `proposed` and cannot become `active` without `decided_at`. Removed preferences become `retired`; replaced ones become `superseded`. `preference_evidence` links them to the feedback that suggested them. |
 | Jobs | `job_sources`, `raw_job_records`, `jobs`, `duplicate_groups` | Every job references its source and the raw payload it was parsed from. Duplicates across sources share a `duplicate_group` with one canonical job. |
 | Matching | `matches`, `match_evaluations` | One match per user and duplicate group, so the same posting is never notified twice. Each funnel stage appends an evaluation with outcome, evidence, model and prompt version. |
-| Feedback | `feedback` | Append-only interested / not-interested history with optional reason. |
+| Feedback | `feedback` | Append-only interested / not-interested history with optional reason tags and free-text reason. See `docs/feedback-learning.md`. |
 | CV | `master_cvs`, `cv_versions`, `cv_version_items` | Facts hold verified truth; `cv_version_items.generated_text` holds tailored wording and must point at a verified fact owned by the same user (enforced by trigger). |
 
 ## Invariants enforced in the database

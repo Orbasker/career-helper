@@ -1,7 +1,8 @@
 import { InlineKeyboard, Keyboard } from "grammy";
 import { formatMonth } from "../domain/dates.js";
 import type { CareerFactKind, MatchRecommendation, PreferenceKind, ProfileSourceKind } from "../domain/enums.js";
-import type { MatchDetails, MatchSummary, ProfileReply, ProfileView } from "../app/services.js";
+import type { MatchDetails, MatchSummary, PreferenceProposalView, ProfileReply, ProfileView } from "../app/services.js";
+import type { FeedbackReasonTag } from "../learning/infer.js";
 import { encodeCallback } from "./callbacks.js";
 
 export const WHATS_NEW_LABEL = "What's new?";
@@ -57,6 +58,12 @@ export const messages = {
   matchNotFound: "I couldn't find that job anymore.",
   feedbackInterested: "Marked as interested 👍",
   feedbackNotInterested: "Got it, I'll show fewer jobs like this.",
+  feedbackReasonPrompt: "What put you off? It's optional, but it helps me learn what to skip.",
+  feedbackReasonNoted: "Noted, thanks.",
+  feedbackReasonTextPrompt: "Tell me in one message what put you off.",
+  feedbackReasonTextSaved: "Thanks, that helps.",
+  proposalAccepted: "Done ✅ I'll use this for new matches.",
+  proposalRejected: "OK, I won't use that.",
   cvRequested: "I'm preparing a tailored CV for this job. I'll send it here when it's ready for your review.",
   cvAlreadyRequested: "A tailored CV for this job is already in progress.",
   help: [
@@ -131,6 +138,42 @@ export function matchDetailsView(match: MatchDetails): { text: string; keyboard:
     .row()
     .text("📝 Tailor my CV", encodeCallback({ type: "tailor_cv", matchId }));
   return { text: sections.join("\n\n"), keyboard };
+}
+
+const REASON_LABELS: [FeedbackReasonTag, string][] = [
+  ["role", "🧭 Not my kind of role"],
+  ["seniority", "📶 Wrong level"],
+  ["location", "📍 Location"],
+  ["work_mode", "🏠 Remote / office setup"],
+  ["company", "🏢 Company"],
+  ["pay", "💰 Pay"],
+];
+
+export function feedbackReasonView(feedbackId: string): { text: string; keyboard: InlineKeyboard } {
+  const keyboard = new InlineKeyboard();
+  REASON_LABELS.forEach(([tag, label], i) => {
+    keyboard.text(label, encodeCallback({ type: "feedback_reason", feedbackId, tag }));
+    if (i % 2 === 1) keyboard.row();
+  });
+  keyboard.text("✍️ Something else", encodeCallback({ type: "feedback_reason_text", feedbackId }));
+  return { text: messages.feedbackReasonPrompt, keyboard };
+}
+
+export function proposalView(proposal: PreferenceProposalView): { text: string; keyboard: InlineKeyboard } {
+  const label = `<b>${escapeHtml(proposal.label)}</b>`;
+  const question =
+    proposal.kind === "dislike"
+      ? `Should I skip ${label} from now on?`
+      : proposal.kind === "hard_constraint"
+        ? `Should I make ${label} a must-have?`
+        : `Should I add ${label} to your ${PREFERENCE_SECTION_TITLES[proposal.kind].toLowerCase()}?`;
+  const { preferenceId } = proposal;
+  return {
+    text: `💡 ${escapeHtml(proposal.rationale)}\n${question}`,
+    keyboard: new InlineKeyboard()
+      .text("✅ Yes", encodeCallback({ type: "proposal_decision", preferenceId, accept: true }))
+      .text("✖️ No", encodeCallback({ type: "proposal_decision", preferenceId, accept: false })),
+  };
 }
 
 const SOURCE_LABELS: Record<ProfileSourceKind, string> = {

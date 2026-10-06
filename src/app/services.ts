@@ -10,6 +10,7 @@ import type {
   WorkMode,
 } from "../domain/enums.js";
 import type { ProfileChange, ProfileSnapshot } from "../domain/profile.js";
+import type { FeedbackReasonTag } from "../learning/infer.js";
 
 export interface TelegramIdentity {
   telegramUserId: number;
@@ -112,8 +113,26 @@ export interface MatchService {
   details(userId: string, matchId: string): Promise<MatchDetails | null>;
 }
 
+export interface PreferenceProposalView {
+  preferenceId: string;
+  kind: PreferenceKind;
+  label: string;
+  rationale: string;
+}
+
+export type ProposalDecision = "accepted" | "rejected" | "not_found";
+
 export interface FeedbackService {
-  record(userId: string, matchId: string, verdict: FeedbackVerdict): Promise<boolean>;
+  /** Returns the feedback id, or null when the match is not the user's; repeating the latest verdict is a no-op. */
+  record(userId: string, matchId: string, verdict: FeedbackVerdict): Promise<{ feedbackId: string } | null>;
+  addReasonTag(userId: string, feedbackId: string, tag: FeedbackReasonTag): Promise<boolean>;
+  /** Makes the user's next text message the free-text reason for this feedback, for a short while. */
+  awaitReasonText(userId: string, feedbackId: string): Promise<boolean>;
+  /** Stores `text` as the awaited reason; false when no reason is awaited, so the text is handled normally. */
+  takeReasonText(userId: string, text: string): Promise<boolean>;
+  /** Turns repeated feedback into new proposed preferences for the user to confirm. */
+  learn(userId: string): Promise<PreferenceProposalView[]>;
+  decideProposal(userId: string, preferenceId: string, accept: boolean): Promise<ProposalDecision>;
 }
 
 export interface CvService {

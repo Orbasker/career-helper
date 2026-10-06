@@ -88,6 +88,17 @@ const hrSnapshot = (prefs: PreferenceSnapshot[] = []): ProfileSnapshot => ({
 });
 
 describe("applyHardFilters", () => {
+  it("rejects jobs at a disliked company, ignoring legal suffixes and case", () => {
+    const company = pref("dislike", { type: "terms", terms: ["Acme Inc."] }, { dimension: "company", label: "Jobs at Acme" });
+    expect(applyHardFilters(job({ company: "ACME" }), [company])).toEqual({
+      passed: false,
+      failures: [{ preferenceId: company.id, label: "Jobs at Acme", reason: "company is ACME" }],
+    });
+    expect(applyHardFilters(job({ company: "Beta" }), [company]).passed).toBe(true);
+    expect(applyHardFilters(job({ company: null }), [company]).passed).toBe(true);
+    expect(applyHardFilters(job({ company: "Acme" }), [{ ...company, status: "proposed" }]).passed).toBe(true);
+  });
+
   it("passes when there are no active hard constraints", () => {
     const prefs = [
       pref("soft_preference", { type: "work_mode", modes: ["remote"] }),

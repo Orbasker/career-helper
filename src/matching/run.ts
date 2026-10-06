@@ -79,6 +79,7 @@ async function matchUser(
       groupId: duplicateGroups.id,
       jobId: jobs.id,
       title: jobs.title,
+      company: jobs.company,
       description: jobs.description,
       location: jobs.location,
       workMode: jobs.workMode,
