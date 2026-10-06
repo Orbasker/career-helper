@@ -3,6 +3,8 @@ import { formatMonth } from "../domain/dates.js";
 import type { CareerFactKind, MatchRecommendation, PreferenceKind, ProfileSourceKind } from "../domain/enums.js";
 import type {
   AddSiteOutcome,
+  ConnectionImport,
+  ConnectionSummary,
   CvDraftView,
   JobSiteView,
   MatchDetails,
@@ -87,10 +89,25 @@ export const messages = {
     "• /new — your latest matches",
     "• /profile — your career profile",
     "• /sites — job sites I search for you (add one with /addsite example.co.il)",
+    "• /connections — import your LinkedIn connections to see who you know at each company",
     "• /start — set up your profile",
     "• Tell me anything to update your profile (e.g. \"no more than 40 minutes commute\", \"add that I managed X\").",
   ].join("\n"),
   error: "Something went wrong on my side. Please try again in a moment.",
+  connectionsHowTo: [
+    "<b>Import your LinkedIn connections</b>",
+    "I'll show you who you know at each company I match you with.",
+    "",
+    "1. On LinkedIn open <b>Settings → Data privacy → Get a copy of your data</b>.",
+    "2. Choose <b>Connections</b> and request the archive. LinkedIn emails it within minutes.",
+    "3. Send me <b>Connections.csv</b> (or the whole ZIP) here.",
+    "",
+    "I only use your contacts to show them on your own matches. You can delete them any time.",
+  ].join("\n"),
+  connectionsNotRecognized: "That file doesn't look like a LinkedIn connections export. Send <b>Connections.csv</b> or the export ZIP — see /connections.",
+  connectionsEmpty: "I couldn't find any contacts in that file. Send /connections for how to export them.",
+  connectionsDeleted: "Deleted your contacts. Send a new export any time with /connections.",
+  connectionsNone: "You have no imported contacts.",
   noSites:
     "Besides the company job boards I check every day, I search the web for jobs that fit your profile.\n\nAdd your favourite job sites and I'll search them too: send <b>/addsite</b> followed by the site, e.g. <i>/addsite example.co.il</i>.",
   sitesIntro: "<b>Job sites I search for you</b>\nI also search the open web and the company job boards I check every day.",
@@ -110,12 +127,37 @@ export function employerNote(match: Pick<MatchSummary, "employerRelation">): str
     : `↩️ <b>You worked at ${employer} before.</b> That's an advantage: mention it, and reach out to former colleagues there.`;
 }
 
+export function connectionsNote(match: Pick<MatchSummary, "connectionCount" | "company">): string | null {
+  if (match.connectionCount === 0 || !match.company) return null;
+  const people = match.connectionCount === 1 ? "1 connection" : `${match.connectionCount} connections`;
+  return `👥 ${people} at ${escapeHtml(match.company)}`;
+}
+
+const STALE_CONNECTIONS_MS = 90 * 86_400_000;
+
+function contactsSection(match: MatchDetails, now = new Date()): string | null {
+  if (match.contacts.length === 0 || !match.company) return null;
+  const lines = match.contacts.map((c) => {
+    const name = c.profileUrl ? `<a href="${escapeHtml(c.profileUrl)}">${escapeHtml(c.fullName)}</a>` : escapeHtml(c.fullName);
+    return `• ${name}${c.position ? ` — ${escapeHtml(c.position)}` : ""}`;
+  });
+  const more = match.connectionCount - match.contacts.length;
+  if (more > 0) lines.push(`<i>and ${more} more</i>`);
+  const imported = match.connectionsImportedAt;
+  if (imported && now.getTime() - imported.getTime() > STALE_CONNECTIONS_MS) {
+    lines.push(`<i>From your LinkedIn export of ${imported.toISOString().slice(0, 7)}. Send /connections to refresh it.</i>`);
+  }
+  return `<b>People you know at ${escapeHtml(match.company)}</b>\n${lines.join("\n")}`;
+}
+
 export function matchListItem(match: MatchSummary): { text: string; keyboard: InlineKeyboard } {
   const lines = [`<b>${escapeHtml(match.title)}</b>`];
   const meta = [match.company, match.location].filter((v): v is string => Boolean(v)).map(escapeHtml);
   if (meta.length > 0) lines.push(meta.join(" · "));
   const note = employerNote(match);
   if (note) lines.push(note);
+  const people = connectionsNote(match);
+  if (people) lines.push(people);
   if (match.recommendation) lines.push(`<i>${RECOMMENDATION_LABELS[match.recommendation]}</i>`);
   if (match.explanation) lines.push(escapeHtml(match.explanation));
   return {
@@ -135,6 +177,8 @@ export function digestView(matches: MatchSummary[], remaining: number): { text: 
     const lines = [`${i + 1}. <b>${escapeHtml(match.title)}</b>${meta.length > 0 ? ` — ${meta.join(" · ")}` : ""}`];
     const note = employerNote(match);
     if (note) lines.push(note);
+    const people = connectionsNote(match);
+    if (people) lines.push(people);
     if (match.recommendation) lines.push(`<i>${RECOMMENDATION_LABELS[match.recommendation]}</i>`);
     if (match.explanation) lines.push(escapeHtml(clip(match.explanation, DIGEST_EXPLANATION_LENGTH)));
     return lines.join("\n");
@@ -158,6 +202,8 @@ export function matchDetailsView(match: MatchDetails): { text: string; keyboard:
   bulletSection("Why it fits", match.fitEvidence);
   bulletSection("Transferable skills", match.transferableSkills);
   bulletSection("Gaps", match.gaps);
+  const people = contactsSection(match);
+  if (people) sections.push(people);
 
   const description =
     match.description.length > DESCRIPTION_PREVIEW_LENGTH
@@ -250,6 +296,28 @@ export function sitesView(sites: JobSiteView[]): { text: string; keyboard?: Inli
   for (const site of sites) keyboard.text(`✖️ ${site.domain}`, encodeCallback({ type: "site_remove", siteId: site.id })).row();
   const list = sites.map((s) => `• ${escapeHtml(s.domain)}`).join("\n");
   return { text: `${messages.sitesIntro}\n\n${list}\n\n${messages.sitesOutro}`, keyboard };
+}
+
+export function connectionsImportReply(outcome: ConnectionImport): string {
+  switch (outcome.kind) {
+    case "imported": {
+      const skipped = outcome.skipped ? ` (${outcome.skipped} rows without a name were skipped)` : "";
+      return `Imported ${outcome.contacts} contacts at ${outcome.companies} companies ✅${skipped}\nI'll show who you know when I match you with one of their companies.`;
+    }
+    case "empty":
+      return messages.connectionsEmpty;
+    case "not_connections":
+      return messages.connectionsNotRecognized;
+  }
+}
+
+export function connectionsView(summary: ConnectionSummary | null): { text: string; keyboard?: InlineKeyboard } {
+  if (!summary) return { text: messages.connectionsHowTo };
+  const date = summary.importedAt.toISOString().slice(0, 10);
+  return {
+    text: `<b>Your connections</b>\n${summary.contacts} contacts at ${summary.companies} companies, imported ${date}.\n\nSend a newer Connections.csv any time to replace them.`,
+    keyboard: new InlineKeyboard().text("🗑 Delete my connections", encodeCallback({ type: "connections_delete" })),
+  };
 }
 
 export function addSiteReply(outcome: AddSiteOutcome): string {

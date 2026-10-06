@@ -32,6 +32,7 @@ describe("employer notes in messages", () => {
     recommendation: "stretch",
     explanation: "Builds on your work.",
     employerRelation: relation,
+    connectionCount: 0,
   });
 
   it("flags internal roles and former employers in the list and the digest", () => {

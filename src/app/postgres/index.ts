@@ -3,6 +3,7 @@ import { SOURCE_ADAPTERS } from "../../ingestion/sources/index.js";
 import { buildStats, formatStats, type SpendLookup } from "../../observability/report.js";
 import type { Db } from "../../db/types.js";
 import type { AppServices, ProfileAssistant } from "../services.js";
+import { PgConnectionService } from "./connections.js";
 import { PgConversationService } from "./conversation.js";
 import { PgCvService } from "./cv.js";
 import { PgFeedbackService } from "./feedback.js";
@@ -26,6 +27,7 @@ export function createPgServices(
     cv: new PgCvService(db, tailorer),
     conversation: new PgConversationService(db, onboarding, assistant),
     sites: new PgSiteService(db, SOURCE_ADAPTERS),
+    connections: new PgConnectionService(db),
     stats: { report: async (days) => formatStats(await buildStats(db, { days, spend: options.spend }), { html: true }) },
   };
 }

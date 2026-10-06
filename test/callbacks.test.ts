@@ -22,6 +22,7 @@ describe("callback data", () => {
     { type: "cv_decision", versionId: feedbackId, approve: false },
     { type: "cv_document", versionId: feedbackId },
     { type: "site_remove", siteId: feedbackId },
+    { type: "connections_delete" },
     { type: "proposal_decision", preferenceId: feedbackId, accept: false },
   ])("round-trips %o within Telegram's 64-byte limit", (action) => {
     const data = encodeCallback(action);

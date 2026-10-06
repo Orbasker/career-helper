@@ -4,6 +4,7 @@ import { careerProfiles, jobs, matches, users } from "../db/schema.js";
 import type { Db } from "../db/types.js";
 import { CONFIDENCE_LEVELS, type ConfidenceLevel, type MatchRecommendation } from "../domain/enums.js";
 import { errorMessage } from "../ingestion/ingest.js";
+import { contactsAtCompanies, contactsFor } from "../connections/lookup.js";
 import { employerRelation, loadEmployerHistory } from "../matching/employer.js";
 
 export type NotifiableRecommendation = Exclude<MatchRecommendation, "not_recommended">;
@@ -140,6 +141,7 @@ export async function runNotifications(
     if (digest.length === 0) continue;
 
     try {
+      const contacts = await contactsAtCompanies(db, userId, digest.map((r) => r.company));
       await notifier.sendDigest(
         rows[0]!.chatId,
         digest.map(({ matchId, title, company, location, recommendation, explanation }) => ({
@@ -150,6 +152,7 @@ export async function runNotifications(
           recommendation,
           explanation,
           employerRelation: employerRelation(company, histories.get(userId) ?? []),
+          connectionCount: contactsFor(contacts, company).length,
         })),
         rows.length - picked.length,
       );

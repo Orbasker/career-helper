@@ -11,6 +11,7 @@ import type {
 } from "../domain/enums.js";
 import type { ProfileChange, ProfileSnapshot } from "../domain/profile.js";
 import type { FeedbackReasonTag } from "../learning/infer.js";
+import type { Contact } from "../connections/lookup.js";
 import type { EmployerRelation } from "../matching/employer.js";
 
 export interface TelegramIdentity {
@@ -33,6 +34,8 @@ export interface MatchSummary {
   recommendation: MatchRecommendation | null;
   explanation: string | null;
   employerRelation: EmployerRelation | null;
+  /** How many of the user's contacts work at the company. */
+  connectionCount: number;
 }
 
 export interface MatchDetails extends MatchSummary {
@@ -45,6 +48,9 @@ export interface MatchDetails extends MatchSummary {
   gaps: string[];
   transferableSkills: string[];
   feedback: FeedbackVerdict | null;
+  /** The most relevant contacts at the company, best first. */
+  contacts: Contact[];
+  connectionsImportedAt: Date | null;
 }
 
 export interface ProfileView {
@@ -222,6 +228,25 @@ export interface SiteService {
   remove(userId: string, siteId: string): Promise<boolean>;
 }
 
+export type ConnectionImport =
+  | { kind: "imported"; contacts: number; companies: number; skipped: number }
+  | { kind: "not_connections" }
+  | { kind: "empty" };
+
+export interface ConnectionSummary {
+  contacts: number;
+  companies: number;
+  importedAt: Date;
+}
+
+export interface ConnectionService {
+  /** Replaces the user's contacts with those in a LinkedIn Connections.csv or export ZIP. */
+  import(userId: string, file: { data: Uint8Array; fileName: string | null }): Promise<ConnectionImport>;
+  summary(userId: string): Promise<ConnectionSummary | null>;
+  /** Deletes all of the user's contacts; returns how many were deleted. */
+  forget(userId: string): Promise<number>;
+}
+
 export interface StatsService {
   /** Operator report for the last `days` days, formatted for Telegram. */
   report(days: number): Promise<string>;
@@ -236,4 +261,5 @@ export interface AppServices {
   conversation: ConversationService;
   sites: SiteService;
   stats: StatsService;
+  connections: ConnectionService;
 }

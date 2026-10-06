@@ -293,7 +293,7 @@ describe("notification threshold", () => {
 
 describe("TelegramNotifier", () => {
   const digest: MatchSummary[] = [
-    { matchId: "11111111-1111-1111-1111-111111111111", title: "People <Ops> Lead", company: "Acme", location: null, recommendation: "strong_fit", explanation: "Great fit.", employerRelation: null },
+    { matchId: "11111111-1111-1111-1111-111111111111", title: "People <Ops> Lead", company: "Acme", location: null, recommendation: "strong_fit", explanation: "Great fit.", employerRelation: null, connectionCount: 0 },
   ];
 
   function apiReturning(responses: Record<string, unknown>[]) {
