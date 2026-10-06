@@ -22,4 +22,5 @@ export interface MatchEvidence {
   transferableSkills: string[];
   adjacencyReasoning?: string;
   failedConstraintIds?: string[];
+  matchedTerms?: string[];
 }

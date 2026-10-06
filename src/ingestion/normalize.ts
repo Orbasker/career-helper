@@ -4,7 +4,7 @@ export interface NormalizedJobKey {
   normalizedLocation: string | null;
 }
 
-const TITLE_ABBREVIATIONS: Record<string, string> = {
+export const TITLE_ABBREVIATIONS: Record<string, string> = {
   sr: "senior",
   snr: "senior",
   jr: "junior",
