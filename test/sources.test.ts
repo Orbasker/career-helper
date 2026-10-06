@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { jobSources, jobs } from "../src/db/schema.js";
 import { toCanonicalJob, type CollectContext, type JobSourceAdapter, type RawJob } from "../src/ingestion/adapter.js";
 import { createIngestCronHandler } from "../src/ingestion/cron.js";
+import { emptyDedupReport } from "../src/ingestion/dedup.js";
 import { runIngestion } from "../src/ingestion/run.js";
 import { ashbyAdapter } from "../src/ingestion/sources/ashby.js";
 import { greenhouseAdapter } from "../src/ingestion/sources/greenhouse.js";
@@ -244,7 +245,7 @@ describe("runIngestion", () => {
     };
     const logs: Record<string, unknown>[] = [];
 
-    const reports = await runIngestion(db, [greenhouseAdapter, broken, ashbyAdapter], {
+    const { sources: reports, dedup } = await runIngestion(db, [greenhouseAdapter, broken, ashbyAdapter], {
       fetch,
       now,
       log: (entry) => logs.push(entry),
@@ -261,9 +262,19 @@ describe("runIngestion", () => {
     const lastCollected = Object.fromEntries(sources.map((s) => [s.key, s.lastCollectedAt]));
     expect(lastCollected).toEqual({ greenhouse: null, ashby: collectedAt, broken: null });
 
-    expect(logs.map((l) => l.event)).toEqual(["ingest.source", "ingest.source", "ingest.source", "ingest.run"]);
+    expect(dedup).toMatchObject({ processed: 2, newGroups: 2, error: null });
+    expect(logs.map((l) => l.event)).toEqual([
+      "ingest.source",
+      "ingest.source",
+      "ingest.source",
+      "dedup.run",
+      "ingest.run",
+    ]);
     expect(logs[2]).toMatchObject({ event: "ingest.source", source: "ashby", ok: true, fetched: 3, inserted: 2, skipped: 1 });
-    expect(logs[3]).toMatchObject({ sources: [{ source: "greenhouse", ok: false }, { source: "broken", ok: false }, { ok: true }] });
+    expect(logs[4]).toMatchObject({
+      sources: [{ source: "greenhouse", ok: false }, { source: "broken", ok: false }, { ok: true }],
+      dedup: { processed: 2 },
+    });
   });
 
   it("records a collect failure mid-stream without losing earlier records", async () => {
@@ -276,7 +287,9 @@ describe("runIngestion", () => {
       normalize: ({ payload }) => ({ title: payload.title, description: "Hire people" }),
     };
 
-    const [report] = await runIngestion(db, [flaky], { now, log: () => {} });
+    const {
+      sources: [report],
+    } = await runIngestion(db, [flaky], { now, log: () => {} });
 
     expect(report).toMatchObject({ inserted: 1, errors: [{ scope: "collect", error: "page 2 timed out" }] });
     const [source] = await db.select().from(jobSources);
@@ -292,29 +305,33 @@ describe("ingest cron handler", () => {
 
   it("rejects requests without the cron secret", async () => {
     let ran = false;
-    const run = async () => ((ran = true), []);
+    const run = async () => ((ran = true), { sources: [], dedup: emptyDedupReport() });
     expect((await createIngestCronHandler("s3cret", run)(request("Bearer nope"))).status).toBe(401);
     expect((await createIngestCronHandler("s3cret", run)(request())).status).toBe(401);
     expect((await createIngestCronHandler(undefined, run)(request("Bearer undefined"))).status).toBe(401);
     expect(ran).toBe(false);
   });
 
-  it("runs ingestion and returns per-source metrics", async () => {
-    const handler = createIngestCronHandler("s3cret", async () => [
-      {
-        source: "lever",
-        disabled: false,
-        fetched: 2,
-        inserted: 2,
-        updated: 0,
-        unchanged: 0,
-        skipped: 0,
-        invalid: [],
-        failed: [],
-        errors: [],
-        durationMs: 120,
-      },
-    ]);
+  it("runs ingestion and returns per-source and dedup metrics", async () => {
+    const dedup = { ...emptyDedupReport(), processed: 2, newGroups: 1, joinedByKey: 1 };
+    const handler = createIngestCronHandler("s3cret", async () => ({
+      dedup,
+      sources: [
+        {
+          source: "lever",
+          disabled: false,
+          fetched: 2,
+          inserted: 2,
+          updated: 0,
+          unchanged: 0,
+          skipped: 0,
+          invalid: [],
+          failed: [],
+          errors: [],
+          durationMs: 120,
+        },
+      ],
+    }));
     const response = await handler(request("Bearer s3cret"));
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
@@ -334,6 +351,7 @@ describe("ingest cron handler", () => {
           durationMs: 120,
         },
       ],
+      dedup,
     });
   });
 });

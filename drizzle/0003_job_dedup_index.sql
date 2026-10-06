@@ -1,0 +1,1 @@
+CREATE INDEX "jobs_normalized_key_idx" ON "jobs" USING btree ("normalized_company","normalized_title","normalized_location");

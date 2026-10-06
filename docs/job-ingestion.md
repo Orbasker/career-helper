@@ -36,9 +36,27 @@ Adapters never touch the database. Test `normalize` directly or through `toCanon
 
 1. Stores the raw payload, deduplicated by `(source, contentHash)`; the hash is order-insensitive over `externalId`, `sourceUrl` and `payload`.
 2. Normalizes and validates it.
-3. Upserts the job by `(source, externalId)`, or `(source, sourceUrl)` when there is no external ID. Rows whose raw record is unchanged are left untouched.
+3. Upserts the job by `(source, externalId)`, or `(source, sourceUrl)` when there is no external ID, along with its normalized title, company and location. Rows whose raw record is unchanged are left untouched. If an update changes the normalized fields, the job leaves its duplicate group so it is regrouped (unless it was grouped `manual`ly).
 
-Re-running with the same input is a no-op. Invalid, skipped and failing records are reported and do not stop the run. Collection errors (`report.errors`) keep what was already stored but leave `last_collected_at` unchanged. Disabled sources are not collected. Cross-source deduplication and normalized fields are handled separately (ANI-84).
+Re-running with the same input is a no-op. Invalid, skipped and failing records are reported and do not stop the run. Collection errors (`report.errors`) keep what was already stored but leave `last_collected_at` unchanged. Disabled sources are not collected.
+
+## Normalization and deduplication
+
+`normalize.ts` holds the pure normalizers; `dedup.ts` groups jobs.
+
+| Field | Normalization | Example |
+| --- | --- | --- |
+| Title | lowercase, accents and punctuation stripped, gender tags and `- Remote`/`(Remote …)` suffixes dropped, common abbreviations expanded (`sr`, `jr`, `mgr`, `hr`, `vp`, …) | `Sr. HR Manager (m/f/d)` → `senior human resources manager` |
+| Company | same text cleanup, trailing legal suffixes dropped (`inc`, `ltd`, `gmbh`, …) | `Acme, Inc.` → `acme` |
+| Location | primary place only (before `,` `;` `/` `\|`), with a few aliases | `Tel Aviv-Yafo, Israel` → `tel aviv` |
+
+`deduplicateJobs(db)` assigns every job without a `duplicate_group_id` to a group, oldest first:
+
+1. **Deterministic key** — an already-grouped job with the same normalized title, company and location (`dedup_method = deterministic_key`).
+2. **Similarity fallback** — an already-grouped job at the same normalized company whose location is equal or unknown on either side, with title word Jaccard ≥ 0.5 **and** description 3-word-shingle Jaccard ≥ 0.6 (`dedup_method = similarity`).
+3. Otherwise a new group keyed `title|company|location`, or `job:{id}` when the company is unknown so company-less postings never merge.
+
+Each job keeps its own row and `source_url`, so a group holds every source's URL (`listGroupSources`). The group's `canonical_job_id` is the most complete member (company, location, work mode, employment type, published date), then the longest description, then the earliest collected. It is re-selected whenever members join or leave.
 
 ## Sources
 
@@ -61,9 +79,9 @@ where key = 'greenhouse';
 
 ## Scheduling and running
 
-`runIngestion(db, adapters)` (`run.ts`) ingests each source in turn; any error in one source is caught, reported and never stops the others. It logs one JSON line per source (`event: "ingest.source"`: counts, `durationMs`, invalid/failed records, errors) and a run summary (`event: "ingest.run"`).
+`runIngestion(db, adapters)` (`run.ts`) ingests each source in turn; any error in one source is caught, reported and never stops the others. It then runs `deduplicateJobs`. It logs one JSON line per source (`event: "ingest.source"`: counts, `durationMs`, invalid/failed records, errors), one for deduplication (`event: "dedup.run"`: processed, joined by key / similarity, new groups, canonical changes, error) and a run summary (`event: "ingest.run"`).
 
-- **Scheduled** — Vercel Cron calls `GET /api/cron/ingest` daily at 05:00 UTC (`vercel.json`). The handler requires `Authorization: Bearer $CRON_SECRET`, which Vercel sends automatically when `CRON_SECRET` is set, and returns per-source metrics.
-- **Manual** — `bun run ingest [source...]` runs all sources or the given keys against `DATABASE_URL` and exits non-zero if any source had errors.
+- **Scheduled** — Vercel Cron calls `GET /api/cron/ingest` daily at 05:00 UTC (`vercel.json`). The handler requires `Authorization: Bearer $CRON_SECRET`, which Vercel sends automatically when `CRON_SECRET` is set, and returns per-source and dedup metrics.
+- **Manual** — `bun run ingest [source...]` runs all sources or the given keys against `DATABASE_URL` and exits non-zero if any source or deduplication had errors.
 
 Required Vercel env var: `CRON_SECRET` (in addition to the bot's).

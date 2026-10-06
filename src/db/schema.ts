@@ -284,6 +284,7 @@ export const jobs = pgTable(
     uniqueIndex("jobs_source_url_uq").on(t.sourceId, t.sourceUrl),
     index("jobs_duplicate_group_idx").on(t.duplicateGroupId),
     index("jobs_collected_at_idx").on(t.collectedAt),
+    index("jobs_normalized_key_idx").on(t.normalizedCompany, t.normalizedTitle, t.normalizedLocation),
     check("jobs_dedup_consistency_chk", sql`(${t.duplicateGroupId} is null) = (${t.dedupMethod} is null)`),
   ],
 );

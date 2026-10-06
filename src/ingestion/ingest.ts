@@ -3,6 +3,7 @@ import { jobSources, jobs, rawJobRecords } from "../db/schema.js";
 import type { Db } from "../db/types.js";
 import { contentHash, toCanonicalJob, type JobSourceAdapter, type RawJob } from "./adapter.js";
 import type { CanonicalJob } from "./canonical-job.js";
+import { normalizeJobKey } from "./normalize.js";
 
 export interface IngestOptions {
   now?: () => Date;
@@ -120,6 +121,7 @@ async function upsertJob(db: Db, sourceId: string, rawRecordId: string, job: Can
   const target = job.externalId
     ? { target: [jobs.sourceId, jobs.externalId], targetWhere: sql`${jobs.externalId} is not null` }
     : { target: [jobs.sourceId, jobs.sourceUrl] };
+  const regroup = sql`${jobs.dedupMethod} is distinct from 'manual' and (${jobs.normalizedTitle}, ${jobs.normalizedCompany}, ${jobs.normalizedLocation}) is distinct from (excluded.normalized_title, excluded.normalized_company, excluded.normalized_location)`;
 
   const [row] = await db
     .insert(jobs)
@@ -136,6 +138,7 @@ async function upsertJob(db: Db, sourceId: string, rawRecordId: string, job: Can
       employmentType: job.employmentType,
       publishedAt: job.publishedAt,
       collectedAt: job.collectedAt,
+      ...normalizeJobKey(job),
     })
     .onConflictDoUpdate({
       ...target,
@@ -150,6 +153,11 @@ async function upsertJob(db: Db, sourceId: string, rawRecordId: string, job: Can
         workMode: sql`excluded.work_mode`,
         employmentType: sql`excluded.employment_type`,
         publishedAt: sql`excluded.published_at`,
+        normalizedTitle: sql`excluded.normalized_title`,
+        normalizedCompany: sql`excluded.normalized_company`,
+        normalizedLocation: sql`excluded.normalized_location`,
+        duplicateGroupId: sql`case when ${regroup} then null else ${jobs.duplicateGroupId} end`,
+        dedupMethod: sql`case when ${regroup} then null else ${jobs.dedupMethod} end`,
       },
       setWhere: sql`${jobs.rawRecordId} is distinct from excluded.raw_record_id`,
     })
