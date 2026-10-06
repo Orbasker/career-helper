@@ -152,13 +152,19 @@ export function scoreRelevance(job: MatchJob, profile: RelevanceProfile, thresho
 }
 
 export function tokenize(text: string | null | undefined): Set<string> {
-  if (!text) return new Set();
-  const terms = new Set<string>();
+  return new Set(termForms(text).keys());
+}
+
+/** Meaningful words of `text` keyed by their stem, keeping the first spelling seen. */
+export function termForms(text: string | null | undefined): Map<string, string> {
+  const forms = new Map<string, string>();
+  if (!text) return forms;
   for (const word of expand(text).split(" ")) {
     if (word.length < 2 || /^\d+$/.test(word) || STOPWORDS.has(word)) continue;
-    terms.add(stem(word));
+    const term = stem(word);
+    if (!forms.has(term)) forms.set(term, word);
   }
-  return terms;
+  return forms;
 }
 
 /** Text-term preferences match as whole phrases in `text`; structured ones defer to the hard-filter matcher. */

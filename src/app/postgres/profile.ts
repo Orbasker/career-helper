@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { formatMonth } from "../../domain/dates.js";
 import type { CareerFactKind, PreferenceKind } from "../../domain/enums.js";
 import type { ExperienceFields, ProfileChange, ProfileFields, ProfileSnapshot } from "../../domain/profile.js";
@@ -67,7 +67,13 @@ export async function loadSnapshot(
       status: preferences.status,
     })
     .from(preferences)
-    .where(and(eq(preferences.userId, userId), inArray(preferences.status, ["proposed", "active"])))
+    .where(
+      and(
+        eq(preferences.userId, userId),
+        inArray(preferences.status, ["proposed", "active"]),
+        or(ne(preferences.origin, "inferred_from_feedback"), eq(preferences.status, "active")),
+      ),
+    )
     .orderBy(asc(preferences.createdAt));
   return {
     profile: profile ?? {

@@ -6,7 +6,7 @@ Each confirmed profile is matched against the canonical job of every duplicate g
 
 ## Hard filters (`hard-filters.ts`)
 
-Only **active `hard_constraint`** preferences are applied. A constraint rejects a job only when the job explicitly contradicts it. Missing job data always passes.
+Only **active** `hard_constraint` preferences and company dislikes (`dislike` with dimension `company`) are applied. A constraint rejects a job only when the job explicitly contradicts it. Missing job data always passes. A company dislike rejects a job whose normalized company equals one of its terms.
 
 | Constraint value | Rejects when |
 | --- | --- |
