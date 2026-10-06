@@ -12,6 +12,7 @@
     "db:migrate": "bun src/db/migrate.ts",
     "bot": "bun src/main.ts",
     "bot:dev": "bun --watch src/main.ts",
+    "ingest": "bun scripts/ingest.ts",
     "vercel-build": "tsc && bun scripts/vercel-build.ts"
   },
   "dependencies": {

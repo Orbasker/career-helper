@@ -30,6 +30,8 @@ export interface CollectContext {
   config: Record<string, unknown>;
   fetch: typeof fetch;
   signal?: AbortSignal;
+  /** Records a failure that only affects part of the source (e.g. one board) so collection can continue. */
+  reportError(scope: string, error: unknown): void;
 }
 
 export interface JobSourceAdapter<TPayload = unknown> {

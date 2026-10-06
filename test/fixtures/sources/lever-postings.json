@@ -1,0 +1,32 @@
+[
+  {
+    "additional": "<div>We offer a learning budget.</div>",
+    "additionalPlain": "We offer a learning budget.",
+    "categories": { "commitment": "Full-time", "department": "People", "location": "Haifa, Israel", "team": "Talent Acquisition", "allLocations": ["Haifa, Israel"] },
+    "createdAt": 1727600000000,
+    "descriptionPlain": "Join our people team to scale hiring.",
+    "description": "<div>Join our people team to scale hiring.</div>",
+    "id": "5f2b7c9e-1a2b-4c3d-9e8f-0a1b2c3d4e5f",
+    "lists": [
+      { "text": "What you'll do", "content": "<li>Partner with hiring managers</li><li>Build sourcing strategies</li>" },
+      { "text": "What you bring", "content": "<li>3+ years in recruiting</li>" }
+    ],
+    "text": "Talent Acquisition Partner",
+    "country": "IL",
+    "workplaceType": "onsite",
+    "hostedUrl": "https://jobs.lever.co/globex/5f2b7c9e-1a2b-4c3d-9e8f-0a1b2c3d4e5f",
+    "applyUrl": "https://jobs.lever.co/globex/5f2b7c9e-1a2b-4c3d-9e8f-0a1b2c3d4e5f/apply"
+  },
+  {
+    "additionalPlain": "",
+    "categories": { "commitment": "Contractor", "location": "Remote", "team": "People Ops" },
+    "createdAt": 1727700000000,
+    "descriptionPlain": "Six-month HRIS migration project.",
+    "id": "0d9e8f7a-6b5c-4d3e-2f1a-0b9c8d7e6f5a",
+    "lists": [],
+    "text": "HRIS Consultant",
+    "workplaceType": "unspecified",
+    "hostedUrl": "https://jobs.lever.co/globex/0d9e8f7a-6b5c-4d3e-2f1a-0b9c8d7e6f5a",
+    "applyUrl": "https://jobs.lever.co/globex/0d9e8f7a-6b5c-4d3e-2f1a-0b9c8d7e6f5a/apply"
+  }
+]

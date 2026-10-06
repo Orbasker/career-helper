@@ -1,0 +1,47 @@
+{
+  "apiVersion": "1",
+  "jobs": [
+    {
+      "id": "b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e",
+      "title": "People Operations Manager",
+      "department": "People",
+      "team": "People Operations",
+      "employmentType": "FullTime",
+      "location": "Jerusalem, Israel",
+      "secondaryLocations": [],
+      "publishedAt": "2026-09-25T07:30:00.000+00:00",
+      "isListed": true,
+      "isRemote": false,
+      "workplaceType": "Hybrid",
+      "jobUrl": "https://jobs.ashbyhq.com/initech/b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e",
+      "applyUrl": "https://jobs.ashbyhq.com/initech/b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e/application",
+      "descriptionHtml": "<p>Build our people operations from the ground up.</p>",
+      "descriptionPlain": "Build our people operations from the ground up.",
+      "compensation": { "compensationTierSummary": "₪30K – ₪38K • Offers Equity" }
+    },
+    {
+      "id": "c2d3e4f5-a6b7-4c8d-9e0f-1a2b3c4d5e6f",
+      "title": "HR Intern",
+      "employmentType": "Intern",
+      "location": "Remote",
+      "publishedAt": "2026-10-01T07:30:00.000+00:00",
+      "isListed": true,
+      "isRemote": true,
+      "workplaceType": null,
+      "jobUrl": "https://jobs.ashbyhq.com/initech/c2d3e4f5-a6b7-4c8d-9e0f-1a2b3c4d5e6f",
+      "descriptionHtml": "<p>Support recruiting coordination.</p><ul><li>Schedule interviews</li></ul>"
+    },
+    {
+      "id": "d3e4f5a6-b7c8-4d9e-0f1a-2b3c4d5e6f7a",
+      "title": "Internal Mobility Specialist",
+      "employmentType": "FullTime",
+      "location": "Jerusalem, Israel",
+      "publishedAt": "2026-10-03T07:30:00.000+00:00",
+      "isListed": false,
+      "isRemote": false,
+      "workplaceType": "OnSite",
+      "jobUrl": "https://jobs.ashbyhq.com/initech/d3e4f5a6-b7c8-4d9e-0f1a-2b3c4d5e6f7a",
+      "descriptionPlain": "Unlisted posting."
+    }
+  ]
+}
