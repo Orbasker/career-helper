@@ -1,0 +1,36 @@
+{
+  "jobs": [
+    {
+      "absolute_url": "https://job-boards.greenhouse.io/acme/jobs/4012345",
+      "data_compliance": [{ "type": "gdpr", "requires_consent": false, "requires_processing_consent": false, "requires_retention_consent": false, "retention_period": null }],
+      "internal_job_id": 3901234,
+      "location": { "name": "Tel Aviv, Israel (Hybrid)" },
+      "metadata": null,
+      "id": 4012345,
+      "updated_at": "2026-09-30T11:02:15-04:00",
+      "requisition_id": "HR-104",
+      "title": "HR Business Partner",
+      "company_name": "Acme Robotics",
+      "first_published": "2026-09-28T09:00:00-04:00",
+      "content": "&lt;p&gt;&lt;strong&gt;About the role&lt;/strong&gt;&lt;/p&gt;\n&lt;p&gt;Partner with R&amp;amp;D leaders on org design &amp;amp; talent.&lt;/p&gt;\n&lt;ul&gt;\n&lt;li&gt;Run quarterly talent reviews&lt;/li&gt;\n&lt;li&gt;Coach managers&amp;nbsp;on feedback&lt;/li&gt;\n&lt;/ul&gt;",
+      "departments": [{ "id": 77, "name": "People", "child_ids": [], "parent_id": null }],
+      "offices": [{ "id": 12, "name": "Tel Aviv", "location": "Tel Aviv, Israel", "child_ids": [], "parent_id": null }]
+    },
+    {
+      "absolute_url": "https://job-boards.greenhouse.io/acme/jobs/4012399",
+      "internal_job_id": 3901299,
+      "location": { "name": "Remote - EMEA" },
+      "metadata": null,
+      "id": 4012399,
+      "updated_at": "2026-10-02T08:00:00-04:00",
+      "requisition_id": "REC-12",
+      "title": "Technical Recruiter",
+      "company_name": "Acme Robotics",
+      "first_published": null,
+      "content": "&lt;p&gt;Own full-cycle hiring for engineering.&lt;/p&gt;",
+      "departments": [],
+      "offices": []
+    }
+  ],
+  "meta": { "total": 2 }
+}

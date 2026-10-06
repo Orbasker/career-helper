@@ -20,6 +20,8 @@ export interface IngestReport {
   skipped: number;
   invalid: { sourceUrl: string; issues: string[] }[];
   failed: { sourceUrl: string; error: string }[];
+  errors: { scope: string; error: string }[];
+  durationMs: number;
 }
 
 type JobWrite = "inserted" | "updated" | "unchanged";
@@ -31,17 +33,7 @@ export async function ingestFromSource<TPayload>(
 ): Promise<IngestReport> {
   const now = options.now ?? (() => new Date());
   const { key, name, kind, baseUrl } = adapter.source;
-  const report: IngestReport = {
-    source: key,
-    disabled: false,
-    fetched: 0,
-    inserted: 0,
-    updated: 0,
-    unchanged: 0,
-    skipped: 0,
-    invalid: [],
-    failed: [],
-  };
+  const report = emptyReport(key);
 
   const [source] = await db
     .insert(jobSources)
@@ -51,28 +43,55 @@ export async function ingestFromSource<TPayload>(
   if (!source!.isEnabled) return { ...report, disabled: true };
 
   const startedAt = now();
-  const records = adapter.collect({
-    since: source!.lastCollectedAt,
-    config: source!.config,
-    fetch: options.fetch ?? globalThis.fetch,
-    signal: options.signal,
-  });
-
-  for await (const raw of records) {
-    report.fetched++;
-    try {
-      const rawRecordId = await storeRawRecord(db, source!.id, raw);
-      const result = toCanonicalJob(adapter, raw, now());
-      if (result.ok === "skipped") report.skipped++;
-      else if (!result.ok) report.invalid.push({ sourceUrl: raw.sourceUrl, issues: result.issues });
-      else report[await upsertJob(db, source!.id, rawRecordId, result.job)]++;
-    } catch (error) {
-      report.failed.push({ sourceUrl: raw.sourceUrl, error: error instanceof Error ? error.message : String(error) });
+  try {
+    const records = adapter.collect({
+      since: source!.lastCollectedAt,
+      config: source!.config,
+      fetch: options.fetch ?? globalThis.fetch,
+      signal: options.signal,
+      reportError: (scope, error) => report.errors.push({ scope, error: errorMessage(error) }),
+    });
+    for await (const raw of records) {
+      report.fetched++;
+      try {
+        const rawRecordId = await storeRawRecord(db, source!.id, raw);
+        const result = toCanonicalJob(adapter, raw, now());
+        if (result.ok === "skipped") report.skipped++;
+        else if (!result.ok) report.invalid.push({ sourceUrl: raw.sourceUrl, issues: result.issues });
+        else report[await upsertJob(db, source!.id, rawRecordId, result.job)]++;
+      } catch (error) {
+        report.failed.push({ sourceUrl: raw.sourceUrl, error: errorMessage(error) });
+      }
     }
+  } catch (error) {
+    report.errors.push({ scope: "collect", error: errorMessage(error) });
   }
 
-  await db.update(jobSources).set({ lastCollectedAt: startedAt }).where(eq(jobSources.id, source!.id));
+  if (!report.errors.length) {
+    await db.update(jobSources).set({ lastCollectedAt: startedAt }).where(eq(jobSources.id, source!.id));
+  }
+  report.durationMs = now().getTime() - startedAt.getTime();
   return report;
+}
+
+export function emptyReport(source: string): IngestReport {
+  return {
+    source,
+    disabled: false,
+    fetched: 0,
+    inserted: 0,
+    updated: 0,
+    unchanged: 0,
+    skipped: 0,
+    invalid: [],
+    failed: [],
+    errors: [],
+    durationMs: 0,
+  };
+}
+
+export function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 async function storeRawRecord(db: Db, sourceId: string, raw: RawJob): Promise<string> {
