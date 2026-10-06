@@ -1,7 +1,7 @@
 import { parseEnv } from "@neon/env";
 import config from "../neon.js";
 import { createDb } from "../src/db/client.js";
-import { runIngestion } from "../src/ingestion/run.js";
+import { runFailed, runIngestion } from "../src/ingestion/run.js";
 import { SOURCE_ADAPTERS } from "../src/ingestion/sources/index.js";
 
 const requested = process.argv.slice(2);
@@ -15,8 +15,7 @@ const adapters = requested.length ? SOURCE_ADAPTERS.filter((a) => requested.incl
 const { postgres } = parseEnv(config, ["DATABASE_URL"]);
 const { db, pool } = createDb(postgres.databaseUrl);
 try {
-  const reports = await runIngestion(db, adapters);
-  if (reports.some((r) => r.errors.length)) process.exitCode = 1;
+  if (runFailed(await runIngestion(db, adapters))) process.exitCode = 1;
 } finally {
   await pool.end();
 }

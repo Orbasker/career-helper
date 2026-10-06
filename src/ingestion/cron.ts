@@ -1,14 +1,13 @@
 import { timingSafeEqual } from "node:crypto";
-import type { IngestReport } from "./ingest.js";
-import { summarize } from "./run.js";
+import { summarize, type IngestionRun } from "./run.js";
 
-export function createIngestCronHandler(secret: string | undefined, run: () => Promise<IngestReport[]>) {
+export function createIngestCronHandler(secret: string | undefined, run: () => Promise<IngestionRun>) {
   return async (request: Request): Promise<Response> => {
     if (!secret || !matches(request.headers.get("authorization"), `Bearer ${secret}`)) {
       return new Response("Unauthorized", { status: 401 });
     }
-    const reports = await run();
-    return Response.json({ sources: reports.map(summarize) });
+    const { sources, dedup } = await run();
+    return Response.json({ sources: sources.map(summarize), dedup });
   };
 }
 

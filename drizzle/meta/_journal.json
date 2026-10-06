@@ -22,6 +22,13 @@
       "when": 1791304284525,
       "tag": "0002_profile_onboarding",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791305799686,
+      "tag": "0003_job_dedup_index",
+      "breakpoints": true
     }
   ]
 }
