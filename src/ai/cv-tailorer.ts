@@ -11,6 +11,7 @@ import {
   type TailoringJob,
 } from "../cv/tailoring.js";
 import { EXPLANATION_MODEL, renderProfile } from "./deep-matcher.js";
+import { noopRecorder, tracked, type ModelCallRecorder } from "./tracking.js";
 
 export const CV_TAILORING_PROMPT_VERSION = "cv-tailoring-v1";
 const MAX_DESCRIPTION_CHARS = 20_000;
@@ -37,7 +38,10 @@ export class AiCvTailorer implements CvTailorer {
   readonly promptVersion = CV_TAILORING_PROMPT_VERSION;
   readonly model: string;
 
-  constructor(private readonly languageModel: LanguageModel = EXPLANATION_MODEL) {
+  constructor(
+    private readonly languageModel: LanguageModel = EXPLANATION_MODEL,
+    private readonly recorder: ModelCallRecorder = noopRecorder,
+  ) {
     this.model = typeof languageModel === "string" ? languageModel : languageModel.modelId;
   }
 
@@ -61,12 +65,15 @@ export class AiCvTailorer implements CvTailorer {
   }
 
   private async draft(prompt: string) {
-    const { output } = await generateText({
-      model: this.languageModel,
-      instructions: INSTRUCTIONS,
-      prompt,
-      output: Output.object({ schema: draftSchema }),
-    });
+    const { output } = await tracked(this.recorder, "cv.tailor", this.model, (providerOptions) =>
+      generateText({
+        providerOptions,
+        model: this.languageModel,
+        instructions: INSTRUCTIONS,
+        prompt,
+        output: Output.object({ schema: draftSchema }),
+      }),
+    );
     return output;
   }
 }

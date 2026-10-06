@@ -1,4 +1,5 @@
 import { generateText, Output, type LanguageModel } from "ai";
+import { noopRecorder, tracked, type ModelCallRecorder } from "./tracking.js";
 import type { ProfileAssistant, ProfileExtraction, ProfileInterpretation, ProfileSourceText } from "../app/services.js";
 import type { ProfileSnapshot } from "../domain/profile.js";
 import { aliasSnapshot, extractionToChanges, interpretationToChanges } from "./mapping.js";
@@ -41,18 +42,28 @@ Rules:
 - If the message is not a profile change (a question, small talk) or is too ambiguous to act on, return no changes and a one-sentence reply. Otherwise reply is null.`;
 
 export class AiProfileAssistant implements ProfileAssistant {
-  constructor(private readonly model: LanguageModel = PROFILE_MODEL) {}
+  constructor(
+    private readonly model: LanguageModel = PROFILE_MODEL,
+    private readonly recorder: ModelCallRecorder = noopRecorder,
+  ) {}
+
+  private get modelName(): string {
+    return typeof this.model === "string" ? this.model : this.model.modelId;
+  }
 
   async extract(input: { linkedinUrl: string | null; sources: ProfileSourceText[] }): Promise<ProfileExtraction> {
     const documents = input.sources
       .map((s, i) => `<document index="${i + 1}" kind="${s.kind}">\n${s.content.slice(0, MAX_SOURCE_CHARS)}\n</document>`)
       .join("\n\n");
-    const { output } = await generateText({
-      model: this.model,
-      instructions: EXTRACTION_INSTRUCTIONS,
-      prompt: `LinkedIn profile URL: ${input.linkedinUrl ?? "not provided"}\n\n${documents}`,
-      output: Output.object({ schema: extractionSchema }),
-    });
+    const { output } = await tracked(this.recorder, "profile.extract", this.modelName, (providerOptions) =>
+      generateText({
+        providerOptions,
+        model: this.model,
+        instructions: EXTRACTION_INSTRUCTIONS,
+        prompt: `LinkedIn profile URL: ${input.linkedinUrl ?? "not provided"}\n\n${documents}`,
+        output: Output.object({ schema: extractionSchema }),
+      }),
+    );
     return { changes: extractionToChanges(output), followUpQuestions: output.followUpQuestions };
   }
 
@@ -65,12 +76,15 @@ export class AiProfileAssistant implements ProfileAssistant {
     ]
       .filter(Boolean)
       .join("\n\n");
-    const { output } = await generateText({
-      model: this.model,
-      instructions: INTERPRETATION_INSTRUCTIONS,
-      prompt,
-      output: Output.object({ schema: interpretationSchema }),
-    });
+    const { output } = await tracked(this.recorder, "profile.interpret", this.modelName, (providerOptions) =>
+      generateText({
+        providerOptions,
+        model: this.model,
+        instructions: INTERPRETATION_INSTRUCTIONS,
+        prompt,
+        output: Output.object({ schema: interpretationSchema }),
+      }),
+    );
     return { changes: interpretationToChanges(output, aliases), reply: output.reply };
   }
 }

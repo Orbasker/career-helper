@@ -444,6 +444,34 @@ export const cvVersionItems = pgTable(
   (t) => [uniqueIndex("cv_version_items_position_uq").on(t.cvVersionId, t.section, t.position)],
 );
 
+export const modelCalls = pgTable(
+  "model_calls",
+  {
+    id: id(),
+    purpose: text("purpose").notNull(),
+    model: text("model").notNull(),
+    inputTokens: integer("input_tokens"),
+    outputTokens: integer("output_tokens"),
+    durationMs: integer("duration_ms").notNull(),
+    ok: boolean("ok").notNull(),
+    error: text("error"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("model_calls_created_idx").on(t.createdAt, t.purpose)],
+);
+
+export const pipelineRuns = pgTable(
+  "pipeline_runs",
+  {
+    id: id(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    failed: boolean("failed"),
+    report: jsonb("report").$type<Record<string, unknown>>(),
+  },
+  (t) => [index("pipeline_runs_started_idx").on(t.startedAt)],
+);
+
 export const conversationStates = pgTable("conversation_states", {
   userId: uuid("user_id")
     .primaryKey()

@@ -83,7 +83,7 @@ The evaluation records `model` (`typesafe-ai/jev + anthropic/claude-sonnet-5.5`)
 - **Adjacent management and operations roles** (Talent & Culture, L&D, Operations Manager, Chief of Staff) must be `good_fit` / `stretch`. Talent & Culture may also be `strong_fit`.
 - **Clear negatives** must be `not_recommended`: backend engineer, financial controller and field sales; an HRBP role paying below the salary must-have; a technical recruiter role the user dislikes.
 
-Each case also fails when a recommended verdict has no grounded evidence, or when the explanation states a numeric fit score. Run `bun run eval:deep-match [decisionModel] [explanationModel]` against the real models. They default to `DECISION_MODEL` and `EXPLANATION_MODEL`, and the script exits non-zero on any failure.
+Each case also fails when a recommended verdict has no grounded evidence, or when the explanation states a numeric fit score. Run it with `bun run eval` (together with the CV factuality suite, compared against a saved baseline; see `docs/observability.md`).
 
 ## Current and former employers (`employer.ts`)
 
