@@ -11,11 +11,12 @@ import { formatMonth } from "../domain/dates.js";
 import type { ConfidenceLevel, MatchRecommendation, PreferenceKind } from "../domain/enums.js";
 import type { PreferenceSnapshot, ProfileSnapshot } from "../domain/profile.js";
 import type { FitEvidence } from "../domain/types.js";
+import { employerRelation } from "../matching/employer.js";
 import { isRecommended, type DeepMatcher, type DeepMatchJob, type DeepMatchVerdict } from "../matching/deep-match.js";
 
 export const DECISION_MODEL = "typesafe-ai/jev";
 export const EXPLANATION_MODEL = "anthropic/claude-sonnet-5.5";
-export const DEEP_MATCH_PROMPT_VERSION = "deep-match-v2";
+export const DEEP_MATCH_PROMPT_VERSION = "deep-match-v3";
 const MAX_DESCRIPTION_CHARS = 20_000;
 const VETO_PROBABILITY = 0.5;
 
@@ -45,7 +46,9 @@ Evidence rules:
 - gaps: requirements of the job the history does not show. Missing information in the posting is not a gap. risks: anything else that could make it a poor move (seniority jump, domain change, unclear scope, preference concerns).
 - Never output numeric scores or percentages.
 
-explanation: one or two plain sentences addressed to the candidate ("you"), saying why this job is worth a look. No jargon, no ids.`;
+explanation: one or two plain sentences addressed to the candidate ("you"), saying why this job is worth a look. No jargon, no ids.
+
+When an <employer> note says the candidate works or worked at the hiring company, say so in the explanation: an opening at their current employer is an internal move (they know the product and people, and can talk to their manager or HR); a former employer is a return where their inside knowledge and former colleagues help.`;
 
 const explanationSchema = z.object({
   fitEvidence: z.array(
@@ -116,7 +119,7 @@ export class AiDeepMatcher implements DeepMatcher {
     const { output } = await generateText({
       model: this.explanationModel,
       instructions: EXPLANATION_INSTRUCTIONS,
-      prompt: `<candidate>\n${profileText}\n</candidate>\n\n<job>\n${jobText}\n</job>\n\n<recommendation>${decision.recommendation}: ${RECOMMENDATIONS[decision.recommendation]}</recommendation>`,
+      prompt: `<candidate>\n${profileText}\n</candidate>\n\n<job>\n${jobText}\n</job>${employerNote(profile, job)}\n\n<recommendation>${decision.recommendation}: ${RECOMMENDATIONS[decision.recommendation]}</recommendation>`,
       output: Output.object({ schema: explanationSchema }),
     });
     return groundVerdict(decision, output, aliases, job);
@@ -257,6 +260,13 @@ export function renderProfile(snapshot: ProfileSnapshot): { text: string; aliase
     if (labels.length) lines.push("", `${heading}:`, ...labels);
   }
   return { text: lines.join("\n"), aliases };
+}
+
+function employerNote(profile: ProfileSnapshot, job: DeepMatchJob): string {
+  const relation = employerRelation(job.company, profile.experiences);
+  if (!relation) return "";
+  const when = relation.kind === "current" ? "currently works" : "used to work";
+  return `\n\n<employer>The candidate ${when} at ${relation.employer}, the hiring company.</employer>`;
 }
 
 function renderJob(job: DeepMatchJob): string {

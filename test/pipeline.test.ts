@@ -64,10 +64,12 @@ class TitleMatcher implements DeepMatcher {
 
 class FakeNotifier implements Notifier {
   digests: { chatId: number; titles: string[]; remaining: number }[] = [];
+  sentMatches: MatchSummary[] = [];
   fail: Error | null = null;
 
   async sendDigest(chatId: number, matches: MatchSummary[], remaining: number) {
     if (this.fail) throw this.fail;
+    this.sentMatches.push(...matches);
     this.digests.push({ chatId, titles: matches.map((m) => m.title), remaining });
   }
 }
@@ -149,6 +151,7 @@ describe("runDailyPipeline", () => {
       { chatId: 10, titles: ["People Operations Lead", "HR Business Partner"], remaining: 0 },
     ]);
     expect(await statusOf("ops")).toEqual({ status: "notified", notifiedAt: now() });
+    expect(notifier.sentMatches[0]!.employerRelation).toEqual({ kind: "former", employer: "Acme" });
     expect(await statusOf("culture")).toMatchObject({ status: "ready", notifiedAt: null });
 
     const again = await run([adapter]);
@@ -290,7 +293,7 @@ describe("notification threshold", () => {
 
 describe("TelegramNotifier", () => {
   const digest: MatchSummary[] = [
-    { matchId: "11111111-1111-1111-1111-111111111111", title: "People <Ops> Lead", company: "Acme", location: null, recommendation: "strong_fit", explanation: "Great fit." },
+    { matchId: "11111111-1111-1111-1111-111111111111", title: "People <Ops> Lead", company: "Acme", location: null, recommendation: "strong_fit", explanation: "Great fit.", employerRelation: null },
   ];
 
   function apiReturning(responses: Record<string, unknown>[]) {

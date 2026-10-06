@@ -4,6 +4,7 @@ import { careerProfiles, jobs, matches, users } from "../db/schema.js";
 import type { Db } from "../db/types.js";
 import { CONFIDENCE_LEVELS, type ConfidenceLevel, type MatchRecommendation } from "../domain/enums.js";
 import { errorMessage } from "../ingestion/ingest.js";
+import { employerRelation, loadEmployerHistory } from "../matching/employer.js";
 
 export type NotifiableRecommendation = Exclude<MatchRecommendation, "not_recommended">;
 
@@ -112,6 +113,7 @@ export async function runNotifications(
     )
     .orderBy(asc(matches.createdAt), asc(matches.id));
 
+  const histories = await loadEmployerHistory(db, [...new Set(candidates.map((c) => c.userId))]);
   const byUser = new Map<string, typeof candidates>();
   for (const row of candidates) {
     const rows = byUser.get(row.userId) ?? [];
@@ -147,6 +149,7 @@ export async function runNotifications(
           location,
           recommendation,
           explanation,
+          employerRelation: employerRelation(company, histories.get(userId) ?? []),
         })),
         rows.length - picked.length,
       );
