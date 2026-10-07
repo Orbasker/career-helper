@@ -114,7 +114,7 @@ export type CvLanguageSource = (typeof CV_LANGUAGE_SOURCES)[number];
 export const CV_FILE_FORMATS = ["docx", "pdf"] as const;
 export type CvFileFormat = (typeof CV_FILE_FORMATS)[number];
 
-export const CONVERSATION_FLOWS = ["idle", "onboarding", "preference_update", "profile_edit", "cv_request"] as const;
+export const CONVERSATION_FLOWS = ["idle", "onboarding", "preference_update", "profile_edit", "cv_request", "cv_library"] as const;
 export type ConversationFlow = (typeof CONVERSATION_FLOWS)[number];
 
 export const CONVERSATION_LANGUAGES = ["en", "he"] as const;

@@ -5,6 +5,7 @@ import { createBot } from "../src/bot/bot.js";
 import { encodeCallback } from "../src/bot/callbacks.js";
 import { timeAgo } from "../src/bot/views.js";
 import { duplicateGroups, jobSources, jobs, matches, pipelineRuns, rawJobRecords, userJobSites, users } from "../src/db/schema.js";
+import { strings } from "../src/i18n/index.js";
 import { FakeProfileAssistant } from "./support/assistant.js";
 import { createTestDb, type TestDb } from "./support/db.js";
 import { FakeCvTailorer } from "./support/tailorer.js";
@@ -205,7 +206,7 @@ describe("sources in the bot", () => {
 describe("timeAgo", () => {
   it("describes how long ago something happened", () => {
     const now = new Date("2026-10-07T12:00:00Z");
-    const ago = (ms: number) => timeAgo(new Date(now.getTime() - ms), now);
+    const ago = (ms: number) => timeAgo(strings("en"), new Date(now.getTime() - ms), now);
     expect(ago(30_000)).toBe("just now");
     expect(ago(15 * 60_000)).toBe("15 min ago");
     expect(ago(5 * 3_600_000)).toBe("5h ago");

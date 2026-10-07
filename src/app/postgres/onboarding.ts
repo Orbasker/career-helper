@@ -18,6 +18,7 @@ export type StoredDocument =
       documentId: string;
       kind: DocumentKind;
       language: ConversationLanguage | null;
+      languageCertain: boolean;
       version: number;
       text: string;
     }
@@ -30,8 +31,8 @@ interface QuestionsContext {
   index?: number;
 }
 
-const SKIP = /^\s*(skip|no|none|nope|n\/a|-)\s*[.!]?\s*$/i;
-const DONE = /^\s*(done|analy[sz]e|that'?s all|finished|continue)\s*[.!]?\s*$/i;
+const SKIP = /^\s*(skip|no|none|nope|n\/a|-|דלג|תדלג|לדלג|לא|אין|בלי)\s*[.!]?\s*$/i;
+const DONE = /^\s*(done|analy[sz]e|that'?s all|finished|continue|סיימתי|זהו|זה הכל|זה הכול|נתח|תנתח|ניתוח|המשך|תמשיך)\s*[.!]?\s*$/i;
 
 export class PgOnboardingService implements OnboardingService {
   constructor(
@@ -82,7 +83,13 @@ export class PgOnboardingService implements OnboardingService {
     });
   }
 
-  async answer(userId: string, step: string, context: QuestionsContext, text: string): Promise<ProfileReply[]> {
+  async answer(
+    userId: string,
+    step: string,
+    context: QuestionsContext,
+    text: string,
+    language: ConversationLanguage,
+  ): Promise<ProfileReply[]> {
     switch (step as OnboardingStepKey) {
       case "language": {
         const language = parseLanguageChoice(text);
@@ -95,15 +102,17 @@ export class PgOnboardingService implements OnboardingService {
         return [{ kind: "ask_documents", linkedinSaved: url !== null }];
       }
       case "documents":
-        if (DONE.test(text)) return [await this.analyze(userId)];
+        if (DONE.test(text)) return [await this.analyze(userId, language)];
         await this.db.insert(profileSources).values({ userId, kind: "pasted_text", content: text });
-        return [{ kind: "source_received", source: "pasted_text", fileName: null, documentId: null, language: null }];
+        return [
+          { kind: "source_received", source: "pasted_text", fileName: null, documentId: null, language: null, languageCertain: true },
+        ];
       case "analyzing":
         return [{ kind: "busy" }];
       case "questions":
-        return this.answerQuestion(userId, context, text);
+        return this.answerQuestion(userId, context, text, language);
       case "review":
-        return this.correctReview(userId, text);
+        return this.correctReview(userId, text, language);
       default:
         return this.start(userId);
     }
@@ -129,6 +138,7 @@ export class PgOnboardingService implements OnboardingService {
       fileName: document.fileName,
       documentId: stored.documentId,
       language: stored.language,
+      languageCertain: stored.languageCertain,
     };
   }
 
@@ -162,7 +172,15 @@ export class PgOnboardingService implements OnboardingService {
         .values({ ...file, kind, language: parsed.language, version, extractedText: parsed.text, parseStatus: "parsed" })
         .returning({ id: sourceDocuments.id });
       await onStored?.(tx, row!.id, kind);
-      return { stored: true, documentId: row!.id, kind, language: parsed.language, version, text: parsed.text } as const;
+      return {
+        stored: true,
+        documentId: row!.id,
+        kind,
+        language: parsed.language,
+        languageCertain: parsed.languageCertain,
+        version,
+        text: parsed.text,
+      } as const;
     });
   }
 
@@ -171,19 +189,23 @@ export class PgOnboardingService implements OnboardingService {
       const [document] = await tx
         .select({ kind: sourceDocuments.kind, language: sourceDocuments.language, version: sourceDocuments.version })
         .from(sourceDocuments)
-        .where(and(eq(sourceDocuments.id, documentId), eq(sourceDocuments.userId, userId)))
+        .where(and(eq(sourceDocuments.id, documentId), eq(sourceDocuments.userId, userId), isNull(sourceDocuments.removedAt)))
         .for("update");
       if (!document) return false;
       const version =
         document.kind && document.language !== language
           ? await nextVersion(tx, userId, document.kind, language)
           : document.version;
-      await tx.update(sourceDocuments).set({ language, languageConfirmed: true, version }).where(eq(sourceDocuments.id, documentId));
+      const moved = document.language !== language;
+      await tx
+        .update(sourceDocuments)
+        .set({ language, languageConfirmed: true, version, ...(moved ? { isDefault: false } : {}) })
+        .where(eq(sourceDocuments.id, documentId));
       return true;
     });
   }
 
-  async analyze(userId: string): Promise<ProfileReply> {
+  async analyze(userId: string, language: ConversationLanguage): Promise<ProfileReply> {
     const [sources] = await this.db
       .select({ n: count() })
       .from(profileSources)
@@ -219,7 +241,11 @@ export class PgOnboardingService implements OnboardingService {
         .leftJoin(sourceDocuments, eq(sourceDocuments.id, profileSources.documentId))
         .where(eq(profileSources.userId, userId))
         .orderBy(profileSources.createdAt);
-      const extraction = await this.assistant.extract({ linkedinUrl: profile?.linkedinUrl ?? null, sources: sourceRows });
+      const extraction = await this.assistant.extract({
+        linkedinUrl: profile?.linkedinUrl ?? null,
+        sources: sourceRows,
+        language,
+      });
 
       await this.db.transaction(async (tx) => {
         await applyChanges(tx, userId, extraction.changes, "draft");
@@ -254,13 +280,23 @@ export class PgOnboardingService implements OnboardingService {
     });
   }
 
-  private async answerQuestion(userId: string, context: QuestionsContext, text: string): Promise<ProfileReply[]> {
+  private async answerQuestion(
+    userId: string,
+    context: QuestionsContext,
+    text: string,
+    language: ConversationLanguage,
+  ): Promise<ProfileReply[]> {
     const questions = context.questions ?? [];
     const index = context.index ?? 0;
     const replies: ProfileReply[] = [];
     if (!SKIP.test(text)) {
       const snapshot = await loadSnapshot(this.db, userId);
-      const interpretation = await this.assistant.interpret({ snapshot, message: text, question: questions[index] ?? null });
+      const interpretation = await this.assistant.interpret({
+        snapshot,
+        message: text,
+        question: questions[index] ?? null,
+        language,
+      });
       await this.db.transaction((tx) => applyChanges(tx, userId, interpretation.changes, "draft"));
       if (interpretation.changes.length === 0 && interpretation.reply) {
         replies.push({ kind: "no_change", reply: interpretation.reply });
@@ -273,9 +309,9 @@ export class PgOnboardingService implements OnboardingService {
     return replies;
   }
 
-  private async correctReview(userId: string, text: string): Promise<ProfileReply[]> {
+  private async correctReview(userId: string, text: string, language: ConversationLanguage): Promise<ProfileReply[]> {
     const snapshot = await loadSnapshot(this.db, userId);
-    const interpretation = await this.assistant.interpret({ snapshot, message: text, question: null });
+    const interpretation = await this.assistant.interpret({ snapshot, message: text, question: null, language });
     if (interpretation.changes.length === 0) {
       return [{ kind: "no_change", reply: interpretation.reply }];
     }

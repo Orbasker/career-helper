@@ -1,28 +1,36 @@
-import { Bot, InlineKeyboard, InputFile, type Context, type BotConfig } from "grammy";
+import { Bot, InlineKeyboard, InputFile, type Api, type Context, type BotConfig } from "grammy";
 import { MAX_DOCUMENT_BYTES } from "../app/documents.js";
 import type { AppServices, CvRequestOutcome, ProfileReply } from "../app/services.js";
-import type { ConversationLanguage, CvFileFormat } from "../domain/enums.js";
-import { parseLanguageRequest } from "../domain/language.js";
-import { decodeCallback, encodeCallback } from "./callbacks.js";
+import { parseCvLibraryRequest } from "../domain/cv-library.js";
+import { CONVERSATION_LANGUAGES, type ConversationLanguage, type CvFileFormat } from "../domain/enums.js";
+import { DEFAULT_LANGUAGE, parseLanguageRequest } from "../domain/language.js";
+import { ALL_STRINGS, strings, type Strings } from "../i18n/index.js";
+import { decodeCallback, encodeCallback, type DocumentAction } from "./callbacks.js";
 import {
-  DOCUMENT_LANGUAGE_NAMES,
-  MY_PROFILE_LABEL,
-  WHATS_NEW_LABEL,
+  ASK_LANGUAGE,
   addSiteReply,
   boardsViews,
+  botCommands,
+  chooseDefaultView,
   connectionsImportReply,
   connectionsView,
   cvDocumentKeyboard,
   cvDraftViews,
+  cvLibraryViews,
+  documentCardView,
+  documentName,
   feedbackReasonView,
+  jobLinkFailureText,
+  jobLinkReadingText,
+  jobLinkResultView,
   languageKeyboard,
   languageSettingsView,
   mainMenu,
   matchDetailsView,
   matchListItem,
-  messages,
   profileReplyViews,
   proposalView,
+  removeDocumentView,
   sitesView,
   sourcesView,
   type View,
@@ -31,10 +39,36 @@ import {
 export const LATEST_MATCHES_LIMIT = 5;
 
 const CONNECTIONS_FILE = /\.(csv|zip)$/i;
-const FORGET_CONNECTIONS = /\b(delete|remove|forget|erase)\b.*\b(my )?(linkedin )?(connections|contacts)\b/i;
+const FORGET_CONNECTIONS = [
+  /\b(delete|remove|forget|erase)\b.*\b(my )?(linkedin )?(connections|contacts)\b/i,
+  /(?:^|\s)(?:ת?מחק|ל?מחוק|ת?שכח|ל?שכוח)\s.*אנשי (?:ה)?קשר/,
+];
 
+const DOMAIN = String.raw`((?:https?:\/\/)?(?:[\w-]+\.)+[a-z]{2,}(?:\/\S*)?)`;
 /** "search on example.co.il", "also look at https://jobs.example.com" and similar requests to add a job site. */
-const SITE_REQUEST = /\b(?:search|look|check)\b[^.?!\n]*?\b(?:on|in|at)\s+((?:https?:\/\/)?(?:[\w-]+\.)+[a-z]{2,}(?:\/\S*)?)/i;
+const SITE_REQUEST = new RegExp(String.raw`\b(search|look|check)\b[^.?!\n]*?\b(?:on|in|at)\s+${DOMAIN}`, "i");
+/** "חפש גם ב-example.co.il", "תחפש באתר example.co.il". */
+const HEBREW_SITE_REQUEST = new RegExp(String.raw`(?:^|\s)(?:ת?חפש|ל?חפש)\s[^.?!\n]*?ב[-־]?\s*(?:אתר\s+)?${DOMAIN}`, "i");
+const MAX_JOB_LINKS = 3;
+const LINK = /https?:\/\/[^\s<>"']+/gi;
+const LINKEDIN_PROFILE = /^https?:\/\/(?:[\w-]+\.)?linkedin\.com\/in\//i;
+
+/** A request to add a whole site; "look at" followed by a link to one page is about that page, not the site. */
+export function siteRequestFrom(text: string): string | null {
+  const hebrew = text.match(HEBREW_SITE_REQUEST);
+  if (hebrew) return hebrew[1]!;
+  const match = text.match(SITE_REQUEST);
+  if (!match) return null;
+  const [, verb, site] = match;
+  const path = site!.replace(/^https?:\/\//i, "").replace(/\/+$/, "").split("/").slice(1).join("/");
+  return verb!.toLowerCase() === "search" || !path ? site! : null;
+}
+
+/** Links in a message that may be job postings, without LinkedIn profiles, at most three. */
+export function jobLinksFromText(text: string): string[] {
+  const links = (text.match(LINK) ?? []).map((l) => l.replace(/[.,;!?)\]]+$/, "")).filter((l) => !LINKEDIN_PROFILE.test(l));
+  return [...new Set(links)].slice(0, MAX_JOB_LINKS);
+}
 
 /** "where are you searching?", "which sites do you check?", "איפה אתה מחפש?" and similar questions about job sources. */
 const SOURCES_REQUEST =
@@ -44,6 +78,8 @@ export type BotContext = Context & {
   userId: string;
   hasProfile: boolean;
   language: ConversationLanguage | null;
+  /** Copy in the user's language, or the default language until they choose one. */
+  t: Strings;
   languagePromptDue: boolean;
 };
 
@@ -78,14 +114,26 @@ export function createBot(
   const bot = new Bot<BotContext>(token, config);
   const html = { parse_mode: "HTML" as const, link_preview_options: { is_disabled: true } };
 
+  const locale = (ctx: BotContext) => ctx.language ?? DEFAULT_LANGUAGE;
+
+  const useLanguage = async (ctx: BotContext, language: ConversationLanguage) => {
+    ctx.language = language;
+    ctx.t = strings(language);
+    if (!ctx.chat) return;
+    await ctx.api
+      .setMyCommands(botCommands(ctx.t), { scope: { type: "chat", chat_id: ctx.chat.id } })
+      .catch((error) => console.error("setting chat commands failed", { error }));
+  };
+
   const sendReplies = async (ctx: BotContext, replies: ProfileReply[]) => {
     for (const reply of replies) {
-      const views = profileReplyViews(reply);
+      if (reply.kind === "language_saved") await useLanguage(ctx, reply.language);
+      const views = profileReplyViews(ctx.t, reply);
       for (const [i, view] of views.entries()) {
         const isLast = i === views.length - 1;
         const menu = isLast && !view.keyboard && (ctx.hasProfile || MENU_REPLIES.has(reply.kind));
         const hideMenu = reply.kind === "onboarding_welcome" ? { remove_keyboard: true as const } : undefined;
-        await ctx.reply(view.text, { ...html, reply_markup: view.keyboard ?? (menu ? mainMenu : hideMenu) });
+        await ctx.reply(view.text, { ...html, reply_markup: view.keyboard ?? (menu ? mainMenu(ctx.t) : hideMenu) });
       }
     }
   };
@@ -100,12 +148,15 @@ export function createBot(
       return null;
     });
     if (!file) {
-      const retry = new InlineKeyboard().text("📄 Send document", encodeCallback({ type: "cv_document", versionId, format }));
-      await ctx.reply(messages.cvDocumentFailed, { ...html, reply_markup: retry });
+      const retry = new InlineKeyboard().text(ctx.t.buttons.sendDocument, encodeCallback({ type: "cv_document", versionId, format }));
+      await ctx.reply(ctx.t.messages.cvDocumentFailed, { ...html, reply_markup: retry });
       return;
     }
     const document = file.kind === "cached" ? file.fileRef : new InputFile(file.data, file.fileName);
-    const sent = await ctx.replyWithDocument(document, { caption: messages.cvDocumentCaption, reply_markup: cvDocumentKeyboard(versionId, file) });
+    const sent = await ctx.replyWithDocument(document, {
+      caption: ctx.t.messages.cvDocumentCaption,
+      reply_markup: cvDocumentKeyboard(ctx.t, versionId, file),
+    });
     const fileRef = sent?.document?.file_id;
     if (file.kind === "rendered" && fileRef) await services.cv.saveDocumentRef(ctx.userId, versionId, format, fileRef);
   };
@@ -114,25 +165,25 @@ export function createBot(
   const sendCvOutcome = async (ctx: BotContext, outcome: CvRequestOutcome, requestedMessage: string) => {
     switch (outcome.kind) {
       case "not_found":
-        await ctx.reply(messages.matchNotFound, html);
+        await ctx.reply(ctx.t.messages.matchNotFound, html);
         return;
       case "in_progress":
-        await ctx.reply(messages.cvInProgress, html);
+        await ctx.reply(ctx.t.messages.cvInProgress, html);
         return;
       case "approved":
         await sendCvDocument(ctx, outcome.versionId);
         return;
       case "draft": {
         const draft = await services.cv.draft(ctx.userId, outcome.versionId);
-        if (draft) await sendViews(ctx, cvDraftViews(draft));
+        if (draft) await sendViews(ctx, cvDraftViews(ctx.t, draft));
         return;
       }
       case "requested": {
         await ctx.reply(requestedMessage, html);
         await typing(ctx);
         const result = await services.cv.tailor(ctx.userId, outcome.versionId);
-        if (result.kind === "draft") await sendViews(ctx, cvDraftViews(result.draft));
-        else await ctx.reply(messages.cvFailed, html);
+        if (result.kind === "draft") await sendViews(ctx, cvDraftViews(ctx.t, result.draft));
+        else await ctx.reply(ctx.t.messages.cvFailed, html);
         return;
       }
     }
@@ -151,16 +202,17 @@ export function createBot(
     ctx.userId = session.userId;
     ctx.hasProfile = session.hasProfile;
     ctx.language = session.language;
+    ctx.t = strings(session.language);
     ctx.languagePromptDue = session.languagePromptDue;
     await next();
     if (ctx.languagePromptDue && (await services.users.claimLanguagePrompt(session.userId))) {
-      await ctx.reply(messages.askLanguage, { ...html, reply_markup: languageKeyboard() });
+      await ctx.reply(ASK_LANGUAGE, { ...html, reply_markup: languageKeyboard() });
     }
   });
 
   const sendProposals = async (ctx: BotContext) => {
-    for (const proposal of await services.feedback.learn(ctx.userId)) {
-      const view = proposalView(proposal);
+    for (const proposal of await services.feedback.learn(ctx.userId, locale(ctx))) {
+      const view = proposalView(ctx.t, proposal);
       await ctx.reply(view.text, { ...html, reply_markup: view.keyboard });
     }
   };
@@ -168,18 +220,35 @@ export function createBot(
   const sendLatest = async (ctx: BotContext) => {
     const latest = await services.matches.whatsNew(ctx.userId, LATEST_MATCHES_LIMIT);
     if (latest.length === 0) {
-      await ctx.reply(messages.noMatches, { ...html, reply_markup: mainMenu });
+      await ctx.reply(ctx.t.messages.noMatches, { ...html, reply_markup: mainMenu(ctx.t) });
       return;
     }
     for (const match of latest) {
-      const view = matchListItem(match);
+      const view = matchListItem(ctx.t, match);
       await ctx.reply(view.text, { ...html, reply_markup: view.keyboard });
     }
   };
 
+  const analyzeJobLink = async (ctx: BotContext, link: string, several: boolean) => {
+    await ctx.reply(jobLinkReadingText(ctx.t, link, several), html);
+    await typing(ctx);
+    const outcome = await services.jobLinks.analyze(ctx.userId, link);
+    if (outcome.kind !== "evaluated" && outcome.kind !== "fails_must_have") {
+      await ctx.reply(jobLinkFailureText(ctx.t, outcome, several ? link : null), { ...html, reply_markup: mainMenu(ctx.t) });
+      return;
+    }
+    const details = await services.matches.details(ctx.userId, outcome.matchId);
+    if (!details) {
+      await ctx.reply(ctx.t.messages.matchNotFound, html);
+      return;
+    }
+    const view = jobLinkResultView(ctx.t, outcome, details);
+    await ctx.reply(view.text, { ...html, reply_markup: view.keyboard });
+  };
+
   bot.command("start", async (ctx) => {
     if (ctx.hasProfile) {
-      await ctx.reply(messages.welcomeBack, { ...html, reply_markup: mainMenu });
+      await ctx.reply(ctx.t.messages.welcomeBack, { ...html, reply_markup: mainMenu(ctx.t) });
       return;
     }
     await sendReplies(ctx, await services.onboarding.start(ctx.userId));
@@ -187,39 +256,72 @@ export function createBot(
 
   const showLanguage = (ctx: BotContext) => {
     ctx.languagePromptDue = false;
-    const view = languageSettingsView(ctx.language);
+    const view = languageSettingsView(ctx.t, ctx.language);
     return ctx.reply(view.text, { ...html, reply_markup: view.keyboard });
   };
   bot.command(["language", "settings"], showLanguage);
 
+
   const showProfile = async (ctx: BotContext) => sendReplies(ctx, [await services.conversation.showProfile(ctx.userId)]);
 
-  bot.command("help", (ctx) => ctx.reply(messages.help, { ...html, reply_markup: mainMenu }));
+  const showHelp = (ctx: BotContext) => ctx.reply(ctx.t.messages.help, { ...html, reply_markup: mainMenu(ctx.t) });
+
+  bot.command("help", showHelp);
   bot.command("new", sendLatest);
-  bot.hears(WHATS_NEW_LABEL, sendLatest);
+  bot.hears(ALL_STRINGS.map((t) => t.menu.whatsNew), sendLatest);
   bot.command("profile", showProfile);
 
   const showSites = async (ctx: BotContext) => {
-    const view = sitesView(await services.sites.list(ctx.userId));
-    await ctx.reply(view.text, { ...html, reply_markup: view.keyboard ?? mainMenu });
+    const view = sitesView(ctx.t, await services.sites.list(ctx.userId));
+    await ctx.reply(view.text, { ...html, reply_markup: view.keyboard ?? mainMenu(ctx.t) });
   };
   const addSite = async (ctx: BotContext, input: string) => {
-    await ctx.reply(addSiteReply(await services.sites.add(ctx.userId, input)), { ...html, reply_markup: mainMenu });
+    await ctx.reply(addSiteReply(ctx.t, await services.sites.add(ctx.userId, input)), { ...html, reply_markup: mainMenu(ctx.t) });
   };
   bot.command("sites", showSites);
   const showSources = async (ctx: BotContext) => {
-    const view = sourcesView(await services.sources.overview(ctx.userId));
+    const view = sourcesView(ctx.t, await services.sources.overview(ctx.userId));
     await ctx.reply(view.text, { ...html, reply_markup: view.keyboard });
   };
   bot.command("sources", showSources);
   const showConnections = async (ctx: BotContext) => {
-    const view = connectionsView(await services.connections.summary(ctx.userId));
-    await ctx.reply(view.text, { ...html, reply_markup: view.keyboard ?? mainMenu });
+    const view = connectionsView(ctx.t, await services.connections.summary(ctx.userId));
+    await ctx.reply(view.text, { ...html, reply_markup: view.keyboard ?? mainMenu(ctx.t) });
   };
   bot.command("connections", showConnections);
+  const showDocuments = async (ctx: BotContext) => {
+    const documents = await services.documents.list(ctx.userId);
+    if (!documents) {
+      await ctx.reply(ctx.t.messages.notOnboarded, html);
+      return;
+    }
+    await sendViews(ctx, cvLibraryViews(ctx.t, documents));
+  };
+  bot.command("cvs", showDocuments);
+  const requestDefaultCv = async (ctx: BotContext, language: ConversationLanguage | null) => {
+    const outcome = await services.documents.requestDefault(ctx.userId, language);
+    const languageName = language ? ctx.t.documentLanguages[language] : null;
+    switch (outcome.kind) {
+      case "not_onboarded":
+        await ctx.reply(ctx.t.messages.notOnboarded, html);
+        return;
+      case "none":
+        await ctx.reply(ctx.t.cvs.noCvs(languageName), { ...html, reply_markup: mainMenu(ctx.t) });
+        return;
+      case "choose":
+        await sendViews(ctx, [chooseDefaultView(ctx.t, outcome.language, outcome.documents)]);
+        return;
+      case "set": {
+        const { document } = outcome;
+        const text = ctx.t.cvs.defaultSet(documentName(ctx.t, document), ctx.t.documentLanguages[document.language!]);
+        await ctx.reply(text, { ...html, reply_markup: mainMenu(ctx.t) });
+        return;
+      }
+    }
+  };
   bot.command("stats", async (ctx) => {
     if (!ctx.from || !options.adminTelegramIds?.includes(ctx.from.id)) {
-      await ctx.reply(messages.help, { ...html, reply_markup: mainMenu });
+      await showHelp(ctx);
       return;
     }
     const days = Math.min(90, Math.max(1, Number.parseInt(ctx.match, 10) || 7));
@@ -228,17 +330,17 @@ export function createBot(
   bot.command("addsite", async (ctx) => {
     const input = ctx.match.trim();
     if (!input) {
-      await ctx.reply(messages.siteUsage, html);
+      await ctx.reply(ctx.t.messages.siteUsage, html);
       return;
     }
     await addSite(ctx, input);
   });
-  bot.hears(MY_PROFILE_LABEL, showProfile);
+  bot.hears(ALL_STRINGS.map((t) => t.menu.myProfile), showProfile);
 
   bot.on("message:document", async (ctx) => {
     const { document } = ctx.message;
     if (document.file_size !== undefined && document.file_size > MAX_DOCUMENT_BYTES) {
-      await ctx.reply(messages.documentTooLarge, html);
+      await ctx.reply(ctx.t.messages.documentTooLarge, html);
       return;
     }
     await typing(ctx);
@@ -248,7 +350,7 @@ export function createBot(
     const data = await io.downloadFile(file.file_path);
     if (fileName && CONNECTIONS_FILE.test(fileName)) {
       const outcome = await services.connections.import(ctx.userId, { data, fileName });
-      await ctx.reply(connectionsImportReply(outcome), { ...html, reply_markup: mainMenu });
+      await ctx.reply(connectionsImportReply(ctx.t, outcome), { ...html, reply_markup: mainMenu(ctx.t) });
       return;
     }
     const replies = await services.conversation.addDocument(ctx.userId, {
@@ -258,9 +360,52 @@ export function createBot(
       data,
       sizeBytes: document.file_size ?? null,
       label: ctx.message.caption ?? null,
-    });
+    }, locale(ctx));
     await sendReplies(ctx, replies);
   });
+
+  const handleDocumentAction = async (ctx: BotContext, documentId: string, action: DocumentAction) => {
+    if (action === "default") {
+      const outcome = await services.documents.setDefault(ctx.userId, documentId);
+      if (outcome.kind !== "set") {
+        await ctx.answerCallbackQuery({ text: outcome.kind === "not_eligible" ? ctx.t.cvs.notEligible : ctx.t.messages.expired });
+        return;
+      }
+      await ctx.answerCallbackQuery({ text: ctx.t.cvs.defaultFor(ctx.t.documentLanguages[outcome.document.language!]) });
+      const card = documentCardView(ctx.t, outcome.document);
+      await ctx.editMessageText(card.text, { ...html, reply_markup: card.keyboard }).catch(() => undefined);
+      return;
+    }
+    const document =
+      action === "label"
+        ? await services.documents.awaitLabel(ctx.userId, documentId)
+        : action === "replace"
+          ? await services.documents.awaitReplacement(ctx.userId, documentId)
+          : action === "remove"
+            ? await services.documents.get(ctx.userId, documentId)
+            : await services.documents.remove(ctx.userId, documentId);
+    if (!document) {
+      await ctx.answerCallbackQuery({ text: ctx.t.messages.expired });
+      return;
+    }
+    await ctx.answerCallbackQuery();
+    const name = documentName(ctx.t, document);
+    switch (action) {
+      case "label":
+        await ctx.reply(ctx.t.cvs.labelPrompt(name), html);
+        return;
+      case "replace":
+        await ctx.reply(ctx.t.cvs.replacePrompt(name), html);
+        return;
+      case "remove":
+        await sendViews(ctx, [removeDocumentView(ctx.t, document)]);
+        return;
+      case "confirm_remove":
+        await ctx.editMessageReplyMarkup().catch(() => undefined);
+        await ctx.reply(ctx.t.cvs.removed(name), { ...html, reply_markup: mainMenu(ctx.t) });
+        return;
+    }
+  };
 
   bot.on("callback_query:data", async (ctx) => {
     const action = decodeCallback(ctx.callbackQuery.data);
@@ -274,26 +419,26 @@ export function createBot(
         const details = await services.matches.details(ctx.userId, action.matchId);
         await ctx.answerCallbackQuery();
         if (!details) {
-          await ctx.reply(messages.matchNotFound, html);
+          await ctx.reply(ctx.t.messages.matchNotFound, html);
           return;
         }
-        const view = matchDetailsView(details);
+        const view = matchDetailsView(ctx.t, details);
         await ctx.reply(view.text, { ...html, reply_markup: view.keyboard });
         return;
       }
       case "feedback": {
         const recorded = await services.feedback.record(ctx.userId, action.matchId, action.verdict);
         if (!recorded) {
-          await ctx.answerCallbackQuery({ text: messages.matchNotFound });
+          await ctx.answerCallbackQuery({ text: ctx.t.messages.matchNotFound });
           return;
         }
         await ctx.answerCallbackQuery({
-          text: action.verdict === "interested" ? messages.feedbackInterested : messages.feedbackNotInterested,
+          text: action.verdict === "interested" ? ctx.t.messages.feedbackInterested : ctx.t.messages.feedbackNotInterested,
         });
         const details = await services.matches.details(ctx.userId, action.matchId);
-        if (details) await ctx.editMessageReplyMarkup({ reply_markup: matchDetailsView(details).keyboard });
+        if (details) await ctx.editMessageReplyMarkup({ reply_markup: matchDetailsView(ctx.t, details).keyboard });
         if (action.verdict === "not_interested") {
-          const view = feedbackReasonView(recorded.feedbackId);
+          const view = feedbackReasonView(ctx.t, recorded.feedbackId);
           await ctx.reply(view.text, { ...html, reply_markup: view.keyboard });
           await sendProposals(ctx);
         }
@@ -301,36 +446,35 @@ export function createBot(
       }
       case "feedback_reason": {
         const saved = await services.feedback.addReasonTag(ctx.userId, action.feedbackId, action.tag);
-        await ctx.answerCallbackQuery({ text: saved ? messages.feedbackReasonNoted : messages.matchNotFound });
+        await ctx.answerCallbackQuery({ text: saved ? ctx.t.messages.feedbackReasonNoted : ctx.t.messages.matchNotFound });
         if (saved) await sendProposals(ctx);
         return;
       }
       case "feedback_reason_text": {
         const waiting = await services.feedback.awaitReasonText(ctx.userId, action.feedbackId);
         await ctx.answerCallbackQuery();
-        await ctx.reply(waiting ? messages.feedbackReasonTextPrompt : messages.matchNotFound, html);
+        await ctx.reply(waiting ? ctx.t.messages.feedbackReasonTextPrompt : ctx.t.messages.matchNotFound, html);
         return;
       }
       case "proposal_decision": {
         const outcome = await services.feedback.decideProposal(ctx.userId, action.preferenceId, action.accept);
         await ctx.answerCallbackQuery();
         await ctx.editMessageReplyMarkup().catch(() => undefined);
-        const reply = { accepted: messages.proposalAccepted, rejected: messages.proposalRejected, not_found: messages.expired }[
-          outcome
-        ];
-        await ctx.reply(reply, { ...html, reply_markup: mainMenu });
+        const { proposalAccepted, proposalRejected, expired } = ctx.t.messages;
+        const reply = { accepted: proposalAccepted, rejected: proposalRejected, not_found: expired }[outcome];
+        await ctx.reply(reply, { ...html, reply_markup: mainMenu(ctx.t) });
         return;
       }
       case "tailor_cv": {
         const outcome = await services.cv.requestTailored(ctx.userId, action.matchId);
         await ctx.answerCallbackQuery();
-        await sendCvOutcome(ctx, outcome, messages.cvRequested);
+        await sendCvOutcome(ctx, outcome, ctx.t.messages.cvRequested);
         return;
       }
       case "cv_language": {
         const outcome = await services.cv.requestLanguage(ctx.userId, action.versionId, action.language);
         await ctx.answerCallbackQuery();
-        await sendCvOutcome(ctx, outcome, messages.cvLanguageRequested[action.language]);
+        await sendCvOutcome(ctx, outcome, ctx.t.messages.cvLanguageRequested(ctx.t.documentLanguages[action.language]));
         return;
       }
       case "set_language": {
@@ -343,19 +487,22 @@ export function createBot(
         const deleted = await services.connections.forget(ctx.userId);
         await ctx.answerCallbackQuery();
         await ctx.editMessageReplyMarkup().catch(() => undefined);
-        await ctx.reply(deleted ? messages.connectionsDeleted : messages.connectionsNone, { ...html, reply_markup: mainMenu });
+        await ctx.reply(deleted ? ctx.t.messages.connectionsDeleted : ctx.t.messages.connectionsNone, {
+          ...html,
+          reply_markup: mainMenu(ctx.t),
+        });
         return;
       }
       case "site_remove": {
         const removed = await services.sites.remove(ctx.userId, action.siteId);
-        await ctx.answerCallbackQuery({ text: removed ? messages.siteRemoved : messages.expired });
-        const view = sitesView(await services.sites.list(ctx.userId));
+        await ctx.answerCallbackQuery({ text: removed ? ctx.t.messages.siteRemoved : ctx.t.messages.expired });
+        const view = sitesView(ctx.t, await services.sites.list(ctx.userId));
         await ctx.editMessageText(view.text, { ...html, reply_markup: view.keyboard }).catch(() => undefined);
         return;
       }
       case "sources_boards": {
         await ctx.answerCallbackQuery();
-        await sendViews(ctx, boardsViews(await services.sources.overview(ctx.userId)));
+        await sendViews(ctx, boardsViews(ctx.t, await services.sources.overview(ctx.userId)));
         return;
       }
       case "sources_sites": {
@@ -372,26 +519,36 @@ export function createBot(
         const decision = await services.cv.decide(ctx.userId, action.versionId, action.approve);
         await ctx.answerCallbackQuery();
         await ctx.editMessageReplyMarkup().catch(() => undefined);
-        const reply = { approved: messages.cvApproved, discarded: messages.cvDiscarded, not_found: messages.expired }[decision];
-        await ctx.reply(reply, { ...html, reply_markup: mainMenu });
+        const { cvApproved, cvDiscarded, expired } = ctx.t.messages;
+        const reply = { approved: cvApproved, discarded: cvDiscarded, not_found: expired }[decision];
+        await ctx.reply(reply, { ...html, reply_markup: mainMenu(ctx.t) });
         if (decision === "approved") await sendCvDocument(ctx, action.versionId);
         return;
       }
       case "onboarding_analyze": {
         await ctx.answerCallbackQuery();
         await ctx.editMessageReplyMarkup().catch(() => undefined);
-        await ctx.reply(messages.analyzing, html);
+        await ctx.reply(ctx.t.messages.analyzing, html);
         await typing(ctx);
-        await sendReplies(ctx, [await services.onboarding.analyze(ctx.userId)]);
+        await sendReplies(ctx, [await services.onboarding.analyze(ctx.userId, locale(ctx))]);
         return;
       }
       case "document_language": {
         const saved = await services.onboarding.setDocumentLanguage(ctx.userId, action.documentId, action.language);
         await ctx.answerCallbackQuery({
-          text: saved ? `Marked as ${DOCUMENT_LANGUAGE_NAMES[action.language]} ✅` : messages.expired,
+          text: saved ? ctx.t.documents.languageMarked(ctx.t.documentLanguages[action.language]) : ctx.t.messages.expired,
         });
         if (saved) {
           const rows = ctx.callbackQuery.message?.reply_markup?.inline_keyboard ?? [];
+          const cardAction = encodeCallback({ type: "document_action", documentId: action.documentId, action: "label" });
+          if (rows.flat().some((button) => "callback_data" in button && button.callback_data === cardAction)) {
+            const document = await services.documents.get(ctx.userId, action.documentId);
+            if (document) {
+              const card = documentCardView(ctx.t, document);
+              await ctx.editMessageText(card.text, { ...html, reply_markup: card.keyboard }).catch(() => undefined);
+              return;
+            }
+          }
           const kept = rows
             .map((row) => row.filter((button) => !("callback_data" in button && button.callback_data.startsWith("dl:"))))
             .filter((row) => row.length > 0);
@@ -399,6 +556,25 @@ export function createBot(
         }
         return;
       }
+      case "documents": {
+        await ctx.answerCallbackQuery();
+        await showDocuments(ctx);
+        return;
+      }
+      case "document_upload": {
+        await ctx.answerCallbackQuery();
+        await ctx.reply(ctx.t.cvs.uploadHowTo, html);
+        return;
+      }
+      case "document": {
+        const document = await services.documents.get(ctx.userId, action.documentId);
+        await ctx.answerCallbackQuery(document ? undefined : { text: ctx.t.messages.expired });
+        if (document) await sendViews(ctx, [documentCardView(ctx.t, document)]);
+        return;
+      }
+      case "document_action":
+        await handleDocumentAction(ctx, action.documentId, action.action);
+        return;
       case "onboarding_confirm": {
         await ctx.answerCallbackQuery();
         const reply = await services.onboarding.confirm(ctx.userId);
@@ -422,7 +598,22 @@ export function createBot(
 
   bot.on("message:text", async (ctx) => {
     if (ctx.message.text.startsWith("/")) {
-      await ctx.reply(messages.help, { ...html, reply_markup: mainMenu });
+      await showHelp(ctx);
+      return;
+    }
+    const labelled = await services.documents.takeLabel(ctx.userId, ctx.message.text);
+    if (labelled) {
+      await ctx.reply(ctx.t.cvs.labelSaved(documentName(ctx.t, labelled)), html);
+      await sendViews(ctx, [documentCardView(ctx.t, labelled)]);
+      return;
+    }
+    const cvRequest = parseCvLibraryRequest(ctx.message.text);
+    if (cvRequest?.kind === "list") {
+      await showDocuments(ctx);
+      return;
+    }
+    if (cvRequest?.kind === "default") {
+      await requestDefaultCv(ctx, cvRequest.language);
       return;
     }
     const languageRequest = parseLanguageRequest(ctx.message.text);
@@ -434,14 +625,17 @@ export function createBot(
       await sendReplies(ctx, await services.conversation.setLanguage(ctx.userId, languageRequest));
       return;
     }
-    if (FORGET_CONNECTIONS.test(ctx.message.text)) {
+    if (FORGET_CONNECTIONS.some((pattern) => pattern.test(ctx.message.text))) {
       const deleted = await services.connections.forget(ctx.userId);
-      await ctx.reply(deleted ? messages.connectionsDeleted : messages.connectionsNone, { ...html, reply_markup: mainMenu });
+      await ctx.reply(deleted ? ctx.t.messages.connectionsDeleted : ctx.t.messages.connectionsNone, {
+        ...html,
+        reply_markup: mainMenu(ctx.t),
+      });
       return;
     }
-    const siteRequest = ctx.message.text.match(SITE_REQUEST);
+    const siteRequest = siteRequestFrom(ctx.message.text);
     if (siteRequest && ctx.hasProfile) {
-      await addSite(ctx, siteRequest[1]!);
+      await addSite(ctx, siteRequest);
       return;
     }
     if (SOURCES_REQUEST.test(ctx.message.text)) {
@@ -449,28 +643,30 @@ export function createBot(
       return;
     }
     if (await services.feedback.takeReasonText(ctx.userId, ctx.message.text)) {
-      await ctx.reply(messages.feedbackReasonTextSaved, { ...html, reply_markup: mainMenu });
+      await ctx.reply(ctx.t.messages.feedbackReasonTextSaved, { ...html, reply_markup: mainMenu(ctx.t) });
+      return;
+    }
+    const links = ctx.hasProfile ? jobLinksFromText(ctx.message.text) : [];
+    if (links.length > 0) {
+      for (const link of links) await analyzeJobLink(ctx, link, links.length > 1);
       return;
     }
     await typing(ctx);
-    await sendReplies(ctx, await services.conversation.handleText(ctx.userId, ctx.message.text));
+    await sendReplies(ctx, await services.conversation.handleText(ctx.userId, ctx.message.text, locale(ctx)));
   });
 
   bot.catch(async (err) => {
     console.error("bot update failed", { updateId: err.ctx.update.update_id, error: err.error });
-    await err.ctx.reply(messages.error).catch(() => undefined);
+    await err.ctx.reply(strings(err.ctx.language).messages.error).catch(() => undefined);
   });
 
   return bot;
 }
 
-export const BOT_COMMANDS = [
-  { command: "new", description: "Latest job matches" },
-  { command: "profile", description: "Your career profile" },
-  { command: "sources", description: "Where I search for jobs" },
-  { command: "sites", description: "Job sites I search for you" },
-  { command: "connections", description: "Who you know at matched companies" },
-  { command: "language", description: "Choose English or Hebrew" },
-  { command: "start", description: "Set up your career profile" },
-  { command: "help", description: "What I can do" },
-];
+/** Telegram shows these by the client's language; a user's own choice is set per chat when they switch. */
+export async function registerCommands(api: Api): Promise<void> {
+  await api.setMyCommands(botCommands(strings(DEFAULT_LANGUAGE)));
+  for (const language of CONVERSATION_LANGUAGES) {
+    if (language !== DEFAULT_LANGUAGE) await api.setMyCommands(botCommands(strings(language)), { language_code: language });
+  }
+}

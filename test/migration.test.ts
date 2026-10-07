@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 const LAST_SINGLE_CV_MIGRATION = "0007_preferred_language";
 
-const LAST_SINGLE_LANGUAGE_CV_MIGRATION = "0008_multi_cv_documents";
+const LAST_SINGLE_LANGUAGE_CV_MIGRATION = "0009_cv_library";
 
 let client: PGlite;
 let legacyFolder: string;

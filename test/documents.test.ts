@@ -1,6 +1,6 @@
 import { Document, Packer, Paragraph, TextRun } from "docx";
 import { describe, expect, it } from "vitest";
-import { classifySource, documentFormat, parseDocument, parseLinkedinUrl } from "../src/app/documents.js";
+import { classifySource, detectDocumentLanguage, documentFormat, parseDocument, parseLinkedinUrl } from "../src/app/documents.js";
 import { detectLanguage } from "../src/domain/language.js";
 
 const HEBREW_CV = ["דנה לוי", "מנהלת משאבי אנוש באקמה בעמ", "ניהלה צוות של שישה מגייסים"];
@@ -66,12 +66,14 @@ describe("documents", () => {
       format: "pdf",
       text: lines.join("\n"),
       language,
+      languageCertain: true,
     });
     expect(await parseDocument(doc("cv.docx", DOCX_MIME, await docx(lines)))).toEqual({
       status: "parsed",
       format: "docx",
       text: lines.join("\n\n"),
       language,
+      languageCertain: true,
     });
   });
 
@@ -82,6 +84,7 @@ describe("documents", () => {
       format: "txt",
       text,
       language: "en",
+      languageCertain: true,
     });
   });
 
@@ -123,6 +126,16 @@ describe("documents", () => {
     ["2019 – 2024", null],
   ])("detects the language of %s", (text, language) => {
     expect(detectLanguage(text)).toBe(language);
+  });
+
+  it.each([
+    ["דנה לוי, מנהלת משאבי אנוש ב-Acme, ניסיון עם Workday ו-SAP SuccessFactors", "he", true],
+    ["Dana Levi, HR Manager at Acme", "en", true],
+    ["Dana Levi — דנה לוי — HR Manager, Acme Ltd, Tel Aviv, Workday, SAP SuccessFactors, Greenhouse", "en", false],
+    ["דנה לוי, מנהלת משאבי אנוש, Dana Levi, HR, Acme, Workday, SuccessFactors", "he", false],
+    ["2019 – 2024", null, false],
+  ])("is sure of the language of %s only when the text is clearly one language", (text, language, certain) => {
+    expect(detectDocumentLanguage(text)).toEqual({ language, certain });
   });
 
   it("recognises LinkedIn PDF exports", () => {

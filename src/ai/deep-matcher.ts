@@ -8,16 +8,18 @@ import {
 } from "ai";
 import { z } from "zod";
 import { formatMonth } from "../domain/dates.js";
-import type { ConfidenceLevel, MatchRecommendation, PreferenceKind } from "../domain/enums.js";
+import type { ConfidenceLevel, ConversationLanguage, MatchRecommendation, PreferenceKind } from "../domain/enums.js";
 import type { PreferenceSnapshot, ProfileSnapshot } from "../domain/profile.js";
 import type { FitEvidence } from "../domain/types.js";
+import { strings } from "../i18n/index.js";
 import { employerRelation } from "../matching/employer.js";
+import { replyLanguageRule } from "./language.js";
 import { noopRecorder, tracked, type ModelCallRecorder } from "./tracking.js";
 import { isRecommended, type DeepMatcher, type DeepMatchJob, type DeepMatchVerdict } from "../matching/deep-match.js";
 
 export const DECISION_MODEL = "typesafe-ai/jev";
 export const EXPLANATION_MODEL = "anthropic/claude-sonnet-5.5";
-export const DEEP_MATCH_PROMPT_VERSION = "deep-match-v3";
+export const DEEP_MATCH_PROMPT_VERSION = "deep-match-v4";
 const MAX_DESCRIPTION_CHARS = 20_000;
 const VETO_PROBABILITY = 0.5;
 
@@ -104,16 +106,24 @@ export class AiDeepMatcher implements DeepMatcher {
     this.model = `${modelName(decisionModel)} + ${modelName(explanationModel)}`;
   }
 
-  async evaluate({ profile, job }: { profile: ProfileSnapshot; job: DeepMatchJob }): Promise<DeepMatchVerdict> {
+  async evaluate({
+    profile,
+    job,
+    language,
+  }: {
+    profile: ProfileSnapshot;
+    job: DeepMatchJob;
+    language: ConversationLanguage;
+  }): Promise<DeepMatchVerdict> {
     const { text: profileText, aliases } = renderProfile(profile);
     const jobText = renderJob(job);
-    const decision = await this.decide(profile, profileText, jobText);
+    const decision = await this.decide(profile, profileText, jobText, language);
 
     if (!isRecommended(decision.recommendation)) {
       return {
         recommendation: decision.recommendation,
         confidence: decision.confidence,
-        explanation: decision.vetoes[0]?.explanation ?? "This role doesn't build on your proven experience closely enough.",
+        explanation: decision.vetoes[0]?.explanation ?? strings(language).matching.notBuilding,
         evidence: { fitEvidence: [], gaps: [], risks: decision.vetoes.map((v) => v.reason), transferableSkills: [] },
       };
     }
@@ -122,7 +132,7 @@ export class AiDeepMatcher implements DeepMatcher {
       generateText({
         providerOptions,
         model: this.explanationModel,
-        instructions: EXPLANATION_INSTRUCTIONS,
+        instructions: `${EXPLANATION_INSTRUCTIONS}\n\n${replyLanguageRule(language, "explanation, fitEvidence claims, gaps, risks, transferableSkills and adjacencyReasoning")}`,
         prompt: `<candidate>\n${profileText}\n</candidate>\n\n<job>\n${jobText}\n</job>${employerNote(profile, job)}\n\n<recommendation>${decision.recommendation}: ${RECOMMENDATIONS[decision.recommendation]}</recommendation>`,
         output: Output.object({ schema: explanationSchema }),
       }),
@@ -130,8 +140,13 @@ export class AiDeepMatcher implements DeepMatcher {
     return groundVerdict(decision, output, aliases, job);
   }
 
-  private async decide(profile: ProfileSnapshot, profileText: string, jobText: string): Promise<FitDecision> {
-    const vetoQuestions = buildVetoQuestions(profile);
+  private async decide(
+    profile: ProfileSnapshot,
+    profileText: string,
+    jobText: string,
+    language: ConversationLanguage,
+  ): Promise<FitDecision> {
+    const vetoQuestions = buildVetoQuestions(profile, language);
     const questions: Record<string, Experimental_DecisionQuestion> = {
       recommendation: { type: "choice", instructions: RECOMMENDATION_INSTRUCTIONS, criteria: RECOMMENDATIONS },
     };
@@ -160,7 +175,11 @@ export class AiDeepMatcher implements DeepMatcher {
   }
 }
 
-function buildVetoQuestions(profile: ProfileSnapshot): Map<string, { question: Experimental_DecisionQuestion; veto: Veto }> {
+function buildVetoQuestions(
+  profile: ProfileSnapshot,
+  language: ConversationLanguage,
+): Map<string, { question: Experimental_DecisionQuestion; veto: Veto }> {
+  const t = strings(language).matching;
   const questions = new Map<string, { question: Experimental_DecisionQuestion; veto: Veto }>();
   const active = profile.preferences.filter((p) => p.status === "active");
   const add = (id: string, instructions: string, veto: Veto) =>
@@ -172,7 +191,7 @@ function buildVetoQuestions(profile: ProfileSnapshot): Map<string, { question: E
       add(
         `mustHave${i + 1}`,
         `Does this job clearly break the candidate's must-have "${p.label}"? Answer no when the posting does not say.`,
-        { reason: `Breaks must-have “${p.label}”`, explanation: `This job conflicts with your must-have: ${p.label}.` },
+        { reason: `Breaks must-have “${p.label}”`, explanation: t.mustHaveConflict(p.label) },
       ),
     );
   active
@@ -180,7 +199,7 @@ function buildVetoQuestions(profile: ProfileSnapshot): Map<string, { question: E
     .forEach((p, i) =>
       add(`dislike${i + 1}`, `Is this job mainly the kind of work the candidate wants to avoid: "${p.label}"?`, {
         reason: `Matches something to avoid: “${p.label}”`,
-        explanation: `This looks like the kind of role you want to avoid: ${p.label}.`,
+        explanation: t.dislikeConflict(p.label),
       }),
     );
   if (!profile.profile.openToAdjacentRoles) {
@@ -189,7 +208,7 @@ function buildVetoQuestions(profile: ProfileSnapshot): Map<string, { question: E
       "Is this job outside both the candidate's target roles and the kinds of roles they have held before?",
       {
         reason: "Outside target and past roles, and the candidate is not open to adjacent roles",
-        explanation: "This role is outside the roles you're targeting, and you asked to skip adjacent roles.",
+        explanation: t.outsidePath,
       },
     );
   }

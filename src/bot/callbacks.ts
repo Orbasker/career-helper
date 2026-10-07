@@ -1,6 +1,9 @@
 import { CONVERSATION_LANGUAGES, type ConversationLanguage, type CvFileFormat, type FeedbackVerdict } from "../domain/enums.js";
 import type { FeedbackReasonTag } from "../learning/infer.js";
 
+export const DOCUMENT_ACTIONS = ["default", "label", "replace", "remove", "confirm_remove"] as const;
+export type DocumentAction = (typeof DOCUMENT_ACTIONS)[number];
+
 export type CallbackAction =
   | { type: "job_details"; matchId: string }
   | { type: "feedback"; matchId: string; verdict: FeedbackVerdict }
@@ -16,6 +19,10 @@ export type CallbackAction =
   | { type: "onboarding_analyze" }
   | { type: "onboarding_confirm" }
   | { type: "document_language"; documentId: string; language: ConversationLanguage }
+  | { type: "documents" }
+  | { type: "document_upload" }
+  | { type: "document"; documentId: string }
+  | { type: "document_action"; documentId: string; action: DocumentAction }
   | { type: "edit_apply"; token: string }
   | { type: "edit_cancel"; token: string }
   | { type: "feedback_reason"; feedbackId: string; tag: FeedbackReasonTag }
@@ -33,6 +40,13 @@ const REASON_CODES: Record<FeedbackReasonTag, string> = {
 };
 const REASON_TEXT_CODE = "o";
 const FORMAT_CODES: Record<CvFileFormat, string> = { docx: "d", pdf: "p" };
+const DOCUMENT_ACTION_CODES: Record<DocumentAction, string> = {
+  default: "d",
+  label: "l",
+  replace: "r",
+  remove: "x",
+  confirm_remove: "y",
+};
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TOKEN = /^[A-Za-z0-9_-]{4,32}$/;
 
@@ -66,6 +80,14 @@ export function encodeCallback(action: CallbackAction): string {
       return "ob:confirm";
     case "document_language":
       return `dl:${action.language}:${action.documentId}`;
+    case "documents":
+      return "doc:list";
+    case "document_upload":
+      return "doc:add";
+    case "document":
+      return `doc:${action.documentId}`;
+    case "document_action":
+      return `doc:${DOCUMENT_ACTION_CODES[action.action]}:${action.documentId}`;
     case "edit_apply":
       return `pe:a:${action.token}`;
     case "edit_cancel":
@@ -86,6 +108,8 @@ export function decodeCallback(data: string): CallbackAction | null {
   if (data === "cn:delete") return { type: "connections_delete" };
   if (data === "src:boards") return { type: "sources_boards" };
   if (data === "src:sites") return { type: "sources_sites" };
+  if (data === "doc:list") return { type: "documents" };
+  if (data === "doc:add") return { type: "document_upload" };
   if (parts.length === 2 && parts[0] === "lang") {
     const language = CONVERSATION_LANGUAGES.find((l) => l === parts[1]);
     if (language) return { type: "set_language", language };
@@ -108,6 +132,11 @@ export function decodeCallback(data: string): CallbackAction | null {
     if (language) return { type: "document_language", documentId: id, language };
   }
   if (parts.length === 3 && parts[0] === "st" && parts[1] === "x") return { type: "site_remove", siteId: id };
+  if (parts.length === 2 && parts[0] === "doc") return { type: "document", documentId: id };
+  if (parts.length === 3 && parts[0] === "doc") {
+    const action = DOCUMENT_ACTIONS.find((a) => DOCUMENT_ACTION_CODES[a] === parts[1]);
+    if (action) return { type: "document_action", documentId: id, action };
+  }
   if (parts.length === 3 && parts[0] === "cvd" && (parts[1] === "a" || parts[1] === "x")) {
     return { type: "cv_decision", versionId: id, approve: parts[1] === "a" };
   }

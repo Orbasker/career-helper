@@ -3,11 +3,14 @@ import { createPgServices } from "../src/app/postgres/index.js";
 import { createBot } from "../src/bot/bot.js";
 import { webhookSecret } from "../src/bot/telegram-env.js";
 import { createWebhookHandler } from "../src/bot/webhook.js";
-import { messages } from "../src/bot/views.js";
+import { strings } from "../src/i18n/index.js";
 import { FakeProfileAssistant } from "./support/assistant.js";
 import { FakeCvTailorer } from "./support/tailorer.js";
 import { createTestDb } from "./support/db.js";
 import { BOT_INFO, captureApiCalls, textUpdate, type ApiCall } from "./support/telegram.js";
+
+const en = strings("en");
+const messages = en.messages;
 
 const TOKEN = "123:test";
 let close: () => Promise<void>;

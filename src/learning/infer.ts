@@ -1,5 +1,6 @@
-import { WORK_MODES, type FeedbackVerdict, type WorkMode } from "../domain/enums.js";
+import { WORK_MODES, type ConversationLanguage, type FeedbackVerdict, type WorkMode } from "../domain/enums.js";
 import type { NewPreference, PreferenceSnapshot } from "../domain/profile.js";
+import { strings } from "../i18n/index.js";
 import { normalizeCompany, normalizeText } from "../ingestion/normalize.js";
 import { termForms, tokenize } from "../matching/relevance.js";
 
@@ -34,6 +35,8 @@ export interface InferenceInput {
   ownTitles: readonly string[];
   /** Every preference the user has had, in any status, so rejected proposals are never proposed again. */
   preferences: readonly PreferenceSnapshot[];
+  /** Language of the proposed labels and rationales. */
+  language: ConversationLanguage;
 }
 
 /**
@@ -47,7 +50,8 @@ export function inferPreferences(input: InferenceInput): PreferenceProposal[] {
 const rejections = (signals: readonly FeedbackSignal[]) => signals.filter((s) => s.verdict === "not_interested");
 const interests = (signals: readonly FeedbackSignal[]) => signals.filter((s) => s.verdict === "interested");
 
-function inferRoleDislikes({ signals, ownTitles, preferences }: InferenceInput): PreferenceProposal[] {
+function inferRoleDislikes({ signals, ownTitles, preferences, language }: InferenceInput): PreferenceProposal[] {
+  const t = strings(language).learning;
   const protectedTerms = new Set<string>();
   const protect = (text: string) => tokenize(text).forEach((t) => protectedTerms.add(t));
   ownTitles.forEach(protect);
@@ -83,10 +87,10 @@ function inferRoleDislikes({ signals, ownTitles, preferences }: InferenceInput):
       preference: {
         kind: "dislike",
         dimension: "role",
-        label: `${capitalize(word)} roles`,
+        label: t.roleLabel(word),
         value: { type: "terms", terms: [word] },
       },
-      rationale: `You passed on ${supporting.length} jobs with “${word}” in the title.`,
+      rationale: t.roleRationale(supporting.length, word),
       supersedesId: null,
       feedbackIds: supporting.map((s) => s.feedbackId),
     });
@@ -94,7 +98,8 @@ function inferRoleDislikes({ signals, ownTitles, preferences }: InferenceInput):
   return proposals;
 }
 
-function inferCompanyDislikes({ signals, preferences }: InferenceInput): PreferenceProposal[] {
+function inferCompanyDislikes({ signals, preferences, language }: InferenceInput): PreferenceProposal[] {
+  const t = strings(language).learning;
   const liked = new Set(interests(signals).map((s) => normalizeCompany(s.company)));
   const known = new Set(
     preferences.filter((p) => p.dimension === "company").flatMap((p) => termsOf(p).map(normalizeCompany)),
@@ -110,15 +115,16 @@ function inferCompanyDislikes({ signals, preferences }: InferenceInput): Prefere
     .map((supporting) => {
       const company = supporting[0]!.company!;
       return {
-        preference: { kind: "dislike", dimension: "company", label: `Jobs at ${company}`, value: { type: "terms", terms: [company] } },
-        rationale: `You passed on ${supporting.length} jobs at ${company} because of the company.`,
+        preference: { kind: "dislike", dimension: "company", label: t.companyLabel(company), value: { type: "terms", terms: [company] } },
+        rationale: t.companyRationale(supporting.length, company),
         supersedesId: null,
         feedbackIds: supporting.map((s) => s.feedbackId),
       };
     });
 }
 
-function inferWorkMode({ signals, preferences }: InferenceInput): PreferenceProposal[] {
+function inferWorkMode({ signals, preferences, language }: InferenceInput): PreferenceProposal[] {
+  const { learning: t, workModes } = strings(language);
   const liked = new Set(interests(signals).map((s) => s.workMode));
   const current = preferences.find(
     (p) => p.kind === "hard_constraint" && p.status === "active" && p.value.type === "work_mode",
@@ -143,10 +149,13 @@ function inferWorkMode({ signals, preferences }: InferenceInput): PreferenceProp
       preference: {
         kind: "hard_constraint",
         dimension: "work_mode",
-        label: `${modes.map(capitalize).join(" or ")} only`,
+        label: t.workModeLabel(modes.map((m) => workModes[m])),
         value: { type: "work_mode", modes },
       },
-      rationale: `You passed on ${supporting.length} ${excluded.map((e) => e.mode).join(" and ")} jobs because of the work setup.`,
+      rationale: t.workModeRationale(
+        supporting.length,
+        excluded.map((e) => workModes[e.mode]),
+      ),
       supersedesId: current?.id ?? null,
       feedbackIds: supporting.map((s) => s.feedbackId),
     },
@@ -156,4 +165,3 @@ function inferWorkMode({ signals, preferences }: InferenceInput): PreferenceProp
 const termsOf = (p: PreferenceSnapshot) => (p.value.type === "terms" ? p.value.terms : [p.label]);
 const key = (text: string) => normalizeText(text);
 const modesKey = (modes: readonly WorkMode[]) => [...modes].sort().join(",");
-const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);

@@ -1,6 +1,6 @@
 {
-  "id": "ce98ea79-dc7f-4523-a80b-8100bc0fca7d",
-  "prevId": "4043c51c-8ecc-442f-ad54-f13c5bd5c1e9",
+  "id": "3dca9a0d-6d42-41c2-b6bd-f5746e7009b2",
+  "prevId": "ce98ea79-dc7f-4523-a80b-8100bc0fca7d",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -476,6 +476,88 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.cv_version_files": {
+      "name": "cv_version_files",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "cv_version_id": {
+          "name": "cv_version_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "format": {
+          "name": "format",
+          "type": "cv_file_format",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "file_ref": {
+          "name": "file_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "cv_version_files_format_uq": {
+          "name": "cv_version_files_format_uq",
+          "columns": [
+            {
+              "expression": "cv_version_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "format",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "cv_version_files_cv_version_id_cv_versions_id_fk": {
+          "name": "cv_version_files_cv_version_id_cv_versions_id_fk",
+          "tableFrom": "cv_version_files",
+          "tableTo": "cv_versions",
+          "columnsFrom": [
+            "cv_version_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.cv_version_items": {
       "name": "cv_version_items",
       "schema": "",
@@ -617,6 +699,26 @@
           "primaryKey": false,
           "notNull": false
         },
+        "language": {
+          "name": "language",
+          "type": "conversation_language",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "language_source": {
+          "name": "language_source",
+          "type": "cv_language_source",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "based_on_version_id": {
+          "name": "based_on_version_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "status": {
           "name": "status",
           "type": "cv_version_status",
@@ -645,12 +747,6 @@
         },
         "prompt_version": {
           "name": "prompt_version",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "rendered_file_ref": {
-          "name": "rendered_file_ref",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -718,6 +814,12 @@
               "isExpression": false,
               "asc": true,
               "nulls": "last"
+            },
+            {
+              "expression": "language",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
             }
           ],
           "isUnique": true,
@@ -778,6 +880,19 @@
             "id"
           ],
           "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "cv_versions_based_on_version_id_cv_versions_id_fk": {
+          "name": "cv_versions_based_on_version_id_cv_versions_id_fk",
+          "tableFrom": "cv_versions",
+          "tableTo": "cv_versions",
+          "columnsFrom": [
+            "based_on_version_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -2854,6 +2969,24 @@
       "values": [
         "en",
         "he"
+      ]
+    },
+    "public.cv_file_format": {
+      "name": "cv_file_format",
+      "schema": "public",
+      "values": [
+        "docx",
+        "pdf"
+      ]
+    },
+    "public.cv_language_source": {
+      "name": "cv_language_source",
+      "schema": "public",
+      "values": [
+        "requested",
+        "job",
+        "cv",
+        "conversation"
       ]
     },
     "public.cv_section": {

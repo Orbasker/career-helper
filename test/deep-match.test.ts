@@ -255,9 +255,9 @@ describe("AiDeepMatcher", () => {
     const llm = languageModel(JSON.stringify(output()));
     const matcher = new AiDeepMatcher(jev.model, llm.model);
 
-    const verdict = await matcher.evaluate({ profile: snapshot, job: peopleOpsJob });
+    const verdict = await matcher.evaluate({ profile: snapshot, job: peopleOpsJob, language: "en" });
 
-    expect(matcher).toMatchObject({ model: "jev-mock + sonnet-mock", promptVersion: "deep-match-v3" });
+    expect(matcher).toMatchObject({ model: "jev-mock + sonnet-mock", promptVersion: "deep-match-v4" });
     expect(Object.keys(jev.calls[0]!.questions)).toEqual(["recommendation", "mustHave1", "outsidePath"]);
     expect(jev.calls[0]!.questions.mustHave1).toMatchObject({ type: "boolean" });
     expect(JSON.stringify(jev.calls[0]!.questions.mustHave1)).toContain("At least 25k ILS");
@@ -277,7 +277,7 @@ describe("AiDeepMatcher", () => {
     }));
     const llm = languageModel(JSON.stringify(output()));
 
-    await new AiDeepMatcher(jev.model, llm.model).evaluate({ profile: snapshot, job: { ...peopleOpsJob, company: "Acme Inc." } });
+    await new AiDeepMatcher(jev.model, llm.model).evaluate({ profile: snapshot, job: { ...peopleOpsJob, company: "Acme Inc." }, language: "en" });
 
     expect(llm.prompts[0]).toContain("The candidate currently works at Acme, the hiring company.");
   });
@@ -290,7 +290,7 @@ describe("AiDeepMatcher", () => {
     }));
     const llm = languageModel("{}");
 
-    const verdict = await new AiDeepMatcher(jev.model, llm.model).evaluate({ profile: snapshot, job: peopleOpsJob });
+    const verdict = await new AiDeepMatcher(jev.model, llm.model).evaluate({ profile: snapshot, job: peopleOpsJob, language: "en" });
 
     expect(llm.prompts).toEqual([]);
     expect(verdict).toEqual({
@@ -301,6 +301,27 @@ describe("AiDeepMatcher", () => {
     });
   });
 
+  it("explains in the user's language", async () => {
+    const jev = decisionModel(() => ({
+      recommendation: choice("good_fit", 0.85),
+      mustHave1: { type: "boolean", probability: 0.1 },
+      outsidePath: { type: "boolean", probability: 0.2 },
+    }));
+    const llm = languageModel(JSON.stringify(output()));
+
+    await new AiDeepMatcher(jev.model, llm.model).evaluate({ profile: snapshot, job: peopleOpsJob, language: "he" });
+    expect(llm.prompts[0]).toContain("natural, fluent Hebrew");
+
+    const vetoed = decisionModel(() => ({
+      recommendation: choice("strong_fit", 0.9),
+      mustHave1: { type: "boolean", probability: 0.93 },
+      outsidePath: { type: "boolean", probability: 0.05 },
+    }));
+    const verdict = await new AiDeepMatcher(vetoed.model, llm.model).evaluate({ profile: snapshot, job: peopleOpsJob, language: "he" });
+    expect(verdict.explanation).toBe("המשרה הזו מתנגשת בדרישת החובה שלך: At least 25k ILS.");
+    expect(verdict.evidence.risks).toEqual(["Breaks must-have “At least 25k ILS”"]);
+  });
+
   it("skips the LLM when Jev does not recommend the job", async () => {
     const jev = decisionModel(() => ({
       recommendation: choice("not_recommended", 0.7),
@@ -309,7 +330,7 @@ describe("AiDeepMatcher", () => {
     }));
     const llm = languageModel("{}");
 
-    const verdict = await new AiDeepMatcher(jev.model, llm.model).evaluate({ profile: snapshot, job: peopleOpsJob });
+    const verdict = await new AiDeepMatcher(jev.model, llm.model).evaluate({ profile: snapshot, job: peopleOpsJob, language: "en" });
 
     expect(llm.prompts).toEqual([]);
     expect(verdict).toMatchObject({ recommendation: "not_recommended", confidence: "medium", evidence: { risks: [] } });

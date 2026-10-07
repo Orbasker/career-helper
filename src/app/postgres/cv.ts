@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, lt } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lt } from "drizzle-orm";
 import { cvFileName, type CvDocumentContent } from "../../cv/document.js";
 import { chooseCvLanguage, type CvLanguageChoice } from "../../cv/language.js";
 import { renderCvDocx } from "../../cv/render-docx.js";
@@ -129,13 +129,20 @@ export class PgCvService implements CvService {
     return open?.status === "draft" ? { kind: "draft", versionId: open.id } : { kind: "in_progress" };
   }
 
-  /** The user's readable CVs, newest first. */
+  /** The user's readable CVs, each language's default first, then newest first. */
   private readableCvs(userId: string) {
     return this.db
       .select({ id: sourceDocuments.id, language: sourceDocuments.language })
       .from(sourceDocuments)
-      .where(and(eq(sourceDocuments.userId, userId), eq(sourceDocuments.kind, "cv"), eq(sourceDocuments.parseStatus, "parsed")))
-      .orderBy(desc(sourceDocuments.createdAt));
+      .where(
+        and(
+          eq(sourceDocuments.userId, userId),
+          eq(sourceDocuments.kind, "cv"),
+          eq(sourceDocuments.parseStatus, "parsed"),
+          isNull(sourceDocuments.removedAt),
+        ),
+      )
+      .orderBy(desc(sourceDocuments.isDefault), desc(sourceDocuments.createdAt));
   }
 
   async tailor(userId: string, versionId: string): Promise<CvTailorOutcome> {

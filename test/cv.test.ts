@@ -7,7 +7,6 @@ import { PgCvService, STALE_REQUEST_MS } from "../src/app/postgres/cv.js";
 import { createPgServices } from "../src/app/postgres/index.js";
 import { createBot } from "../src/bot/bot.js";
 import { encodeCallback } from "../src/bot/callbacks.js";
-import { messages } from "../src/bot/views.js";
 import {
   groundTailoring,
   sectionFor,
@@ -32,10 +31,14 @@ import {
   workExperiences,
 } from "../src/db/schema.js";
 import type { ProfileSnapshot } from "../src/domain/profile.js";
+import { strings } from "../src/i18n/index.js";
 import { FakeProfileAssistant } from "./support/assistant.js";
 import { createTestDb, type TestDb } from "./support/db.js";
 import { FakeCvTailorer } from "./support/tailorer.js";
 import { BOT_INFO, TELEGRAM_USER_ID, callbackUpdate, captureApiCalls, type ApiCall } from "./support/telegram.js";
+
+const en = strings("en");
+const messages = en.messages;
 
 const profile: ProfileSnapshot = {
   profile: { headline: "HR Business Partner", summary: null, currentSeniority: "senior", managementScope: null, openToAdjacentRoles: true, linkedinUrl: null },
@@ -578,19 +581,19 @@ describe("CV tailoring flow", () => {
     it("sends the draft for review and records the decision", async () => {
       await tap(encodeCallback({ type: "tailor_cv", matchId }));
       const [ack, preview] = sent();
-      expect(ack!.payload.text).toBe(messages.cvRequested);
+      expect(ack!.payload.text).toBe(en.messages.cvRequested);
       expect(preview!.payload.text).toContain("Tailored CV for People Operations Lead at Initech");
       expect(preview!.payload.text).toContain("• Led hiring for 120 engineers");
-      expect(preview!.payload.text).toContain(messages.cvDraftOutro);
+      expect(preview!.payload.text).toContain(en.messages.cvDraftOutro);
       const approve = preview!.payload.reply_markup.inline_keyboard[0][0].callback_data as string;
 
       await tap(encodeCallback({ type: "tailor_cv", matchId }));
       expect(sent()[0]!.payload.text).toContain("Tailored CV for People Operations Lead");
 
       await tap(approve);
-      expect(sent().map((c) => c.payload.text)).toEqual([messages.cvApproved]);
+      expect(sent().map((c) => c.payload.text)).toEqual([en.messages.cvApproved]);
       const upload = calls.find((c) => c.method === "sendDocument")!;
-      expect(upload.payload.caption).toBe(messages.cvDocumentCaption);
+      expect(upload.payload.caption).toBe(en.messages.cvDocumentCaption);
       expect(upload.payload.document.filename).toBe("CV - Dana - People Operations Lead.docx");
       const [version] = await db.select().from(cvVersions);
       expect(version!.status).toBe("approved");
@@ -615,7 +618,7 @@ describe("CV tailoring flow", () => {
 
       await tap(hebrewButton.callback_data);
       const [ack, hebrewPreview] = sent();
-      expect(ack!.payload.text).toBe(messages.cvLanguageRequested.he);
+      expect(ack!.payload.text).toBe(en.messages.cvLanguageRequested("Hebrew"));
       expect(hebrewPreview!.payload.text).toContain("🌐 Hebrew (as you asked)");
       expect(tailorer.calls.at(-1)).toMatchObject({ language: "he", keep: { highlights: [factIds.hiring], skills: [factIds.hris] } });
     });
@@ -625,7 +628,7 @@ describe("CV tailoring flow", () => {
         throw new Error("gateway timeout");
       };
       await tap(encodeCallback({ type: "tailor_cv", matchId }));
-      expect(sent().map((c) => c.payload.text)).toEqual([messages.cvRequested, messages.cvFailed]);
+      expect(sent().map((c) => c.payload.text)).toEqual([en.messages.cvRequested, en.messages.cvFailed]);
     });
   });
 });
