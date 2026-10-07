@@ -14,6 +14,7 @@ export type CallbackAction =
   | { type: "set_language"; language: ConversationLanguage }
   | { type: "onboarding_analyze" }
   | { type: "onboarding_confirm" }
+  | { type: "document_language"; documentId: string; language: ConversationLanguage }
   | { type: "edit_apply"; token: string }
   | { type: "edit_cancel"; token: string }
   | { type: "feedback_reason"; feedbackId: string; tag: FeedbackReasonTag }
@@ -59,6 +60,8 @@ export function encodeCallback(action: CallbackAction): string {
       return "ob:analyze";
     case "onboarding_confirm":
       return "ob:confirm";
+    case "document_language":
+      return `dl:${action.language}:${action.documentId}`;
     case "edit_apply":
       return `pe:a:${action.token}`;
     case "edit_cancel":
@@ -95,6 +98,10 @@ export function decodeCallback(data: string): CallbackAction | null {
     if (parts[1] === REASON_TEXT_CODE) return { type: "feedback_reason_text", feedbackId: id };
     const tag = (Object.keys(REASON_CODES) as FeedbackReasonTag[]).find((t) => REASON_CODES[t] === parts[1]);
     if (tag) return { type: "feedback_reason", feedbackId: id, tag };
+  }
+  if (parts.length === 3 && parts[0] === "dl") {
+    const language = CONVERSATION_LANGUAGES.find((l) => l === parts[1]);
+    if (language) return { type: "document_language", documentId: id, language };
   }
   if (parts.length === 3 && parts[0] === "st" && parts[1] === "x") return { type: "site_remove", siteId: id };
   if (parts.length === 3 && parts[0] === "cvd" && (parts[1] === "a" || parts[1] === "x")) {

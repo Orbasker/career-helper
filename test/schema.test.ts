@@ -9,7 +9,9 @@ import {
   matchEvaluations,
   matches,
   preferences,
+  profileSources,
   rawJobRecords,
+  sourceDocuments,
   users,
 } from "../src/db/schema.js";
 import { createTestDb, expectDbError, type TestDb } from "./support/db.js";
@@ -196,5 +198,32 @@ describe("schema", () => {
       /preferences_inferred_requires_confirmation_chk/,
     );
     await db.insert(preferences).values({ ...base, status: "active", decidedAt: new Date() });
+  });
+
+  it("keeps parse status, text and error of source documents consistent", async () => {
+    const user = await insertUser();
+    const base = { userId: user.id, format: "pdf" as const, fileRef: "tg-1" };
+    await expectDbError(
+      db.insert(sourceDocuments).values({ ...base, parseStatus: "parsed", extractedText: "text" }),
+      /source_documents_parsed_chk/,
+    );
+    await expectDbError(
+      db.insert(sourceDocuments).values({ ...base, parseStatus: "failed", parseError: null }),
+      /source_documents_error_chk/,
+    );
+    await expectDbError(
+      db.insert(sourceDocuments).values({ ...base, parseStatus: "failed", parseError: "x", languageConfirmed: true }),
+      /source_documents_language_chk/,
+    );
+    const [document] = await db
+      .insert(sourceDocuments)
+      .values({ ...base, kind: "cv", parseStatus: "parsed", extractedText: "text", language: "he" })
+      .returning();
+
+    await expectDbError(
+      db.insert(profileSources).values({ userId: user.id, kind: "cv", documentId: document!.id, content: "copy" }),
+      /profile_sources_content_chk/,
+    );
+    await expectDbError(db.insert(profileSources).values({ userId: user.id, kind: "pasted_text" }), /profile_sources_content_chk/);
   });
 });

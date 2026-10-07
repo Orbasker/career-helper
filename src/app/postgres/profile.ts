@@ -126,7 +126,13 @@ export async function applyChanges(tx: Db, userId: string, changes: ProfileChang
       case "add_experience": {
         const [row] = await tx
           .insert(workExperiences)
-          .values({ userId, ...change.experience, origin: change.origin, ...verification })
+          .values({
+            userId,
+            ...change.experience,
+            origin: change.origin,
+            sourceDocumentId: change.sourceDocumentId ?? null,
+            ...verification,
+          })
           .returning({ id: workExperiences.id });
         newExperienceIds.set(change.ref, row!.id);
         break;
@@ -158,6 +164,7 @@ export async function applyChanges(tx: Db, userId: string, changes: ProfileChang
           kind: change.kind,
           statement: change.statement,
           origin: change.origin,
+          sourceDocumentId: change.sourceDocumentId ?? null,
           ...verification,
         });
         break;

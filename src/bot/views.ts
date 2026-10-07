@@ -57,7 +57,7 @@ export const messages = {
   welcomeNew: "Hi! I'm your career agent. I'll find jobs that fit your experience — including adjacent roles — and help tailor your CV. Let's build your career profile first.",
   askLinkedin: "First, send me your <b>LinkedIn profile URL</b> (e.g. linkedin.com/in/your-name), or reply <i>skip</i>.",
   askDocuments: [
-    "Now send me your <b>CV / resume</b> (PDF, DOCX or TXT).",
+    "Now send me your <b>CV / resume</b> (PDF, DOCX or TXT). Have it in more than one language, e.g. Hebrew and English? Send each one.",
     "",
     "LinkedIn doesn't let me read profiles directly. To import yours too, open your LinkedIn profile → <b>More</b> → <b>Save to PDF</b> and send me that file.",
     "",
@@ -67,6 +67,7 @@ export const messages = {
   linkedinSkipped: "No LinkedIn URL saved — you can add it later.",
   documentTooLarge: "That file is too large (max 10 MB). Please send a smaller PDF, DOCX or TXT file.",
   unreadableDocument: "I couldn't read text from that file. Please send a PDF, DOCX or TXT file (not a scanned image), or paste the text.",
+  legacyDoc: "I can't read old Word <b>.doc</b> files. In Word choose <b>File → Save As → Word Document (.docx)</b> or <b>PDF</b>, and send me that file.",
   needSource: "I need at least one CV, LinkedIn PDF or a short written summary of your experience before I can analyze it.",
   analyzing: "Reading your documents and building your profile… this can take a minute.",
   analysisFailed: "Sorry, I couldn't analyze your documents this time. Tap <b>Analyze</b> to try again, or send more details.",
@@ -82,7 +83,9 @@ export const messages = {
   expired: "That action is no longer available.",
   noChange: "I didn't find anything to change in your profile. Tell me what to add, correct or remove — e.g. <i>\"add that I managed a team of 5\"</i>.",
   notOnboarded: "Let's set up your career profile first — send /start.",
-  documentNotExpected: "I only import documents while building your profile. To change your profile, just tell me what to add or correct.",
+  documentNotExpected: "I can't take documents at this step. Finish setting up your profile first (or send /start), then send it again.",
+  documentNothingNew: "Your profile already covers everything in this document, so there's nothing to change.",
+  documentMergeFailed: "I saved the file, but couldn't compare it with your profile right now. Tell me what to add in your own words, or send it again later.",
   noMatches: "No new matches right now. I'll message you when something relevant shows up.",
   matchNotFound: "I couldn't find that job anymore.",
   feedbackInterested: "Marked as interested 👍",
@@ -106,6 +109,7 @@ export const messages = {
     "<b>What I can do</b>",
     "• /new — your latest matches",
     "• /profile — your career profile",
+    "• Send an updated CV (PDF, DOCX or TXT) anytime — I'll show what it adds to your profile before saving anything.",
     "• /sources — where I search for jobs and what I found there",
     "• /sites — job sites I search for you (add one with /addsite example.co.il)",
     "• /connections — import your LinkedIn connections to see who you know at each company",
@@ -478,6 +482,8 @@ export function addSiteReply(outcome: AddSiteOutcome): string {
   }
 }
 
+export const DOCUMENT_LANGUAGE_NAMES: Record<ConversationLanguage, string> = { en: "English", he: "Hebrew" };
+
 const SOURCE_LABELS: Record<ProfileSourceKind, string> = {
   cv: "your CV",
   linkedin_export: "your LinkedIn export",
@@ -587,6 +593,15 @@ export function languageSettingsView(current: ConversationLanguage | null): View
 export const analyzeKeyboard = () =>
   new InlineKeyboard().text("🔍 Analyze", encodeCallback({ type: "onboarding_analyze" }));
 
+export function documentLanguageKeyboard(documentId: string, detected: ConversationLanguage | null): InlineKeyboard {
+  const keyboard = new InlineKeyboard();
+  for (const language of CONVERSATION_LANGUAGES.filter((l) => l !== detected)) {
+    const label = detected ? `It's ${DOCUMENT_LANGUAGE_NAMES[language]}` : DOCUMENT_LANGUAGE_NAMES[language];
+    keyboard.text(`🌐 ${label}`, encodeCallback({ type: "document_language", documentId, language }));
+  }
+  return keyboard;
+}
+
 export function profileReplyViews(reply: ProfileReply): View[] {
   switch (reply.kind) {
     case "ask_language":
@@ -601,15 +616,35 @@ export function profileReplyViews(reply: ProfileReply): View[] {
       return [{ text: `${reply.linkedinSaved ? messages.linkedinSaved : messages.linkedinSkipped}\n\n${messages.askDocuments}` }];
     case "source_received": {
       const name = reply.fileName ? ` (${escapeHtml(reply.fileName)})` : "";
+      const language = reply.language ? ` · ${DOCUMENT_LANGUAGE_NAMES[reply.language]}` : "";
       return [
         {
-          text: `Got ${SOURCE_LABELS[reply.source]}${name} ✅ Send more, or tap <b>Analyze</b> when you're done.`,
-          keyboard: analyzeKeyboard(),
+          text: `Got ${SOURCE_LABELS[reply.source]}${name}${language} ✅ Send more, or tap <b>Analyze</b> when you're done.`,
+          keyboard: reply.documentId
+            ? documentLanguageKeyboard(reply.documentId, reply.language).row().text("🔍 Analyze", encodeCallback({ type: "onboarding_analyze" }))
+            : analyzeKeyboard(),
         },
       ];
     }
+    case "document_saved": {
+      const name = reply.fileName ? ` (${escapeHtml(reply.fileName)})` : "";
+      const language = reply.language ? ` · ${DOCUMENT_LANGUAGE_NAMES[reply.language]}` : "";
+      const version = reply.version > 1 ? ` · version ${reply.version}` : "";
+      return [
+        {
+          text: `Saved ${SOURCE_LABELS[reply.source]}${name}${language}${version} ✅ Your earlier documents are kept too.`,
+          keyboard: documentLanguageKeyboard(reply.documentId, reply.language),
+        },
+      ];
+    }
+    case "document_nothing_new":
+      return [{ text: messages.documentNothingNew }];
+    case "document_merge_failed":
+      return [{ text: messages.documentMergeFailed }];
     case "unreadable_document":
       return [{ text: messages.unreadableDocument }];
+    case "legacy_doc":
+      return [{ text: messages.legacyDoc }];
     case "need_source":
       return [{ text: messages.needSource }];
     case "analysis_failed":

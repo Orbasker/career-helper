@@ -1,9 +1,9 @@
-import { and, count, eq } from "drizzle-orm";
-import type { ConversationLanguage } from "../../domain/enums.js";
+import { and, count, eq, isNull, max, sql } from "drizzle-orm";
+import type { ConversationLanguage, DocumentKind } from "../../domain/enums.js";
 import { parseLanguageChoice } from "../../domain/language.js";
-import { careerProfiles, conversationStates, masterCvs, profileSources, users } from "../../db/schema.js";
+import { careerProfiles, conversationStates, profileSources, sourceDocuments, users } from "../../db/schema.js";
 import type { Db } from "../../db/types.js";
-import { classifySource, parseLinkedinUrl, readDocumentText } from "../documents.js";
+import { classifySource, parseDocument, parseLinkedinUrl } from "../documents.js";
 import type {
   IncomingDocument,
   OnboardingService,
@@ -11,6 +11,17 @@ import type {
   ProfileReply,
 } from "../services.js";
 import { applyChanges, clearDraftProfile, confirmDraftProfile, loadSnapshot, toProfileView } from "./profile.js";
+
+export type StoredDocument =
+  | {
+      stored: true;
+      documentId: string;
+      kind: DocumentKind;
+      language: ConversationLanguage | null;
+      version: number;
+      text: string;
+    }
+  | { stored: false; reply: ProfileReply };
 
 export type OnboardingStepKey = "language" | "linkedin" | "documents" | "analyzing" | "questions" | "review";
 
@@ -86,7 +97,7 @@ export class PgOnboardingService implements OnboardingService {
       case "documents":
         if (DONE.test(text)) return [await this.analyze(userId)];
         await this.db.insert(profileSources).values({ userId, kind: "pasted_text", content: text });
-        return [{ kind: "source_received", source: "pasted_text", fileName: null }];
+        return [{ kind: "source_received", source: "pasted_text", fileName: null, documentId: null, language: null }];
       case "analyzing":
         return [{ kind: "busy" }];
       case "questions":
@@ -107,27 +118,69 @@ export class PgOnboardingService implements OnboardingService {
       return { kind: "document_not_expected" };
     }
 
-    const content = await readDocumentText(document).catch((error: unknown) => {
-      console.error("document text extraction failed", { userId, error });
-      return null;
-    });
-    if (!content) return { kind: "unreadable_document" };
-
-    const kind = classifySource(content);
-    await this.db.transaction(async (tx) => {
-      await tx.insert(profileSources).values({ userId, kind, fileRef: document.fileRef, fileName: document.fileName, content });
-      if (kind === "cv") {
-        await tx
-          .insert(masterCvs)
-          .values({ userId, originalFileRef: document.fileRef, originalText: content })
-          .onConflictDoUpdate({
-            target: masterCvs.userId,
-            set: { originalFileRef: document.fileRef, originalText: content },
-          });
-      }
+    const stored = await this.storeDocument(userId, document, async (tx, documentId, kind) => {
+      await tx.insert(profileSources).values({ userId, kind, documentId });
       if (state.step === "linkedin") await this.setStep(tx, userId, "documents", {});
     });
-    return { kind: "source_received", source: kind, fileName: document.fileName };
+    if (!stored.stored) return stored.reply;
+    return {
+      kind: "source_received",
+      source: stored.kind,
+      fileName: document.fileName,
+      documentId: stored.documentId,
+      language: stored.language,
+    };
+  }
+
+  /** Parses and keeps the file as a new source document; `onStored` runs in the same transaction. */
+  async storeDocument(
+    userId: string,
+    document: IncomingDocument,
+    onStored?: (tx: Db, documentId: string, kind: DocumentKind) => Promise<void>,
+  ): Promise<StoredDocument> {
+    const parsed = await parseDocument(document);
+    const file = {
+      userId,
+      fileName: document.fileName,
+      mimeType: document.mimeType,
+      format: parsed.format,
+      fileRef: document.fileRef,
+      sizeBytes: document.sizeBytes ?? document.data.byteLength,
+      label: document.label?.trim() || null,
+    };
+    if (parsed.status !== "parsed") {
+      console.error("document parsing failed", { userId, format: parsed.format, error: parsed.error });
+      await this.db.insert(sourceDocuments).values({ ...file, parseStatus: parsed.status, parseError: parsed.error });
+      return { stored: false, reply: parsed.format === "doc" ? { kind: "legacy_doc" } : { kind: "unreadable_document" } };
+    }
+
+    const kind = classifySource(parsed.text);
+    return this.db.transaction(async (tx) => {
+      const version = await nextVersion(tx, userId, kind, parsed.language);
+      const [row] = await tx
+        .insert(sourceDocuments)
+        .values({ ...file, kind, language: parsed.language, version, extractedText: parsed.text, parseStatus: "parsed" })
+        .returning({ id: sourceDocuments.id });
+      await onStored?.(tx, row!.id, kind);
+      return { stored: true, documentId: row!.id, kind, language: parsed.language, version, text: parsed.text } as const;
+    });
+  }
+
+  async setDocumentLanguage(userId: string, documentId: string, language: ConversationLanguage): Promise<boolean> {
+    return this.db.transaction(async (tx) => {
+      const [document] = await tx
+        .select({ kind: sourceDocuments.kind, language: sourceDocuments.language, version: sourceDocuments.version })
+        .from(sourceDocuments)
+        .where(and(eq(sourceDocuments.id, documentId), eq(sourceDocuments.userId, userId)))
+        .for("update");
+      if (!document) return false;
+      const version =
+        document.kind && document.language !== language
+          ? await nextVersion(tx, userId, document.kind, language)
+          : document.version;
+      await tx.update(sourceDocuments).set({ language, languageConfirmed: true, version }).where(eq(sourceDocuments.id, documentId));
+      return true;
+    });
   }
 
   async analyze(userId: string): Promise<ProfileReply> {
@@ -156,8 +209,14 @@ export class PgOnboardingService implements OnboardingService {
         .from(careerProfiles)
         .where(eq(careerProfiles.userId, userId));
       const sourceRows = await this.db
-        .select({ kind: profileSources.kind, content: profileSources.content })
+        .select({
+          kind: profileSources.kind,
+          content: sql<string>`coalesce(${profileSources.content}, ${sourceDocuments.extractedText})`,
+          documentId: profileSources.documentId,
+          language: sourceDocuments.language,
+        })
         .from(profileSources)
+        .leftJoin(sourceDocuments, eq(sourceDocuments.id, profileSources.documentId))
         .where(eq(profileSources.userId, userId))
         .orderBy(profileSources.createdAt);
       const extraction = await this.assistant.extract({ linkedinUrl: profile?.linkedinUrl ?? null, sources: sourceRows });
@@ -245,4 +304,18 @@ export class PgOnboardingService implements OnboardingService {
         set: { flow: "onboarding", step, context: { ...context } },
       });
   }
+}
+
+async function nextVersion(db: Db, userId: string, kind: DocumentKind, language: string | null): Promise<number> {
+  const [row] = await db
+    .select({ latest: max(sourceDocuments.version) })
+    .from(sourceDocuments)
+    .where(
+      and(
+        eq(sourceDocuments.userId, userId),
+        eq(sourceDocuments.kind, kind),
+        language === null ? isNull(sourceDocuments.language) : eq(sourceDocuments.language, language),
+      ),
+    );
+  return (row?.latest ?? 0) + 1;
 }

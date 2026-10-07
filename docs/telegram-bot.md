@@ -20,7 +20,8 @@
 | `/sources`, "where are you searching?", "which sites do you check?", "איפה אתה מחפש?" | `sources.overview` | Where the agent searches: company boards (per ATS), web search and the user's own sites, each with when it last ran and the jobs and new companies it found in the last 7 days, plus problems from the latest run. **Show boards** (`src:boards`) lists every board; **Manage my sites** (`src:sites`) opens `/sites`. See `docs/discovery.md`. |
 | `/sites`, `/addsite <site>`, "search on <site>" | `sites.list` / `sites.add` / `sites.remove` | The user's own job sites for the agent to search (see `docs/discovery.md`). |
 | `/connections`, a `.csv`/`.zip` document, "delete my connections" | `connections.summary` / `connections.import` / `connections.forget` | LinkedIn connections shown on matches (see `docs/connections.md`). |
-| Document | `onboarding.addDocument` | During onboarding: stores the CV / LinkedIn PDF text as a `profile_source`. |
+| Document | `conversation.addDocument` | Stores the file as a new `source_document` (the caption becomes its label); earlier documents are kept. During onboarding it joins the run's `profile_sources`. Once the profile is confirmed, `ProfileAssistant.mergeDocument` compares it with the profile and its additions are proposed as an edit with **Apply** / **Cancel**, attributed to the document. Legacy `.doc` files are rejected with instructions to save as DOCX or PDF. |
+| Language button on an upload | `onboarding.setDocumentLanguage` | Corrects or confirms the detected language of a document (`dl:<he\|en>:<documentId>`). |
 | Any other text | `conversation.handleText` | Onboarding answer, review correction, or a natural-language profile edit. |
 
 ### Onboarding
@@ -29,8 +30,8 @@
 
 0. `language` — English or Hebrew, by button or typed answer. Skipped when `users.preferred_language` is already set (e.g. when restarting onboarding), so the choice is asked only once.
 1. `linkedin` — LinkedIn URL (or *skip*). LinkedIn can't be fetched directly, so the bot asks for the profile's **Save to PDF** export instead.
-2. `documents` — CV / LinkedIn PDF (PDF, DOCX, TXT) or pasted text, repeatable. **Analyze** (`ob:analyze`) starts extraction.
-3. `analyzing` — `ProfileAssistant.extract` turns all sources into unverified `work_experiences` / `career_facts` and `proposed` preferences, plus up to 4 follow-up questions for missing high-value info.
+2. `documents` — CVs / LinkedIn PDF (PDF, DOCX, TXT) or pasted text, repeatable. Each CV is kept separately with its detected language (Hebrew or English), which the user can correct. **Analyze** (`ob:analyze`) starts extraction.
+3. `analyzing` — `ProfileAssistant.extract` merges all sources (including the same career described in several languages) into unverified `work_experiences` / `career_facts` and `proposed` preferences, plus up to 4 follow-up questions for missing high-value info.
 4. `questions` — each answer is interpreted into draft changes; *skip* moves on.
 5. `review` — the full draft is shown; free-text corrections update the draft. **Confirm profile** (`ob:confirm`) verifies all facts, activates preferences and marks the profile `confirmed`.
 

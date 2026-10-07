@@ -1,6 +1,6 @@
 # Master CV and tailoring
 
-Code: `src/cv/tailoring.ts` (rules and grounding), `src/ai/cv-tailorer.ts` (LLM), `src/app/postgres/cv.ts` (persistence). Tables: `master_cvs`, `cv_versions`, `cv_version_items` (see `docs/domain-model.md`).
+Code: `src/cv/tailoring.ts` (rules and grounding), `src/ai/cv-tailorer.ts` (LLM), `src/app/postgres/cv.ts` (persistence). Tables: `source_documents`, `cv_versions`, `cv_version_items` (see `docs/domain-model.md`).
 
 ## Master CV
 
@@ -9,7 +9,7 @@ The truth lives in the confirmed profile:
 - **Verified** `work_experiences` hold employers, titles and dates.
 - **Verified** `career_facts` hold responsibilities, achievements, skills, education, certifications, languages and other facts.
 
-`master_cvs` keeps the original uploaded CV for reference. Facts are never edited in place (a correction rejects the old fact and creates a new one), so a fact id is stable provenance.
+The uploaded CVs stay in `source_documents` for reference, one row per file and language, and each extracted fact points back at its document through `source_document_id`. Wording in an uploaded CV is never trusted on its own: facts extracted from it are `unverified` until the user confirms them. `cv_versions.source_document_id` records the latest readable CV when the version was requested. Facts are never edited in place (a correction rejects the old fact and creates a new one), so a fact id is stable provenance.
 
 A tailored CV is presentation only. Each `cv_version_items` row is one line of generated text pointing at the verified fact it presents. A database trigger rejects lines that cite unverified facts or another user's facts. Role headers (title, employer, dates) are never generated; they are read from `work_experiences` when the CV is shown or rendered.
 

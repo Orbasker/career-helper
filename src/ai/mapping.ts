@@ -1,6 +1,7 @@
 import { normalizeDate } from "../domain/dates.js";
 import type { FactOrigin, ProfileSourceKind } from "../domain/enums.js";
 import type { ExperienceFields, ProfileChange, ProfileFields, ProfileSnapshot } from "../domain/profile.js";
+import type { ProfileSourceText } from "../app/services.js";
 import { toPreferenceValue, type Extraction, type Interpretation } from "./schemas.js";
 
 const SOURCE_ORIGINS: Record<ProfileSourceKind, FactOrigin> = {
@@ -37,8 +38,15 @@ function definedFields<T extends Record<string, unknown>>(fields: T): Partial<{ 
   }>;
 }
 
-export function extractionToChanges(extraction: Extraction): ProfileChange[] {
+export function extractionToChanges(extraction: Extraction, sources: ProfileSourceText[]): ProfileChange[] {
   const changes: ProfileChange[] = [];
+  const provenance = (index: number) => {
+    const source = sources[index - 1] ?? sources[0];
+    return {
+      origin: source ? SOURCE_ORIGINS[source.kind] : ("conversation" as const),
+      sourceDocumentId: sources[index - 1]?.documentId ?? null,
+    };
+  };
   const profile: Partial<ProfileFields> = definedFields({
     headline: extraction.headline,
     summary: extraction.summary,
@@ -51,8 +59,8 @@ export function extractionToChanges(extraction: Extraction): ProfileChange[] {
   extraction.experiences.forEach(({ source, facts, ...raw }, index) => {
     if (!raw.employer.trim() || !raw.title.trim()) return;
     const ref = `x${index}`;
-    const origin = SOURCE_ORIGINS[source];
-    changes.push({ op: "add_experience", ref, experience: normalizeExperience(raw), origin });
+    const from = provenance(source);
+    changes.push({ op: "add_experience", ref, experience: normalizeExperience(raw), ...from });
     for (const fact of facts) {
       if (!fact.statement.trim()) continue;
       changes.push({
@@ -61,7 +69,7 @@ export function extractionToChanges(extraction: Extraction): ProfileChange[] {
         statement: fact.statement.trim(),
         experienceId: null,
         experienceRef: ref,
-        origin,
+        ...from,
       });
     }
   });
@@ -74,7 +82,7 @@ export function extractionToChanges(extraction: Extraction): ProfileChange[] {
       statement: fact.statement.trim(),
       experienceId: null,
       experienceRef: null,
-      origin: SOURCE_ORIGINS[fact.source],
+      ...provenance(fact.source),
     });
   }
 
@@ -86,6 +94,13 @@ export function extractionToChanges(extraction: Extraction): ProfileChange[] {
     });
   }
   return changes;
+}
+
+export function attributeTo(changes: ProfileChange[], source: ProfileSourceText): ProfileChange[] {
+  const provenance = { origin: SOURCE_ORIGINS[source.kind], sourceDocumentId: source.documentId };
+  return changes.map((change) =>
+    change.op === "add_experience" || change.op === "add_fact" ? { ...change, ...provenance } : change,
+  );
 }
 
 export interface Aliases {
