@@ -12,6 +12,9 @@ import {
   connectionsView,
   cvDraftViews,
   feedbackReasonView,
+  jobLinkFailureText,
+  jobLinkReadingText,
+  jobLinkResultView,
   languageKeyboard,
   languageSettingsView,
   mainMenu,
@@ -30,7 +33,25 @@ const CONNECTIONS_FILE = /\.(csv|zip)$/i;
 const FORGET_CONNECTIONS = /\b(delete|remove|forget|erase)\b.*\b(my )?(linkedin )?(connections|contacts)\b/i;
 
 /** "search on example.co.il", "also look at https://jobs.example.com" and similar requests to add a job site. */
-const SITE_REQUEST = /\b(?:search|look|check)\b[^.?!\n]*?\b(?:on|in|at)\s+((?:https?:\/\/)?(?:[\w-]+\.)+[a-z]{2,}(?:\/\S*)?)/i;
+const SITE_REQUEST = /\b(search|look|check)\b[^.?!\n]*?\b(?:on|in|at)\s+((?:https?:\/\/)?(?:[\w-]+\.)+[a-z]{2,}(?:\/\S*)?)/i;
+const MAX_JOB_LINKS = 3;
+const LINK = /https?:\/\/[^\s<>"']+/gi;
+const LINKEDIN_PROFILE = /^https?:\/\/(?:[\w-]+\.)?linkedin\.com\/in\//i;
+
+/** A request to add a whole site; "look at" followed by a link to one page is about that page, not the site. */
+export function siteRequestFrom(text: string): string | null {
+  const match = text.match(SITE_REQUEST);
+  if (!match) return null;
+  const [, verb, site] = match;
+  const path = site!.replace(/^https?:\/\//i, "").replace(/\/+$/, "").split("/").slice(1).join("/");
+  return verb!.toLowerCase() === "search" || !path ? site! : null;
+}
+
+/** Links in a message that may be job postings, without LinkedIn profiles, at most three. */
+export function jobLinksFromText(text: string): string[] {
+  const links = (text.match(LINK) ?? []).map((l) => l.replace(/[.,;!?)\]]+$/, "")).filter((l) => !LINKEDIN_PROFILE.test(l));
+  return [...new Set(links)].slice(0, MAX_JOB_LINKS);
+}
 
 export type BotContext = Context & {
   userId: string;
@@ -139,6 +160,23 @@ export function createBot(
       const view = matchListItem(match);
       await ctx.reply(view.text, { ...html, reply_markup: view.keyboard });
     }
+  };
+
+  const analyzeJobLink = async (ctx: BotContext, link: string, several: boolean) => {
+    await ctx.reply(jobLinkReadingText(link, several), html);
+    await typing(ctx);
+    const outcome = await services.jobLinks.analyze(ctx.userId, link);
+    if (outcome.kind !== "evaluated" && outcome.kind !== "fails_must_have") {
+      await ctx.reply(jobLinkFailureText(outcome, several ? link : null), { ...html, reply_markup: mainMenu });
+      return;
+    }
+    const details = await services.matches.details(ctx.userId, outcome.matchId);
+    if (!details) {
+      await ctx.reply(messages.matchNotFound, html);
+      return;
+    }
+    const view = jobLinkResultView(outcome, details);
+    await ctx.reply(view.text, { ...html, reply_markup: view.keyboard });
   };
 
   bot.command("start", async (ctx) => {
@@ -386,13 +424,18 @@ export function createBot(
       await ctx.reply(deleted ? messages.connectionsDeleted : messages.connectionsNone, { ...html, reply_markup: mainMenu });
       return;
     }
-    const siteRequest = ctx.message.text.match(SITE_REQUEST);
+    const siteRequest = siteRequestFrom(ctx.message.text);
     if (siteRequest && ctx.hasProfile) {
-      await addSite(ctx, siteRequest[1]!);
+      await addSite(ctx, siteRequest);
       return;
     }
     if (await services.feedback.takeReasonText(ctx.userId, ctx.message.text)) {
       await ctx.reply(messages.feedbackReasonTextSaved, { ...html, reply_markup: mainMenu });
+      return;
+    }
+    const links = ctx.hasProfile ? jobLinksFromText(ctx.message.text) : [];
+    if (links.length > 0) {
+      for (const link of links) await analyzeJobLink(ctx, link, links.length > 1);
       return;
     }
     await typing(ctx);

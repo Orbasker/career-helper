@@ -10,7 +10,7 @@
 | `/start` (confirmed profile) | — | Welcome back + main menu. |
 | `/profile` or **👤 My profile** | `conversation.showProfile` | Current confirmed profile: roles, facts, skills, preferences. |
 | `/new` or **What's new?** | `matches.whatsNew` | Up to 5 matches with a **Details** button: undelivered `ready` matches first (best recommendation first), then recent `notified` ones. The `ready` matches shown become `notified`, so the daily digest does not repeat them. |
-| **Details** | `matches.details` | Job, fit evidence, transferable skills, gaps, source link, feedback and CV buttons. |
+| **Details** | `matches.details` | Job, fit evidence, transferable skills, gaps, source link, feedback, CV and **🔗 Original posting** buttons. |
 | 👍 / 👎 | `feedback.record` | Appends feedback (repeating the latest verdict is a no-op). 👎 dismisses the match and asks what put the user off; 👍 after 👎 restores it. See `docs/feedback-learning.md`. |
 | Reason button | `feedback.addReasonTag` / `feedback.awaitReasonText` | Adds a reason tag, or waits up to 10 minutes for a typed reason. |
 | **Yes** / **No** on a proposal | `feedback.decideProposal` | Activates or rejects a preference learned from feedback. |
@@ -18,6 +18,7 @@
 | **Approve** / **Discard** on a CV draft | `cv.decide` | Moves the draft to `approved` or `rejected`. |
 | `/language` (or `/settings`), "switch to Hebrew", "תדבר איתי באנגלית", "change language" | `conversation.setLanguage` | Shows the current language with English / עברית buttons (`lang:<en\|he>`) or saves the requested one. Never touches onboarding state, the profile, matches, feedback or CVs. |
 | `/sites`, `/addsite <site>`, "search on <site>" | `sites.list` / `sites.add` / `sites.remove` | The user's own job sites for the agent to search (see `docs/discovery.md`). |
+| A link to a job posting (confirmed profile) | `jobLinks.analyze`, `matches.details` | Reads the posting, matches it right away and replies with the match details and next actions (see `docs/job-links.md`). |
 | `/connections`, a `.csv`/`.zip` document, "delete my connections" | `connections.summary` / `connections.import` / `connections.forget` | LinkedIn connections shown on matches (see `docs/connections.md`). |
 | Document | `onboarding.addDocument` | During onboarding: stores the CV / LinkedIn PDF text as a `profile_source`. |
 | Any other text | `conversation.handleText` | Onboarding answer, review correction, or a natural-language profile edit. |

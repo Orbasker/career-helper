@@ -39,6 +39,8 @@ A recall-oriented score in `[0, 1]`. A job passes when it scores at least `RELEV
 
 Only jobs collected in the last `maxJobAgeDays` (default 30) are considered. Re-running only evaluates groups the user has no match for yet. Matches are not re-evaluated when the profile changes.
 
+A job the user sends as a link is matched for that user immediately instead (`matchGroupNow`, see `docs/job-links.md`).
+
 Run it manually with `bun run match` against `DATABASE_URL`. It exits non-zero if any user failed. The daily pipeline (`docs/pipeline.md`) runs it after ingestion.
 
 ## Deep match (`deep-match.ts`, `src/ai/deep-matcher.ts`)

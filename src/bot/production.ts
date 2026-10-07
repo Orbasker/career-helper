@@ -1,4 +1,6 @@
 import { AiCvTailorer } from "../ai/cv-tailorer.js";
+import { AiDeepMatcher } from "../ai/deep-matcher.js";
+import { AiJobDiscoverer } from "../ai/job-discoverer.js";
 import { AiProfileAssistant } from "../ai/profile-assistant.js";
 import { createPgServices } from "../app/postgres/index.js";
 import type { Db } from "../db/types.js";
@@ -14,7 +16,10 @@ export function createProductionBot(token: string, db: Db) {
     db,
     new AiProfileAssistant(undefined, recorder),
     new AiCvTailorer(undefined, recorder),
-    { spend: gatewaySpend },
+    {
+      spend: gatewaySpend,
+      jobLinks: { reader: new AiJobDiscoverer(undefined, recorder), matcher: new AiDeepMatcher(undefined, undefined, recorder) },
+    },
   );
   return createBot(token, services, undefined, undefined, { adminTelegramIds: adminTelegramIds() });
 }

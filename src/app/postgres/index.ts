@@ -1,3 +1,5 @@
+import { AiDeepMatcher } from "../../ai/deep-matcher.js";
+import { AiJobDiscoverer } from "../../ai/job-discoverer.js";
 import type { CvTailorer } from "../../cv/tailoring.js";
 import { SOURCE_ADAPTERS } from "../../ingestion/sources/index.js";
 import { buildStats, formatStats, type SpendLookup } from "../../observability/report.js";
@@ -7,6 +9,7 @@ import { PgConnectionService } from "./connections.js";
 import { PgConversationService } from "./conversation.js";
 import { PgCvService } from "./cv.js";
 import { PgFeedbackService } from "./feedback.js";
+import { PgJobLinkService, type JobLinkDeps } from "./job-links.js";
 import { PgMatchService } from "./matches.js";
 import { PgOnboardingService } from "./onboarding.js";
 import { PgSiteService } from "./sites.js";
@@ -16,7 +19,7 @@ export function createPgServices(
   db: Db,
   assistant: ProfileAssistant,
   tailorer: CvTailorer,
-  options: { spend?: SpendLookup } = {},
+  options: { spend?: SpendLookup; jobLinks?: JobLinkDeps } = {},
 ): AppServices {
   const onboarding = new PgOnboardingService(db, assistant);
   return {
@@ -28,6 +31,7 @@ export function createPgServices(
     conversation: new PgConversationService(db, onboarding, assistant),
     sites: new PgSiteService(db, SOURCE_ADAPTERS),
     connections: new PgConnectionService(db),
+    jobLinks: new PgJobLinkService(db, options.jobLinks ?? { reader: new AiJobDiscoverer(), matcher: new AiDeepMatcher() }),
     stats: { report: async (days) => formatStats(await buildStats(db, { days, spend: options.spend }), { html: true }) },
   };
 }

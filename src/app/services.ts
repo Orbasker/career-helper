@@ -259,6 +259,24 @@ export interface ConnectionService {
   forget(userId: string): Promise<number>;
 }
 
+export type JobLinkOutcome =
+  | { kind: "evaluated"; matchId: string; known: boolean }
+  | { kind: "fails_must_have"; matchId: string; known: boolean }
+  | { kind: "evaluation_failed" }
+  | { kind: "not_onboarded" }
+  | { kind: "invalid" }
+  | { kind: "inaccessible" }
+  | { kind: "login_required" }
+  | { kind: "gone" }
+  | { kind: "closed" }
+  | { kind: "not_a_job" }
+  | { kind: "unavailable" };
+
+export interface JobLinkService {
+  /** Reads the job posting at a link the user sent and matches it against their profile right away. */
+  analyze(userId: string, url: string): Promise<JobLinkOutcome>;
+}
+
 export interface StatsService {
   /** Operator report for the last `days` days, formatted for Telegram. */
   report(days: number): Promise<string>;
@@ -274,4 +292,5 @@ export interface AppServices {
   sites: SiteService;
   stats: StatsService;
   connections: ConnectionService;
+  jobLinks: JobLinkService;
 }
