@@ -80,6 +80,8 @@ const hebrewWithLatinContent = (t: Strings) => [
   t.jobSources.turnedOff("Lever"),
   t.provenance.firstSeen(t.provenance.board("Greenhouse"), "2026-10-01"),
   t.provenance.alsoPostedOn("linkedin.com"),
+  t.jobLinks.readingOneOf("acme.com"),
+  t.jobLinks.connectionsTip("Acme"),
 ];
 
 describe("hebrew copy", () => {
@@ -244,7 +246,7 @@ describe.each(FLOWS)("core flow in $language", ({ language, skip, done }) => {
     await send(callbackUpdate(encodeCallback({ type: "job_details", matchId })));
     expect(sent()[0]).toContain(`<b>${t.match.whyItFits}</b>`);
     expect(sent()[0]).toContain(t.match.openPosting);
-    expect(inlineLabels()).toEqual([t.buttons.interested, t.buttons.notInterested, t.buttons.tailorCv]);
+    expect(inlineLabels()).toEqual([t.buttons.interested, t.buttons.notInterested, t.buttons.tailorCv, t.buttons.originalPosting]);
 
     await send(callbackUpdate(encodeCallback({ type: "feedback", matchId, verdict: "not_interested" })));
     expect(calls.find((c) => c.method === "answerCallbackQuery")!.payload.text).toBe(t.messages.feedbackNotInterested);

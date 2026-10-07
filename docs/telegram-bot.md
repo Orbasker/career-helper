@@ -10,7 +10,7 @@
 | `/start` (confirmed profile) | — | Welcome back + main menu. |
 | `/profile` or **👤 My profile** | `conversation.showProfile` | Current confirmed profile: roles, facts, skills, preferences. |
 | `/new` or **What's new?** | `matches.whatsNew` | Up to 5 matches with a **Details** button: undelivered `ready` matches first (best recommendation first), then recent `notified` ones. The `ready` matches shown become `notified`, so the daily digest does not repeat them. |
-| **Details** | `matches.details` | Job, fit evidence, transferable skills, gaps, where it was found (source type, first seen, other URLs of the same job), feedback and CV buttons. |
+| **Details** | `matches.details` | Job, fit evidence, transferable skills, gaps, where it was found (source type, first seen, other URLs of the same job), feedback, CV and **🔗 Original posting** buttons. |
 | 👍 / 👎 | `feedback.record` | Appends feedback (repeating the latest verdict is a no-op). 👎 dismisses the match and asks what put the user off; 👍 after 👎 restores it. See `docs/feedback-learning.md`. |
 | Reason button | `feedback.addReasonTag` / `feedback.awaitReasonText` | Adds a reason tag, or waits up to 10 minutes for a typed reason. |
 | **Yes** / **No** on a proposal | `feedback.decideProposal` | Activates or rejects a preference learned from feedback. |
@@ -19,6 +19,7 @@
 | `/language` (or `/settings`), "switch to Hebrew", "תדבר איתי באנגלית", "change language" | `conversation.setLanguage` | Shows the current language with English / עברית buttons (`lang:<en\|he>`) or saves the requested one. Never touches onboarding state, the profile, matches, feedback or CVs. |
 | `/sources`, "where are you searching?", "which sites do you check?", "איפה אתה מחפש?" | `sources.overview` | Where the agent searches: company boards (per ATS), web search and the user's own sites, each with when it last ran and the jobs and new companies it found in the last 7 days, plus problems from the latest run. **Show boards** (`src:boards`) lists every board; **Manage my sites** (`src:sites`) opens `/sites`. See `docs/discovery.md`. |
 | `/sites`, `/addsite <site>`, "search on <site>" | `sites.list` / `sites.add` / `sites.remove` | The user's own job sites for the agent to search (see `docs/discovery.md`). |
+| A link to a job posting (confirmed profile) | `jobLinks.analyze`, `matches.details` | Reads the posting, matches it right away and replies with the match details and next actions (see `docs/job-links.md`). |
 | `/connections`, a `.csv`/`.zip` document, "delete my connections" | `connections.summary` / `connections.import` / `connections.forget` | LinkedIn connections shown on matches (see `docs/connections.md`). |
 | Document | `conversation.addDocument` | Stores the file as a new `source_document` (the caption becomes its label); earlier documents are kept. During onboarding it joins the run's `profile_sources`. Once the profile is confirmed, `ProfileAssistant.mergeDocument` compares it with the profile and its additions are proposed as an edit with **Apply** / **Cancel**, attributed to the document. Legacy `.doc` files are rejected with instructions to save as DOCX or PDF. |
 | Language button on an upload | `onboarding.setDocumentLanguage` | Corrects or confirms the detected language of a document (`dl:<he\|en>:<documentId>`). |

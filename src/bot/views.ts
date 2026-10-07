@@ -6,6 +6,7 @@ import type { Strings } from "../i18n/index.js";
 import type {
   AddSiteOutcome,
   ConnectionImport,
+  JobLinkOutcome,
   ConnectionSummary,
   CvDraftView,
   JobProvenance,
@@ -39,6 +40,32 @@ export function botCommands(t: Strings) {
     command,
     description: t.commands[command],
   }));
+}
+
+type JobLinkFailure = Exclude<JobLinkOutcome["kind"], "evaluated" | "fails_must_have">;
+
+const linkHost = (link: string) => escapeHtml(new URL(link).hostname.replace(/^www\./, ""));
+
+export function jobLinkReadingText(t: Strings, link: string, several: boolean): string {
+  return several ? t.jobLinks.readingOneOf(linkHost(link)) : t.jobLinks.reading;
+}
+
+/** Why a link could not be evaluated; `link` names it when the user sent several. */
+export function jobLinkFailureText(t: Strings, outcome: { kind: JobLinkFailure }, link: string | null): string {
+  const text = outcome.kind === "not_onboarded" ? t.messages.notOnboarded : t.jobLinks.failures[outcome.kind];
+  return link ? `<b>${linkHost(link)}</b>: ${text}` : text;
+}
+
+export function jobLinkResultView(
+  t: Strings,
+  outcome: Extract<JobLinkOutcome, { kind: "evaluated" | "fails_must_have" }>,
+  match: MatchDetails,
+): View {
+  const intro = outcome.kind === "fails_must_have" ? t.jobLinks.failsMustHave : outcome.known ? t.jobLinks.known : t.jobLinks.fits;
+  const view = matchDetailsView(t, match);
+  const sections = [intro, view.text];
+  if (match.company && !match.connectionsImportedAt) sections.push(t.jobLinks.connectionsTip(escapeHtml(match.company)));
+  return { text: sections.join("\n\n"), keyboard: view.keyboard };
 }
 
 export function employerNote(t: Strings, match: Pick<MatchSummary, "employerRelation">): string | null {
@@ -142,7 +169,8 @@ export function matchDetailsView(t: Strings, match: MatchDetails): { text: strin
       encodeCallback({ type: "feedback", matchId, verdict: "not_interested" }),
     )
     .row()
-    .text(t.buttons.tailorCv, encodeCallback({ type: "tailor_cv", matchId }));
+    .text(t.buttons.tailorCv, encodeCallback({ type: "tailor_cv", matchId }))
+    .url(t.buttons.originalPosting, match.sourceUrl);
   return { text: sections.join("\n\n"), keyboard };
 }
 

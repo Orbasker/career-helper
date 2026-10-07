@@ -8,6 +8,7 @@ import type {
   WorkMode,
 } from "../domain/enums.js";
 import type { ExperienceFields, ProfileFields } from "../domain/profile.js";
+import type { JobLinkOutcome } from "../app/services.js";
 import type { FeedbackReasonTag } from "../learning/infer.js";
 
 const plural = (n: number, one: string, many: string) => (n === 1 ? `1 ${one}` : `${n} ${many}`);
@@ -40,6 +41,7 @@ export const en = {
     notInterested: "👎 Not interested",
     notInterestedChosen: "✅ Not interested",
     tailorCv: "📝 Tailor my CV",
+    originalPosting: "🔗 Original posting",
     somethingElse: "✍️ Something else",
     yes: "✅ Yes",
     no: "✖️ No",
@@ -129,6 +131,7 @@ export const en = {
       "• /sources — where I search for jobs and what I found there",
       "• /sites — job sites I search for you (add one with /addsite example.co.il)",
       "• /connections — import your LinkedIn connections to see who you know at each company",
+      "• Send me a link to a job posting and I'll tell you how well it fits you.",
       "• /language — choose English or Hebrew",
       "• /start — set up your profile",
       "• Tell me anything to update your profile (e.g. \"no more than 40 minutes commute\", \"add that I managed X\").",
@@ -226,6 +229,29 @@ export const en = {
       }\nI'll show who you know when I match you with one of their companies.`,
     summary: (contacts: number, companies: number, date: string) =>
       `<b>Your connections</b>\n${plural(contacts, "contact", "contacts")} at ${plural(companies, "company", "companies")}, imported ${date}.\n\nSend a newer Connections.csv any time to replace them.`,
+  },
+
+  jobLinks: {
+    reading: "🔎 Reading the job posting and checking how it fits you. This can take up to a minute.",
+    readingOneOf: (host: string) => `🔎 Reading the job at <b>${host}</b>…`,
+    known: "I already had this job. Here's how it fits you:",
+    fits: "Here's how this job fits you:",
+    failsMustHave:
+      "⚠️ This job breaks one of your must-haves, so I didn't evaluate it further. If that must-have has changed, just tell me.",
+    connectionsTip: (company: string) => `<i>Send /connections to see who you know at ${company}.</i>`,
+    failures: {
+      invalid: "That link doesn't look like a public web page I can open.",
+      inaccessible:
+        "I couldn't open that page: the site may be down or may not allow automated reading. Try again later, or send a link to the same job on the company's careers page.",
+      login_required:
+        "That page needs a login, so I can't read it. Send a link to the same job on the company's careers page or another public job site.",
+      gone: "That page no longer exists, so the job was probably taken down.",
+      closed: "That posting is closed or expired, so I didn't evaluate it.",
+      not_a_job:
+        "I couldn't find a single open job posting on that page. Send the link to the posting itself, not a list of jobs or a company page.",
+      unavailable: "I can't read job links right now. Please try again later.",
+      evaluation_failed: "I saved the job but couldn't evaluate it right now. I'll include it in my next daily check.",
+    } satisfies Record<Exclude<JobLinkOutcome["kind"], "evaluated" | "fails_must_have" | "not_onboarded">, string>,
   },
 
   documentLanguages: { en: "English", he: "Hebrew" } satisfies Record<ConversationLanguage, string>,

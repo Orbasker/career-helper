@@ -14,6 +14,9 @@ import {
   connectionsView,
   cvDraftViews,
   feedbackReasonView,
+  jobLinkFailureText,
+  jobLinkReadingText,
+  jobLinkResultView,
   languageKeyboard,
   languageSettingsView,
   mainMenu,
@@ -35,11 +38,30 @@ const FORGET_CONNECTIONS = [
 ];
 
 const DOMAIN = String.raw`((?:https?:\/\/)?(?:[\w-]+\.)+[a-z]{2,}(?:\/\S*)?)`;
-/** "search on example.co.il", "חפש גם ב-example.co.il" and similar requests to add a job site. */
-const SITE_REQUESTS = [
-  new RegExp(String.raw`\b(?:search|look|check)\b[^.?!\n]*?\b(?:on|in|at)\s+${DOMAIN}`, "i"),
-  new RegExp(String.raw`(?:^|\s)(?:ת?חפש|ל?חפש|ת?בדוק|ל?בדוק)\s[^.?!\n]*?ב[-־]?\s*(?:אתר\s+)?${DOMAIN}`, "i"),
-];
+/** "search on example.co.il", "also look at https://jobs.example.com" and similar requests to add a job site. */
+const SITE_REQUEST = new RegExp(String.raw`\b(search|look|check)\b[^.?!\n]*?\b(?:on|in|at)\s+${DOMAIN}`, "i");
+/** "חפש גם ב-example.co.il", "תחפש באתר example.co.il". */
+const HEBREW_SITE_REQUEST = new RegExp(String.raw`(?:^|\s)(?:ת?חפש|ל?חפש)\s[^.?!\n]*?ב[-־]?\s*(?:אתר\s+)?${DOMAIN}`, "i");
+const MAX_JOB_LINKS = 3;
+const LINK = /https?:\/\/[^\s<>"']+/gi;
+const LINKEDIN_PROFILE = /^https?:\/\/(?:[\w-]+\.)?linkedin\.com\/in\//i;
+
+/** A request to add a whole site; "look at" followed by a link to one page is about that page, not the site. */
+export function siteRequestFrom(text: string): string | null {
+  const hebrew = text.match(HEBREW_SITE_REQUEST);
+  if (hebrew) return hebrew[1]!;
+  const match = text.match(SITE_REQUEST);
+  if (!match) return null;
+  const [, verb, site] = match;
+  const path = site!.replace(/^https?:\/\//i, "").replace(/\/+$/, "").split("/").slice(1).join("/");
+  return verb!.toLowerCase() === "search" || !path ? site! : null;
+}
+
+/** Links in a message that may be job postings, without LinkedIn profiles, at most three. */
+export function jobLinksFromText(text: string): string[] {
+  const links = (text.match(LINK) ?? []).map((l) => l.replace(/[.,;!?)\]]+$/, "")).filter((l) => !LINKEDIN_PROFILE.test(l));
+  return [...new Set(links)].slice(0, MAX_JOB_LINKS);
+}
 
 /** "where are you searching?", "which sites do you check?", "איפה אתה מחפש?" and similar questions about job sources. */
 const SOURCES_REQUEST =
@@ -167,6 +189,23 @@ export function createBot(
       const view = matchListItem(ctx.t, match);
       await ctx.reply(view.text, { ...html, reply_markup: view.keyboard });
     }
+  };
+
+  const analyzeJobLink = async (ctx: BotContext, link: string, several: boolean) => {
+    await ctx.reply(jobLinkReadingText(ctx.t, link, several), html);
+    await typing(ctx);
+    const outcome = await services.jobLinks.analyze(ctx.userId, link);
+    if (outcome.kind !== "evaluated" && outcome.kind !== "fails_must_have") {
+      await ctx.reply(jobLinkFailureText(ctx.t, outcome, several ? link : null), { ...html, reply_markup: mainMenu(ctx.t) });
+      return;
+    }
+    const details = await services.matches.details(ctx.userId, outcome.matchId);
+    if (!details) {
+      await ctx.reply(ctx.t.messages.matchNotFound, html);
+      return;
+    }
+    const view = jobLinkResultView(ctx.t, outcome, details);
+    await ctx.reply(view.text, { ...html, reply_markup: view.keyboard });
   };
 
   bot.command("start", async (ctx) => {
@@ -454,9 +493,9 @@ export function createBot(
       });
       return;
     }
-    const siteRequest = SITE_REQUESTS.map((pattern) => ctx.message.text.match(pattern)).find(Boolean);
+    const siteRequest = siteRequestFrom(ctx.message.text);
     if (siteRequest && ctx.hasProfile) {
-      await addSite(ctx, siteRequest[1]!);
+      await addSite(ctx, siteRequest);
       return;
     }
     if (SOURCES_REQUEST.test(ctx.message.text)) {
@@ -465,6 +504,11 @@ export function createBot(
     }
     if (await services.feedback.takeReasonText(ctx.userId, ctx.message.text)) {
       await ctx.reply(ctx.t.messages.feedbackReasonTextSaved, { ...html, reply_markup: mainMenu(ctx.t) });
+      return;
+    }
+    const links = ctx.hasProfile ? jobLinksFromText(ctx.message.text) : [];
+    if (links.length > 0) {
+      for (const link of links) await analyzeJobLink(ctx, link, links.length > 1);
       return;
     }
     await typing(ctx);

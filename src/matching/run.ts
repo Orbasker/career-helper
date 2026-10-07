@@ -118,31 +118,9 @@ async function matchUser(
       const matchIds = new Map(rows.map((r) => [r.groupId, r.id]));
       const kept = batch.filter((r) => matchIds.has(r.job.groupId));
 
-      const evaluations = kept.flatMap(({ job, hard, relevance }) => {
-        const matchId = matchIds.get(job.groupId)!;
-        const stages: (typeof matchEvaluations.$inferInsert)[] = [
-          {
-            matchId,
-            stage: "hard_filter",
-            outcome: hard.passed ? "passed" : "rejected",
-            explanation: explainHardFilter(hard),
-            evidence: { ...EMPTY_EVIDENCE, failedConstraintIds: hard.failures.map((f) => f.preferenceId) },
-            profileRevision,
-          },
-        ];
-        if (relevance) {
-          stages.push({
-            matchId,
-            stage: "cheap_relevance",
-            outcome: relevance.passed ? "passed" : "rejected",
-            score: relevance.score,
-            explanation: explainRelevance(relevance, threshold),
-            evidence: { ...EMPTY_EVIDENCE, matchedTerms: relevance.matchedTerms },
-            profileRevision,
-          });
-        }
-        return stages;
-      });
+      const evaluations = kept.flatMap(({ job, hard, relevance }) =>
+        cheapEvaluations(matchIds.get(job.groupId)!, hard, relevance, threshold, profileRevision),
+      );
       if (evaluations.length) await tx.insert(matchEvaluations).values(evaluations);
       return kept;
     });
@@ -154,6 +132,38 @@ async function matchUser(
       else report.passed++;
     }
   }
+}
+
+/** The `hard_filter` evaluation, plus `cheap_relevance` when relevance was scored. */
+export function cheapEvaluations(
+  matchId: string,
+  hard: HardFilterResult,
+  relevance: RelevanceResult | null,
+  threshold: number,
+  profileRevision: number,
+): (typeof matchEvaluations.$inferInsert)[] {
+  const stages: (typeof matchEvaluations.$inferInsert)[] = [
+    {
+      matchId,
+      stage: "hard_filter",
+      outcome: hard.passed ? "passed" : "rejected",
+      explanation: explainHardFilter(hard),
+      evidence: { ...EMPTY_EVIDENCE, failedConstraintIds: hard.failures.map((f) => f.preferenceId) },
+      profileRevision,
+    },
+  ];
+  if (relevance) {
+    stages.push({
+      matchId,
+      stage: "cheap_relevance",
+      outcome: relevance.passed ? "passed" : "rejected",
+      score: relevance.score,
+      explanation: explainRelevance(relevance, threshold),
+      evidence: { ...EMPTY_EVIDENCE, matchedTerms: relevance.matchedTerms },
+      profileRevision,
+    });
+  }
+  return stages;
 }
 
 export function explainHardFilter(result: HardFilterResult): string {
