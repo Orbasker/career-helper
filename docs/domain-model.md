@@ -6,7 +6,7 @@ Source of truth: `src/db/schema.ts` (Drizzle) and `src/domain/enums.ts`. Migrati
 
 | Area | Tables | Notes |
 | --- | --- | --- |
-| Identity | `users`, `conversation_states` | One row per Telegram user; conversation state holds the active bot flow and step. |
+| Identity | `users`, `conversation_states` | One row per Telegram user; conversation state holds the active bot flow and step. `users.preferred_language` (`en` / `he`) is the default conversation language, null until the user picks one (the bot then uses English); `language_prompted_at` records the one-time prompt for users who onboarded before languages existed. |
 | Career profile | `career_profiles`, `work_experiences`, `career_facts`, `profile_sources` | `revision` is bumped on every confirmed change so evaluations and CVs can cite the profile they used. `profile_sources` keeps the raw CV / LinkedIn export / pasted text that onboarding extracted from; extracted rows stay `unverified` until the user confirms the review. |
 | Preferences | `preferences`, `preference_evidence` | Hard constraints, soft preferences, dislikes, target roles. Inferred preferences start as `proposed` and cannot become `active` without `decided_at`. Removed preferences become `retired`; replaced ones become `superseded`. `preference_evidence` links them to the feedback that suggested them. |
 | Jobs | `job_sources`, `raw_job_records`, `jobs`, `duplicate_groups` | Every job references its source and the raw payload it was parsed from. Duplicates across sources share a `duplicate_group` with one canonical job. |

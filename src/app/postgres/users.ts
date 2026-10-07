@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { careerProfiles, users } from "../../db/schema.js";
 import type { Db } from "../../db/types.js";
 import type { TelegramIdentity, UserService, UserSession } from "../services.js";
@@ -25,11 +25,26 @@ export class PgUserService implements UserService {
           locale: sql`coalesce(excluded.locale, ${users.locale})`,
         },
       })
-      .returning({ id: users.id });
+      .returning({ id: users.id, language: users.preferredLanguage, languagePromptedAt: users.languagePromptedAt });
     const [profile] = await this.db
       .select({ status: careerProfiles.status })
       .from(careerProfiles)
       .where(eq(careerProfiles.userId, user!.id));
-    return { userId: user!.id, hasProfile: profile?.status === "confirmed" };
+    const hasProfile = profile?.status === "confirmed";
+    return {
+      userId: user!.id,
+      hasProfile,
+      language: user!.language,
+      languagePromptDue: hasProfile && !user!.language && !user!.languagePromptedAt,
+    };
+  }
+
+  async claimLanguagePrompt(userId: string): Promise<boolean> {
+    const claimed = await this.db
+      .update(users)
+      .set({ languagePromptedAt: new Date() })
+      .where(and(eq(users.id, userId), isNull(users.preferredLanguage), isNull(users.languagePromptedAt)))
+      .returning({ id: users.id });
+    return claimed.length > 0;
   }
 }

@@ -1,6 +1,7 @@
 import type {
   CareerFactKind,
   ConfidenceLevel,
+  ConversationLanguage,
   EmploymentType,
   FeedbackVerdict,
   MatchRecommendation,
@@ -24,6 +25,10 @@ export interface TelegramIdentity {
 export interface UserSession {
   userId: string;
   hasProfile: boolean;
+  /** Null until the user picks a language. */
+  language: ConversationLanguage | null;
+  /** True for an onboarded user who never picked a language and was not asked yet. */
+  languagePromptDue: boolean;
 }
 
 export interface MatchSummary {
@@ -83,6 +88,9 @@ export interface IncomingDocument {
 }
 
 export type ProfileReply =
+  | { kind: "ask_language" }
+  | { kind: "language_saved"; language: ConversationLanguage }
+  | { kind: "onboarding_welcome" }
   | { kind: "ask_linkedin" }
   | { kind: "ask_documents"; linkedinSaved: boolean }
   | { kind: "source_received"; source: ProfileSourceKind; fileName: string | null }
@@ -131,10 +139,12 @@ export type CvDecision = "approved" | "discarded" | "not_found";
 
 export interface UserService {
   ensureUser(identity: TelegramIdentity): Promise<UserSession>;
+  /** Records that the user was asked for a language; false when they were asked before or already chose one. */
+  claimLanguagePrompt(userId: string): Promise<boolean>;
 }
 
 export interface OnboardingService {
-  start(userId: string): Promise<ProfileReply>;
+  start(userId: string): Promise<ProfileReply[]>;
   addDocument(userId: string, document: IncomingDocument): Promise<ProfileReply>;
   analyze(userId: string): Promise<ProfileReply>;
   confirm(userId: string): Promise<ProfileReply>;
@@ -186,6 +196,8 @@ export interface ConversationService {
   applyEdit(userId: string, token: string): Promise<ProfileReply>;
   cancelEdit(userId: string, token: string): Promise<ProfileReply>;
   showProfile(userId: string): Promise<ProfileReply>;
+  /** Saves the default conversation language without touching the profile, and resumes onboarding when it was waiting for it. */
+  setLanguage(userId: string, language: ConversationLanguage): Promise<ProfileReply[]>;
 }
 
 export interface ProfileSourceText {

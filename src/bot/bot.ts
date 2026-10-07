@@ -1,6 +1,8 @@
 import { Bot, InlineKeyboard, InputFile, type Context, type BotConfig } from "grammy";
 import { MAX_DOCUMENT_BYTES } from "../app/documents.js";
 import type { AppServices, ProfileReply } from "../app/services.js";
+import type { ConversationLanguage } from "../domain/enums.js";
+import { parseLanguageRequest } from "../domain/language.js";
 import { decodeCallback, encodeCallback } from "./callbacks.js";
 import {
   MY_PROFILE_LABEL,
@@ -10,6 +12,8 @@ import {
   connectionsView,
   cvDraftViews,
   feedbackReasonView,
+  languageKeyboard,
+  languageSettingsView,
   mainMenu,
   matchDetailsView,
   matchListItem,
@@ -28,7 +32,12 @@ const FORGET_CONNECTIONS = /\b(delete|remove|forget|erase)\b.*\b(my )?(linkedin 
 /** "search on example.co.il", "also look at https://jobs.example.com" and similar requests to add a job site. */
 const SITE_REQUEST = /\b(?:search|look|check)\b[^.?!\n]*?\b(?:on|in|at)\s+((?:https?:\/\/)?(?:[\w-]+\.)+[a-z]{2,}(?:\/\S*)?)/i;
 
-export type BotContext = Context & { userId: string; hasProfile: boolean };
+export type BotContext = Context & {
+  userId: string;
+  hasProfile: boolean;
+  language: ConversationLanguage | null;
+  languagePromptDue: boolean;
+};
 
 export interface BotIo {
   downloadFile(filePath: string): Promise<Uint8Array>;
@@ -67,7 +76,8 @@ export function createBot(
       for (const [i, view] of views.entries()) {
         const isLast = i === views.length - 1;
         const menu = isLast && !view.keyboard && (ctx.hasProfile || MENU_REPLIES.has(reply.kind));
-        await ctx.reply(view.text, { ...html, reply_markup: view.keyboard ?? (menu ? mainMenu : undefined) });
+        const hideMenu = reply.kind === "onboarding_welcome" ? { remove_keyboard: true as const } : undefined;
+        await ctx.reply(view.text, { ...html, reply_markup: view.keyboard ?? (menu ? mainMenu : hideMenu) });
       }
     }
   };
@@ -104,7 +114,12 @@ export function createBot(
     });
     ctx.userId = session.userId;
     ctx.hasProfile = session.hasProfile;
+    ctx.language = session.language;
+    ctx.languagePromptDue = session.languagePromptDue;
     await next();
+    if (ctx.languagePromptDue && (await services.users.claimLanguagePrompt(session.userId))) {
+      await ctx.reply(messages.askLanguage, { ...html, reply_markup: languageKeyboard() });
+    }
   });
 
   const sendProposals = async (ctx: BotContext) => {
@@ -131,9 +146,15 @@ export function createBot(
       await ctx.reply(messages.welcomeBack, { ...html, reply_markup: mainMenu });
       return;
     }
-    await ctx.reply(messages.welcomeNew, { ...html, reply_markup: { remove_keyboard: true } });
-    await sendReplies(ctx, [await services.onboarding.start(ctx.userId)]);
+    await sendReplies(ctx, await services.onboarding.start(ctx.userId));
   });
+
+  const showLanguage = (ctx: BotContext) => {
+    ctx.languagePromptDue = false;
+    const view = languageSettingsView(ctx.language);
+    return ctx.reply(view.text, { ...html, reply_markup: view.keyboard });
+  };
+  bot.command(["language", "settings"], showLanguage);
 
   const showProfile = async (ctx: BotContext) => sendReplies(ctx, [await services.conversation.showProfile(ctx.userId)]);
 
@@ -283,6 +304,12 @@ export function createBot(
         }
         return;
       }
+      case "set_language": {
+        await ctx.answerCallbackQuery();
+        await ctx.editMessageReplyMarkup().catch(() => undefined);
+        await sendReplies(ctx, await services.conversation.setLanguage(ctx.userId, action.language));
+        return;
+      }
       case "connections_delete": {
         const deleted = await services.connections.forget(ctx.userId);
         await ctx.answerCallbackQuery();
@@ -345,6 +372,15 @@ export function createBot(
       await ctx.reply(messages.help, { ...html, reply_markup: mainMenu });
       return;
     }
+    const languageRequest = parseLanguageRequest(ctx.message.text);
+    if (languageRequest === "menu") {
+      await showLanguage(ctx);
+      return;
+    }
+    if (languageRequest) {
+      await sendReplies(ctx, await services.conversation.setLanguage(ctx.userId, languageRequest));
+      return;
+    }
     if (FORGET_CONNECTIONS.test(ctx.message.text)) {
       const deleted = await services.connections.forget(ctx.userId);
       await ctx.reply(deleted ? messages.connectionsDeleted : messages.connectionsNone, { ...html, reply_markup: mainMenu });
@@ -376,6 +412,7 @@ export const BOT_COMMANDS = [
   { command: "profile", description: "Your career profile" },
   { command: "sites", description: "Job sites I search for you" },
   { command: "connections", description: "Who you know at matched companies" },
+  { command: "language", description: "Choose English or Hebrew" },
   { command: "start", description: "Set up your career profile" },
   { command: "help", description: "What I can do" },
 ];

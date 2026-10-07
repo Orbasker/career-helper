@@ -1,6 +1,14 @@
 import { InlineKeyboard, Keyboard } from "grammy";
 import { formatMonth } from "../domain/dates.js";
-import type { CareerFactKind, MatchRecommendation, PreferenceKind, ProfileSourceKind } from "../domain/enums.js";
+import {
+  CONVERSATION_LANGUAGES,
+  type CareerFactKind,
+  type ConversationLanguage,
+  type MatchRecommendation,
+  type PreferenceKind,
+  type ProfileSourceKind,
+} from "../domain/enums.js";
+import { DEFAULT_LANGUAGE, LANGUAGE_NAMES } from "../domain/language.js";
 import type {
   AddSiteOutcome,
   ConnectionImport,
@@ -35,6 +43,11 @@ export function escapeHtml(text: string): string {
 export const mainMenu = new Keyboard().text(WHATS_NEW_LABEL).text(MY_PROFILE_LABEL).resized().persistent();
 
 export const messages = {
+  askLanguage: "👋 Hi! Which language should I use with you?\nשלום! באיזו שפה נדבר?",
+  languageSaved: {
+    en: "Got it, I'll talk to you in English. Change it anytime with /language.",
+    he: "מעולה, מעכשיו נדבר בעברית. אפשר לשנות בכל רגע עם ‎/language.",
+  } satisfies Record<ConversationLanguage, string>,
   welcomeBack: "Welcome back! Tap <b>What's new?</b> for your latest matches, or just tell me what you'd like to change in your preferences.",
   welcomeNew: "Hi! I'm your career agent. I'll find jobs that fit your experience — including adjacent roles — and help tailor your CV. Let's build your career profile first.",
   askLinkedin: "First, send me your <b>LinkedIn profile URL</b> (e.g. linkedin.com/in/your-name), or reply <i>skip</i>.",
@@ -90,6 +103,7 @@ export const messages = {
     "• /profile — your career profile",
     "• /sites — job sites I search for you (add one with /addsite example.co.il)",
     "• /connections — import your LinkedIn connections to see who you know at each company",
+    "• /language — choose English or Hebrew",
     "• /start — set up your profile",
     "• Tell me anything to update your profile (e.g. \"no more than 40 minutes commute\", \"add that I managed X\").",
   ].join("\n"),
@@ -426,11 +440,32 @@ function withFinalKeyboard(sections: string[], outro: string, keyboard?: InlineK
   return texts.map((text, i) => (i === texts.length - 1 && keyboard ? { text, keyboard } : { text }));
 }
 
+export function languageKeyboard(current: ConversationLanguage | null = null): InlineKeyboard {
+  const keyboard = new InlineKeyboard();
+  for (const language of CONVERSATION_LANGUAGES) {
+    const label = language === current ? `✅ ${LANGUAGE_NAMES[language]}` : LANGUAGE_NAMES[language];
+    keyboard.text(label, encodeCallback({ type: "set_language", language }));
+  }
+  return keyboard;
+}
+
+export function languageSettingsView(current: ConversationLanguage | null): View {
+  const name = LANGUAGE_NAMES[current ?? DEFAULT_LANGUAGE];
+  const status = current ? `<b>${name}</b>` : `<b>${name}</b> (you haven't chosen one yet)`;
+  return { text: `🌐 I talk to you in ${status}.\nTap a language to change it:`, keyboard: languageKeyboard(current) };
+}
+
 export const analyzeKeyboard = () =>
   new InlineKeyboard().text("🔍 Analyze", encodeCallback({ type: "onboarding_analyze" }));
 
 export function profileReplyViews(reply: ProfileReply): View[] {
   switch (reply.kind) {
+    case "ask_language":
+      return [{ text: messages.askLanguage, keyboard: languageKeyboard() }];
+    case "language_saved":
+      return [{ text: messages.languageSaved[reply.language] }];
+    case "onboarding_welcome":
+      return [{ text: messages.welcomeNew }];
     case "ask_linkedin":
       return [{ text: messages.askLinkedin }];
     case "ask_documents":

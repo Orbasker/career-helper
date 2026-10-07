@@ -50,6 +50,13 @@
       "when": 1791318299928,
       "tag": "0006_connections",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791393363237,
+      "tag": "0007_preferred_language",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { and, eq } from "drizzle-orm";
+import type { ConversationLanguage } from "../../domain/enums.js";
 import type { ProfileChange } from "../../domain/profile.js";
 import { careerProfiles, conversationStates } from "../../db/schema.js";
 import type { Db } from "../../db/types.js";
@@ -65,6 +66,10 @@ export class PgConversationService implements ConversationService {
   async showProfile(userId: string): Promise<ProfileReply> {
     if (!(await this.isConfirmed(userId))) return { kind: "not_onboarded" };
     return { kind: "profile", profile: toProfileView(await loadSnapshot(this.db, userId)) };
+  }
+
+  async setLanguage(userId: string, language: ConversationLanguage): Promise<ProfileReply[]> {
+    return this.onboarding.chooseLanguage(userId, language);
   }
 
   private async takePendingEdit(tx: Db, userId: string, token: string): Promise<PendingEdit | null> {
