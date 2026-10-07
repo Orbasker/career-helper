@@ -2,7 +2,7 @@ import { generateText, Output, type LanguageModel } from "ai";
 import { noopRecorder, tracked, type ModelCallRecorder } from "./tracking.js";
 import type { ProfileAssistant, ProfileExtraction, ProfileInterpretation, ProfileSourceText } from "../app/services.js";
 import type { ProfileSnapshot } from "../domain/profile.js";
-import { aliasSnapshot, extractionToChanges, interpretationToChanges } from "./mapping.js";
+import { aliasSnapshot, attributeTo, extractionToChanges, interpretationToChanges } from "./mapping.js";
 import { extractionSchema, interpretationSchema } from "./schemas.js";
 
 export const PROFILE_MODEL = "anthropic/claude-sonnet-5.5";
@@ -43,6 +43,17 @@ Rules:
 - Never invent achievements, numbers or employers the user did not state.
 - If the message answers a question you were given, interpret it in that context. "skip", "no", "none" or similar mean no changes.
 - If the message is not a profile change (a question, small talk) or is too ambiguous to act on, return no changes and a one-sentence reply. Otherwise reply is null.`;
+
+const MERGE_INSTRUCTIONS = `You maintain a job seeker's confirmed career profile. They just sent a new document: usually an updated CV, possibly in another language, or a LinkedIn export. Propose only what the document adds to the profile.
+
+Rules:
+- Reference existing items only by the ids given in the profile. Use add_experience with a ref like "new1" for a role the profile lacks, and point add_fact at that ref or at an existing experience id.
+- Skip anything the profile already says, even in other words or another language.
+- Never remove or rewrite existing items because the document leaves them out or words them differently; CVs often omit things. Use update_experience only to fill in a date, title, location or headcount the profile lacks, or a role the document shows has ended.
+- Only record what the document states. Never invent employers, dates, numbers, skills or achievements. The candidate confirms every change.
+- Facts are short statements in the candidate's voice without "I". Write in English, translating when needed; keep employer names as the profile spells them.
+- Add preferences only when the document states them explicitly.
+- reply: null, or one short sentence when the document adds nothing.`;
 
 export class AiProfileAssistant implements ProfileAssistant {
   constructor(
@@ -92,5 +103,24 @@ export class AiProfileAssistant implements ProfileAssistant {
       }),
     );
     return { changes: interpretationToChanges(output, aliases), reply: output.reply };
+  }
+
+  async mergeDocument(input: { snapshot: ProfileSnapshot; document: ProfileSourceText }): Promise<ProfileInterpretation> {
+    const { aliases, view } = aliasSnapshot(input.snapshot);
+    const { kind, language, content } = input.document;
+    const prompt = [
+      `Current profile:\n${JSON.stringify(view, null, 1)}`,
+      `<document kind="${kind}"${language ? ` language="${language}"` : ""}>\n${content.slice(0, MAX_SOURCE_CHARS)}\n</document>`,
+    ].join("\n\n");
+    const { output } = await tracked(this.recorder, "profile.merge_document", this.modelName, (providerOptions) =>
+      generateText({
+        providerOptions,
+        model: this.model,
+        instructions: MERGE_INSTRUCTIONS,
+        prompt,
+        output: Output.object({ schema: interpretationSchema }),
+      }),
+    );
+    return { changes: attributeTo(interpretationToChanges(output, aliases), input.document), reply: output.reply };
   }
 }

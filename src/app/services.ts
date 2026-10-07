@@ -2,6 +2,7 @@ import type {
   CareerFactKind,
   ConfidenceLevel,
   ConversationLanguage,
+  DocumentKind,
   EmploymentType,
   FeedbackVerdict,
   MatchRecommendation,
@@ -102,6 +103,16 @@ export type ProfileReply =
       documentId: string | null;
       language: ConversationLanguage | null;
     }
+  | {
+      kind: "document_saved";
+      source: DocumentKind;
+      fileName: string | null;
+      documentId: string;
+      language: ConversationLanguage | null;
+      version: number;
+    }
+  | { kind: "document_nothing_new" }
+  | { kind: "document_merge_failed" }
   | { kind: "unreadable_document" }
   | { kind: "legacy_doc" }
   | { kind: "need_source" }
@@ -208,6 +219,8 @@ export interface ConversationService {
   applyEdit(userId: string, token: string): Promise<ProfileReply>;
   cancelEdit(userId: string, token: string): Promise<ProfileReply>;
   showProfile(userId: string): Promise<ProfileReply>;
+  /** During onboarding adds the file to the run; once onboarded, proposes what the file adds to the profile as an edit to approve. */
+  addDocument(userId: string, document: IncomingDocument): Promise<ProfileReply[]>;
   /** Saves the default conversation language without touching the profile, and resumes onboarding when it was waiting for it. */
   setLanguage(userId: string, language: ConversationLanguage): Promise<ProfileReply[]>;
 }
@@ -232,6 +245,8 @@ export interface ProfileInterpretation {
 export interface ProfileAssistant {
   extract(input: { linkedinUrl: string | null; sources: ProfileSourceText[] }): Promise<ProfileExtraction>;
   interpret(input: { snapshot: ProfileSnapshot; message: string; question: string | null }): Promise<ProfileInterpretation>;
+  /** Changes that a newly uploaded document adds to an existing profile, attributed to that document. */
+  mergeDocument(input: { snapshot: ProfileSnapshot; document: ProfileSourceText }): Promise<ProfileInterpretation>;
 }
 
 export interface JobSiteView {

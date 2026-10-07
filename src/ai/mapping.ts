@@ -96,6 +96,13 @@ export function extractionToChanges(extraction: Extraction, sources: ProfileSour
   return changes;
 }
 
+export function attributeTo(changes: ProfileChange[], source: ProfileSourceText): ProfileChange[] {
+  const provenance = { origin: SOURCE_ORIGINS[source.kind], sourceDocumentId: source.documentId };
+  return changes.map((change) =>
+    change.op === "add_experience" || change.op === "add_fact" ? { ...change, ...provenance } : change,
+  );
+}
+
 export interface Aliases {
   experiences: Map<string, string>;
   facts: Map<string, string>;

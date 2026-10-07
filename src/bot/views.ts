@@ -78,7 +78,9 @@ export const messages = {
   expired: "That action is no longer available.",
   noChange: "I didn't find anything to change in your profile. Tell me what to add, correct or remove — e.g. <i>\"add that I managed a team of 5\"</i>.",
   notOnboarded: "Let's set up your career profile first — send /start.",
-  documentNotExpected: "I only import documents while building your profile. To change your profile, just tell me what to add or correct.",
+  documentNotExpected: "I can't take documents at this step. Finish setting up your profile first (or send /start), then send it again.",
+  documentNothingNew: "Your profile already covers everything in this document, so there's nothing to change.",
+  documentMergeFailed: "I saved the file, but couldn't compare it with your profile right now. Tell me what to add in your own words, or send it again later.",
   noMatches: "No new matches right now. I'll message you when something relevant shows up.",
   matchNotFound: "I couldn't find that job anymore.",
   feedbackInterested: "Marked as interested 👍",
@@ -102,6 +104,7 @@ export const messages = {
     "<b>What I can do</b>",
     "• /new — your latest matches",
     "• /profile — your career profile",
+    "• Send an updated CV (PDF, DOCX or TXT) anytime — I'll show what it adds to your profile before saving anything.",
     "• /sites — job sites I search for you (add one with /addsite example.co.il)",
     "• /connections — import your LinkedIn connections to see who you know at each company",
     "• /language — choose English or Hebrew",
@@ -467,7 +470,7 @@ export function documentLanguageKeyboard(documentId: string, detected: Conversat
     const label = detected ? `It's ${DOCUMENT_LANGUAGE_NAMES[language]}` : DOCUMENT_LANGUAGE_NAMES[language];
     keyboard.text(`🌐 ${label}`, encodeCallback({ type: "document_language", documentId, language }));
   }
-  return keyboard.row().text("🔍 Analyze", encodeCallback({ type: "onboarding_analyze" }));
+  return keyboard;
 }
 
 export function profileReplyViews(reply: ProfileReply): View[] {
@@ -488,10 +491,27 @@ export function profileReplyViews(reply: ProfileReply): View[] {
       return [
         {
           text: `Got ${SOURCE_LABELS[reply.source]}${name}${language} ✅ Send more, or tap <b>Analyze</b> when you're done.`,
-          keyboard: reply.documentId ? documentLanguageKeyboard(reply.documentId, reply.language) : analyzeKeyboard(),
+          keyboard: reply.documentId
+            ? documentLanguageKeyboard(reply.documentId, reply.language).row().text("🔍 Analyze", encodeCallback({ type: "onboarding_analyze" }))
+            : analyzeKeyboard(),
         },
       ];
     }
+    case "document_saved": {
+      const name = reply.fileName ? ` (${escapeHtml(reply.fileName)})` : "";
+      const language = reply.language ? ` · ${DOCUMENT_LANGUAGE_NAMES[reply.language]}` : "";
+      const version = reply.version > 1 ? ` · version ${reply.version}` : "";
+      return [
+        {
+          text: `Saved ${SOURCE_LABELS[reply.source]}${name}${language}${version} ✅ Your earlier documents are kept too.`,
+          keyboard: documentLanguageKeyboard(reply.documentId, reply.language),
+        },
+      ];
+    }
+    case "document_nothing_new":
+      return [{ text: messages.documentNothingNew }];
+    case "document_merge_failed":
+      return [{ text: messages.documentMergeFailed }];
     case "unreadable_document":
       return [{ text: messages.unreadableDocument }];
     case "legacy_doc":

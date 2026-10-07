@@ -12,6 +12,17 @@ import type {
 } from "../services.js";
 import { applyChanges, clearDraftProfile, confirmDraftProfile, loadSnapshot, toProfileView } from "./profile.js";
 
+export type StoredDocument =
+  | {
+      stored: true;
+      documentId: string;
+      kind: DocumentKind;
+      language: ConversationLanguage | null;
+      version: number;
+      text: string;
+    }
+  | { stored: false; reply: ProfileReply };
+
 export type OnboardingStepKey = "language" | "linkedin" | "documents" | "analyzing" | "questions" | "review";
 
 interface QuestionsContext {
@@ -107,6 +118,26 @@ export class PgOnboardingService implements OnboardingService {
       return { kind: "document_not_expected" };
     }
 
+    const stored = await this.storeDocument(userId, document, async (tx, documentId, kind) => {
+      await tx.insert(profileSources).values({ userId, kind, documentId });
+      if (state.step === "linkedin") await this.setStep(tx, userId, "documents", {});
+    });
+    if (!stored.stored) return stored.reply;
+    return {
+      kind: "source_received",
+      source: stored.kind,
+      fileName: document.fileName,
+      documentId: stored.documentId,
+      language: stored.language,
+    };
+  }
+
+  /** Parses and keeps the file as a new source document; `onStored` runs in the same transaction. */
+  async storeDocument(
+    userId: string,
+    document: IncomingDocument,
+    onStored?: (tx: Db, documentId: string, kind: DocumentKind) => Promise<void>,
+  ): Promise<StoredDocument> {
     const parsed = await parseDocument(document);
     const file = {
       userId,
@@ -120,21 +151,19 @@ export class PgOnboardingService implements OnboardingService {
     if (parsed.status !== "parsed") {
       console.error("document parsing failed", { userId, format: parsed.format, error: parsed.error });
       await this.db.insert(sourceDocuments).values({ ...file, parseStatus: parsed.status, parseError: parsed.error });
-      return parsed.format === "doc" ? { kind: "legacy_doc" } : { kind: "unreadable_document" };
+      return { stored: false, reply: parsed.format === "doc" ? { kind: "legacy_doc" } : { kind: "unreadable_document" } };
     }
 
     const kind = classifySource(parsed.text);
-    const documentId = await this.db.transaction(async (tx) => {
+    return this.db.transaction(async (tx) => {
       const version = await nextVersion(tx, userId, kind, parsed.language);
       const [row] = await tx
         .insert(sourceDocuments)
         .values({ ...file, kind, language: parsed.language, version, extractedText: parsed.text, parseStatus: "parsed" })
         .returning({ id: sourceDocuments.id });
-      await tx.insert(profileSources).values({ userId, kind, documentId: row!.id });
-      if (state.step === "linkedin") await this.setStep(tx, userId, "documents", {});
-      return row!.id;
+      await onStored?.(tx, row!.id, kind);
+      return { stored: true, documentId: row!.id, kind, language: parsed.language, version, text: parsed.text } as const;
     });
-    return { kind: "source_received", source: kind, fileName: document.fileName, documentId, language: parsed.language };
   }
 
   async setDocumentLanguage(userId: string, documentId: string, language: ConversationLanguage): Promise<boolean> {

@@ -19,7 +19,7 @@
 | `/language` (or `/settings`), "switch to Hebrew", "תדבר איתי באנגלית", "change language" | `conversation.setLanguage` | Shows the current language with English / עברית buttons (`lang:<en\|he>`) or saves the requested one. Never touches onboarding state, the profile, matches, feedback or CVs. |
 | `/sites`, `/addsite <site>`, "search on <site>" | `sites.list` / `sites.add` / `sites.remove` | The user's own job sites for the agent to search (see `docs/discovery.md`). |
 | `/connections`, a `.csv`/`.zip` document, "delete my connections" | `connections.summary` / `connections.import` / `connections.forget` | LinkedIn connections shown on matches (see `docs/connections.md`). |
-| Document | `onboarding.addDocument` | During onboarding: stores the file as a new `source_document` (the caption becomes its label) and adds it to the run's `profile_sources`. Legacy `.doc` files are rejected with instructions to save as DOCX or PDF. |
+| Document | `conversation.addDocument` | Stores the file as a new `source_document` (the caption becomes its label); earlier documents are kept. During onboarding it joins the run's `profile_sources`. Once the profile is confirmed, `ProfileAssistant.mergeDocument` compares it with the profile and its additions are proposed as an edit with **Apply** / **Cancel**, attributed to the document. Legacy `.doc` files are rejected with instructions to save as DOCX or PDF. |
 | Language button on an upload | `onboarding.setDocumentLanguage` | Corrects or confirms the detected language of a document (`dl:<he\|en>:<documentId>`). |
 | Any other text | `conversation.handleText` | Onboarding answer, review correction, or a natural-language profile edit. |
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aliasSnapshot, extractionToChanges, interpretationToChanges } from "../src/ai/mapping.js";
+import { aliasSnapshot, attributeTo, extractionToChanges, interpretationToChanges } from "../src/ai/mapping.js";
 import type { Extraction, Interpretation } from "../src/ai/schemas.js";
 import { normalizeDate } from "../src/domain/dates.js";
 import type { ProfileSnapshot } from "../src/domain/profile.js";
@@ -248,6 +248,31 @@ describe("profile change mapping", () => {
         },
         replacesPreferenceId: null,
       },
+    ]);
+  });
+
+  it("attributes additions from an uploaded document to it and leaves other changes alone", () => {
+    const changes = interpretationToChanges(
+      {
+        reply: null,
+        changes: [
+          { op: "add_fact", kind: "skill", statement: "BambooHR", experience: "e1" },
+          { op: "remove_fact", fact: "f1" },
+        ],
+      },
+      aliasSnapshot(snapshot).aliases,
+    );
+    expect(attributeTo(changes, { kind: "linkedin_export", content: "", documentId: LINKEDIN_ID, language: "en" })).toEqual([
+      {
+        op: "add_fact",
+        kind: "skill",
+        statement: "BambooHR",
+        experienceId: EXPERIENCE_ID,
+        experienceRef: null,
+        origin: "linkedin_import",
+        sourceDocumentId: LINKEDIN_ID,
+      },
+      { op: "remove_fact", factId: FACT_ID },
     ]);
   });
 });

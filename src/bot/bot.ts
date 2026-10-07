@@ -9,7 +9,6 @@ import {
   MY_PROFILE_LABEL,
   WHATS_NEW_LABEL,
   addSiteReply,
-  analyzeKeyboard,
   connectionsImportReply,
   connectionsView,
   cvDraftViews,
@@ -212,7 +211,7 @@ export function createBot(
       await ctx.reply(connectionsImportReply(outcome), { ...html, reply_markup: mainMenu });
       return;
     }
-    const reply = await services.onboarding.addDocument(ctx.userId, {
+    const replies = await services.conversation.addDocument(ctx.userId, {
       fileRef: document.file_id,
       fileName,
       mimeType: document.mime_type ?? null,
@@ -220,7 +219,7 @@ export function createBot(
       sizeBytes: document.file_size ?? null,
       label: ctx.message.caption ?? null,
     });
-    await sendReplies(ctx, [reply]);
+    await sendReplies(ctx, replies);
   });
 
   bot.on("callback_query:data", async (ctx) => {
@@ -355,7 +354,13 @@ export function createBot(
         await ctx.answerCallbackQuery({
           text: saved ? `Marked as ${DOCUMENT_LANGUAGE_NAMES[action.language]} ✅` : messages.expired,
         });
-        if (saved) await ctx.editMessageReplyMarkup({ reply_markup: analyzeKeyboard() }).catch(() => undefined);
+        if (saved) {
+          const rows = ctx.callbackQuery.message?.reply_markup?.inline_keyboard ?? [];
+          const kept = rows
+            .map((row) => row.filter((button) => !("callback_data" in button && button.callback_data.startsWith("dl:"))))
+            .filter((row) => row.length > 0);
+          await ctx.editMessageReplyMarkup({ reply_markup: { inline_keyboard: kept } }).catch(() => undefined);
+        }
         return;
       }
       case "onboarding_confirm": {

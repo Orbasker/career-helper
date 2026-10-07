@@ -29,7 +29,7 @@ A failing recorder never fails the call.
 | `cv.tailor` | CV tailoring (twice when the first attempt is rejected) |
 | `discovery.search` | Agent web search |
 | `discovery.extract` | Reading a posting page without JSON-LD |
-| `profile.extract` / `profile.interpret` | Onboarding extraction and profile edits |
+| `profile.extract` / `profile.interpret` / `profile.merge_document` | Onboarding extraction, profile edits, and documents uploaded after onboarding |
 
 **Cost** comes from AI Gateway's spend report grouped by those tags (`gatewaySpend`), so it matches what is billed. Tokens and durations come from `model_calls`.
 
