@@ -91,6 +91,12 @@ const hebrewWithLatinContent = (t: Strings) => [
   t.cvs.removeConfirm("cv-en.pdf", 3),
   t.cvs.removed("cv-en.pdf"),
   t.documents.replaced(t.sources.cv, "cv-2026.pdf", t.documentLanguages.en, "cv-2025.pdf"),
+  t.gmail.reconnect("dana@gmail.com"),
+  t.gmail.connected("dana@gmail.com"),
+  t.gmail.alreadyConnected("dana@gmail.com", "2026-10-07"),
+  t.gmail.disconnectConfirm("dana@gmail.com"),
+  t.gmail.disconnected("dana@gmail.com"),
+  t.gmail.disconnectedNotRevoked("dana@gmail.com"),
 ];
 
 describe("hebrew copy", () => {
@@ -104,7 +110,7 @@ describe("hebrew copy", () => {
   });
 
   it("keeps commands left-to-right inside Hebrew sentences", () => {
-    const unmarked = copy.filter(([, text]) => /(?:^|[^‎])\/(?:new|profile|cvs|sites|connections|language|start|addsite)\b/.test(text));
+    const unmarked = copy.filter(([, text]) => /(?:^|[^‎])\/(?:new|profile|cvs|sites|connections|connect_gmail|disconnect_gmail|language|start|addsite)\b/.test(text));
     expect(unmarked.map(([path]) => path)).toEqual([]);
   });
 

@@ -13,6 +13,7 @@ export type CallbackAction =
   | { type: "cv_language"; versionId: string; language: ConversationLanguage }
   | { type: "site_remove"; siteId: string }
   | { type: "connections_delete" }
+  | { type: "gmail_disconnect" }
   | { type: "sources_boards" }
   | { type: "sources_sites" }
   | { type: "set_language"; language: ConversationLanguage }
@@ -68,6 +69,8 @@ export function encodeCallback(action: CallbackAction): string {
       return `st:x:${action.siteId}`;
     case "connections_delete":
       return "cn:delete";
+    case "gmail_disconnect":
+      return "gm:disconnect";
     case "sources_boards":
       return "src:boards";
     case "sources_sites":
@@ -106,6 +109,7 @@ export function decodeCallback(data: string): CallbackAction | null {
   if (data === "ob:analyze") return { type: "onboarding_analyze" };
   if (data === "ob:confirm") return { type: "onboarding_confirm" };
   if (data === "cn:delete") return { type: "connections_delete" };
+  if (data === "gm:disconnect") return { type: "gmail_disconnect" };
   if (data === "src:boards") return { type: "sources_boards" };
   if (data === "src:sites") return { type: "sources_sites" };
   if (data === "doc:list") return { type: "documents" };

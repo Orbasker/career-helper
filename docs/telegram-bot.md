@@ -23,6 +23,7 @@
 | `/sites`, `/addsite <site>`, "search on <site>" | `sites.list` / `sites.add` / `sites.remove` | The user's own job sites for the agent to search (see `docs/discovery.md`). |
 | A link to a job posting (confirmed profile) | `jobLinks.analyze`, `matches.details` | Reads the posting, matches it right away and replies with the match details and next actions (see `docs/job-links.md`). |
 | `/connections`, a `.csv`/`.zip` document, "delete my connections" | `connections.summary` / `connections.import` / `connections.forget` | LinkedIn connections shown on matches (see `docs/connections.md`). |
+| `/connect_gmail`, `/disconnect_gmail` | `gmail.status` / `gmail.startConnect` / `gmail.disconnect` | Optional read-only Gmail connection (see `docs/gmail.md`). |
 | Document | `conversation.addDocument` | Stores the file as a new `source_document` (the caption becomes its label); earlier documents are kept. During onboarding it joins the run's `profile_sources`. Once the profile is confirmed, `ProfileAssistant.mergeDocument` compares it with the profile and its additions are proposed as an edit with **Apply** / **Cancel**, attributed to the document. Legacy `.doc` files are rejected with instructions to save as DOCX or PDF. |
 | Language button on an upload | `onboarding.setDocumentLanguage` | Corrects or confirms the detected language of a document (`dl:<he\|en>:<documentId>`). When the language is unclear (mixed Hebrew and English text) the reply asks which one it is and offers both. |
 | `/cvs`, "show my CVs", "קורות החיים שלי" | `documents.list` | CV management (below). |
@@ -75,7 +76,7 @@ The LLM only sees per-request aliases (`e1`, `f2`, `p3`) for the user's own item
 
 `src/ai/profile-assistant.ts` calls `anthropic/claude-sonnet-5.5` through Vercel AI Gateway (AI SDK structured output). On Vercel it authenticates with OIDC automatically; locally run `vercel env pull` (for `VERCEL_OIDC_TOKEN`) or set `AI_GATEWAY_API_KEY`. Tests use a fake assistant.
 
-Callback data is `job:<matchId>`, `fb:<i|n>:<matchId>`, `cv:<matchId>`, `ob:analyze`, `ob:confirm`, `pe:<a|c>:<token>`, `fr:<r|s|l|w|c|p|o>:<feedbackId>`, `pp:<a|r>:<preferenceId>`, `cvd:<a|x>:<versionId>`, `cvf:<d|p>:<versionId>` (a bare `cvf:<versionId>` from older messages means Word), `cvl:<en|he>:<versionId>`, `lang:<en|he>`, `st:x:<siteId>`, `src:<boards|sites>`, `cn:delete`, `doc:<list|add>`, `doc:<documentId>`, `doc:<d|l|r|x|y>:<documentId>` (≤ 64 bytes). Only private chats are handled.
+Callback data is `job:<matchId>`, `fb:<i|n>:<matchId>`, `cv:<matchId>`, `ob:analyze`, `ob:confirm`, `pe:<a|c>:<token>`, `fr:<r|s|l|w|c|p|o>:<feedbackId>`, `pp:<a|r>:<preferenceId>`, `cvd:<a|x>:<versionId>`, `cvf:<d|p>:<versionId>` (a bare `cvf:<versionId>` from older messages means Word), `cvl:<en|he>:<versionId>`, `lang:<en|he>`, `st:x:<siteId>`, `src:<boards|sites>`, `cn:delete`, `gm:disconnect`, `doc:<list|add>`, `doc:<documentId>`, `doc:<d|l|r|x|y>:<documentId>` (≤ 64 bytes). Only private chats are handled.
 
 ## Running locally
 
@@ -93,4 +94,4 @@ Production runs as a webhook: Telegram POSTs updates to `api/telegram.ts`, which
 
 `bun run vercel-build` typechecks and, on production builds only (`VERCEL_ENV=production`, i.e. merges to `main`), applies database migrations and registers the webhook at `https://$VERCEL_PROJECT_PRODUCTION_URL/api/telegram`. Preview builds skip both because they share the production database.
 
-Required Vercel env vars: `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `TELEGRAM_BOT_TOKEN`, `CRON_SECRET` (daily pipeline, see `docs/pipeline.md`).
+Required Vercel env vars: `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `TELEGRAM_BOT_TOKEN`, `CRON_SECRET` (daily pipeline, see `docs/pipeline.md`). Optional: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_TOKEN_ENCRYPTION_KEY` for Gmail (see `docs/gmail.md`).

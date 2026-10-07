@@ -19,7 +19,10 @@ import {
   cvLibraryViews,
   documentCardView,
   documentName,
+  escapeHtml,
   feedbackReasonView,
+  gmailConnectView,
+  gmailDisconnectView,
   jobLinkFailureText,
   jobLinkReadingText,
   jobLinkResultView,
@@ -289,6 +292,32 @@ export function createBot(
     await ctx.reply(view.text, { ...html, reply_markup: view.keyboard ?? mainMenu(ctx.t) });
   };
   bot.command("connections", showConnections);
+  bot.command("connect_gmail", async (ctx) => {
+    const status = await services.gmail.status(ctx.userId, { verify: true });
+    if (status.kind === "unavailable") {
+      await ctx.reply(ctx.t.gmail.unavailable, html);
+      return;
+    }
+    if (status.kind === "connected") {
+      const since = status.connectedAt.toISOString().slice(0, 10);
+      await ctx.reply(ctx.t.gmail.alreadyConnected(escapeHtml(status.email), since), { ...html, reply_markup: mainMenu(ctx.t) });
+      return;
+    }
+    const link = await services.gmail.startConnect(ctx.userId);
+    if (link.kind === "unavailable") {
+      await ctx.reply(ctx.t.gmail.unavailable, html);
+      return;
+    }
+    await sendViews(ctx, [gmailConnectView(ctx.t, link.url, status.kind === "needs_reconnect" ? status.email : null)]);
+  });
+  bot.command("disconnect_gmail", async (ctx) => {
+    const status = await services.gmail.status(ctx.userId);
+    if (status.kind !== "connected" && status.kind !== "needs_reconnect") {
+      await ctx.reply(ctx.t.gmail.notConnected, { ...html, reply_markup: mainMenu(ctx.t) });
+      return;
+    }
+    await sendViews(ctx, [gmailDisconnectView(ctx.t, status.email)]);
+  });
   const showDocuments = async (ctx: BotContext) => {
     const documents = await services.documents.list(ctx.userId);
     if (!documents) {
@@ -491,6 +520,17 @@ export function createBot(
           ...html,
           reply_markup: mainMenu(ctx.t),
         });
+        return;
+      }
+      case "gmail_disconnect": {
+        const outcome = await services.gmail.disconnect(ctx.userId);
+        await ctx.answerCallbackQuery();
+        await ctx.editMessageReplyMarkup().catch(() => undefined);
+        const text =
+          outcome.kind === "not_connected"
+            ? ctx.t.gmail.notConnected
+            : (outcome.revoked ? ctx.t.gmail.disconnected : ctx.t.gmail.disconnectedNotRevoked)(escapeHtml(outcome.email));
+        await ctx.reply(text, { ...html, reply_markup: mainMenu(ctx.t) });
         return;
       }
       case "site_remove": {

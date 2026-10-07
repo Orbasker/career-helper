@@ -428,6 +428,48 @@ export interface JobLinkService {
   analyze(userId: string, url: string): Promise<JobLinkOutcome>;
 }
 
+export type GmailStatus =
+  | { kind: "unavailable" }
+  | { kind: "not_connected" }
+  | { kind: "connected"; email: string; connectedAt: Date; lastSyncAt: Date | null }
+  | { kind: "needs_reconnect"; email: string };
+
+export type GmailConnectLink = { kind: "link"; url: string } | { kind: "unavailable" };
+
+/** Who a finished OAuth flow belongs to, so the result can be sent to their Telegram chat. */
+export interface GmailConnectRecipient {
+  chatId: number;
+  language: ConversationLanguage | null;
+}
+
+export type GmailConnectOutcome =
+  | { kind: "invalid_state" }
+  | ({ kind: "connected"; email: string } & GmailConnectRecipient)
+  | ({ kind: "denied" | "missing_scope" | "failed" } & GmailConnectRecipient);
+
+export type GmailDisconnectOutcome = { kind: "disconnected"; email: string; revoked: boolean } | { kind: "not_connected" };
+
+export type GmailAccess =
+  | { kind: "ok"; accessToken: string; email: string }
+  | { kind: "needs_reconnect"; email: string }
+  | { kind: "not_connected" }
+  | { kind: "unavailable" };
+
+export interface GmailService {
+  /** With `verify`, a connected account is checked with Google, so an expired or revoked grant shows as `needs_reconnect`. */
+  status(userId: string, options?: { verify?: boolean }): Promise<GmailStatus>;
+  /** A single-use link, bound to the user, that starts Google sign-in; it replaces the user's earlier links. */
+  startConnect(userId: string): Promise<GmailConnectLink>;
+  /** Google's sign-in URL for a pending link, or null when the link is unknown, used or expired. */
+  authorizationUrl(state: string): Promise<string | null>;
+  /** Consumes the link's state and stores the grant when Google returned a code with read-only Gmail access. */
+  completeConnect(input: { state: string; code: string | null; error: string | null }): Promise<GmailConnectOutcome>;
+  /** Revokes the grant at Google and deletes the stored credentials and everything derived from the user's email. */
+  disconnect(userId: string): Promise<GmailDisconnectOutcome>;
+  /** A fresh access token for reading Gmail; a rejected refresh token marks the account `needs_reconnect`. */
+  accessToken(userId: string): Promise<GmailAccess>;
+}
+
 export interface StatsService {
   /** Operator report for the last `days` days, formatted for Telegram. */
   report(days: number): Promise<string>;
@@ -446,4 +488,5 @@ export interface AppServices {
   connections: ConnectionService;
   jobLinks: JobLinkService;
   documents: DocumentService;
+  gmail: GmailService;
 }

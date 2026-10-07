@@ -4,6 +4,7 @@ import { AiJobDiscoverer } from "../ai/job-discoverer.js";
 import { AiProfileAssistant } from "../ai/profile-assistant.js";
 import { createPgServices } from "../app/postgres/index.js";
 import type { Db } from "../db/types.js";
+import { gmailDepsFromEnv } from "../google/env.js";
 import { PgModelCallRecorder } from "../observability/recorder.js";
 import { gatewaySpend } from "../observability/report.js";
 import { createBot } from "./bot.js";
@@ -19,6 +20,7 @@ export function createProductionBot(token: string, db: Db) {
     {
       spend: gatewaySpend,
       jobLinks: { reader: new AiJobDiscoverer(undefined, recorder), matcher: new AiDeepMatcher(undefined, undefined, recorder) },
+      gmail: gmailDepsFromEnv(),
     },
   );
   return createBot(token, services, undefined, undefined, { adminTelegramIds: adminTelegramIds() });
