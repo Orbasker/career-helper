@@ -1,34 +1,67 @@
-import type { ProfileSourceKind } from "../domain/enums.js";
+import type { ConversationLanguage, DocumentFormat, DocumentKind } from "../domain/enums.js";
 import type { IncomingDocument } from "./services.js";
 
 export const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
 const MIN_TEXT_LENGTH = 40;
+const OLE_SIGNATURE = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1];
+
+export type ParsedDocument =
+  | { status: "parsed"; format: DocumentFormat; text: string; language: ConversationLanguage | null }
+  | { status: "unsupported" | "failed"; format: DocumentFormat; error: string };
 
 function extension(fileName: string | null): string {
   return fileName?.toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] ?? "";
 }
 
-export async function readDocumentText(document: IncomingDocument): Promise<string | null> {
+export function documentFormat(document: Pick<IncomingDocument, "fileName" | "mimeType" | "data">): DocumentFormat {
   const ext = extension(document.fileName);
   const mime = document.mimeType ?? "";
-  let text: string;
-  if (mime === "application/pdf" || ext === "pdf") {
-    const { extractText, getDocumentProxy } = await import("unpdf");
-    const pdf = await getDocumentProxy(document.data);
-    text = (await extractText(pdf, { mergePages: true })).text;
-  } else if (mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || ext === "docx") {
-    const mammoth = await import("mammoth");
-    text = (await mammoth.extractRawText({ buffer: Buffer.from(document.data) })).value;
-  } else if (mime.startsWith("text/") || ext === "txt" || ext === "md") {
-    text = new TextDecoder().decode(document.data);
-  } else {
-    return null;
-  }
-  const normalized = text.replace(/\u0000/g, "").replace(/[ \t]+\n/g, "\n").trim();
-  return normalized.length >= MIN_TEXT_LENGTH ? normalized : null;
+  if (mime === "application/pdf" || ext === "pdf") return "pdf";
+  if (mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || ext === "docx") return "docx";
+  if (mime === "application/msword" || ext === "doc" || OLE_SIGNATURE.every((b, i) => document.data[i] === b)) return "doc";
+  if (mime.startsWith("text/") || ext === "txt" || ext === "md") return "txt";
+  return "other";
 }
 
-export function classifySource(text: string): ProfileSourceKind {
+/** Hebrew CVs routinely contain English terms, so a modest share of Hebrew letters is enough to call it Hebrew. */
+export function detectLanguage(text: string): ConversationLanguage | null {
+  const hebrew = text.match(/[\u05D0-\u05EA]/g)?.length ?? 0;
+  const latin = text.match(/[A-Za-z]/g)?.length ?? 0;
+  if (hebrew > 0.3 * (hebrew + latin)) return "he";
+  return latin > 0 ? "en" : null;
+}
+
+async function extractText(format: DocumentFormat, data: Uint8Array): Promise<string> {
+  switch (format) {
+    case "pdf": {
+      const { extractText, getDocumentProxy } = await import("unpdf");
+      return (await extractText(await getDocumentProxy(data), { mergePages: true })).text;
+    }
+    case "docx": {
+      const mammoth = await import("mammoth");
+      return (await mammoth.extractRawText({ buffer: Buffer.from(data) })).value;
+    }
+    default:
+      return new TextDecoder().decode(data);
+  }
+}
+
+export async function parseDocument(document: IncomingDocument): Promise<ParsedDocument> {
+  const format = documentFormat(document);
+  if (format === "doc") return { status: "unsupported", format, error: "legacy Word .doc format" };
+  if (format === "other") return { status: "unsupported", format, error: `unsupported file type ${document.mimeType ?? "unknown"}` };
+  let text: string;
+  try {
+    text = await extractText(format, document.data);
+  } catch (error) {
+    return { status: "failed", format, error: error instanceof Error ? error.message : String(error) };
+  }
+  const normalized = text.replace(/\u0000/g, "").replace(/[ \t]+\n/g, "\n").trim();
+  if (normalized.length < MIN_TEXT_LENGTH) return { status: "failed", format, error: "no readable text" };
+  return { status: "parsed", format, text: normalized, language: detectLanguage(normalized) };
+}
+
+export function classifySource(text: string): DocumentKind {
   return /linkedin\.com\/in\//i.test(text) && /Page \d+ of \d+/i.test(text) ? "linkedin_export" : "cv";
 }
 

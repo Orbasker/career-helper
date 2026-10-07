@@ -85,6 +85,8 @@ export interface IncomingDocument {
   fileName: string | null;
   mimeType: string | null;
   data: Uint8Array;
+  sizeBytes?: number | null;
+  label?: string | null;
 }
 
 export type ProfileReply =
@@ -93,8 +95,15 @@ export type ProfileReply =
   | { kind: "onboarding_welcome" }
   | { kind: "ask_linkedin" }
   | { kind: "ask_documents"; linkedinSaved: boolean }
-  | { kind: "source_received"; source: ProfileSourceKind; fileName: string | null }
+  | {
+      kind: "source_received";
+      source: ProfileSourceKind;
+      fileName: string | null;
+      documentId: string | null;
+      language: ConversationLanguage | null;
+    }
   | { kind: "unreadable_document" }
+  | { kind: "legacy_doc" }
   | { kind: "need_source" }
   | { kind: "analysis_failed" }
   | { kind: "busy" }
@@ -145,7 +154,10 @@ export interface UserService {
 
 export interface OnboardingService {
   start(userId: string): Promise<ProfileReply[]>;
+  /** Stores every uploaded file as its own source document; a later upload never replaces an earlier one. */
   addDocument(userId: string, document: IncomingDocument): Promise<ProfileReply>;
+  /** Records the user's confirmation of a document's language; false when the document is not theirs. */
+  setConversationLanguage(userId: string, documentId: string, language: ConversationLanguage): Promise<boolean>;
   analyze(userId: string): Promise<ProfileReply>;
   confirm(userId: string): Promise<ProfileReply>;
 }
@@ -203,6 +215,8 @@ export interface ConversationService {
 export interface ProfileSourceText {
   kind: ProfileSourceKind;
   content: string;
+  documentId: string | null;
+  language: string | null;
 }
 
 export interface ProfileExtraction {

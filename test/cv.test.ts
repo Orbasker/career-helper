@@ -19,6 +19,7 @@ import {
   jobs,
   matches,
   rawJobRecords,
+  sourceDocuments,
   users,
   workExperiences,
 } from "../src/db/schema.js";
@@ -309,6 +310,26 @@ describe("CV tailoring flow", () => {
     if (outcome.kind !== "requested") throw new Error(`expected a new request, got ${outcome.kind}`);
     return outcome.versionId;
   };
+
+  it("bases a new request on the user's latest readable CV", async () => {
+    const document = (fileRef: string, parsed: boolean) => ({
+      userId,
+      format: "pdf" as const,
+      fileRef,
+      ...(parsed
+        ? { kind: "cv" as const, extractedText: "CV text", parseStatus: "parsed" as const }
+        : { parseStatus: "failed" as const, parseError: "no readable text" }),
+    });
+    const [older] = await db.insert(sourceDocuments).values(document("he", true)).returning();
+    const [latest] = await db
+      .insert(sourceDocuments)
+      .values({ ...document("en", true), createdAt: new Date(older!.createdAt.getTime() + 1000) })
+      .returning();
+    await db.insert(sourceDocuments).values({ ...document("broken", false), createdAt: new Date(older!.createdAt.getTime() + 2000) });
+
+    const [version] = await db.select().from(cvVersions).where(eq(cvVersions.id, await requestId()));
+    expect(version!.sourceDocumentId).toBe(latest!.id);
+  });
 
   it("tailors from verified facts only and saves the version with provenance", async () => {
     const versionId = await requestId();

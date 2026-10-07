@@ -5,9 +5,11 @@ import type { ConversationLanguage } from "../domain/enums.js";
 import { parseLanguageRequest } from "../domain/language.js";
 import { decodeCallback, encodeCallback } from "./callbacks.js";
 import {
+  DOCUMENT_LANGUAGE_NAMES,
   MY_PROFILE_LABEL,
   WHATS_NEW_LABEL,
   addSiteReply,
+  analyzeKeyboard,
   connectionsImportReply,
   connectionsView,
   cvDraftViews,
@@ -215,6 +217,8 @@ export function createBot(
       fileName,
       mimeType: document.mime_type ?? null,
       data,
+      sizeBytes: document.file_size ?? null,
+      label: ctx.message.caption ?? null,
     });
     await sendReplies(ctx, [reply]);
   });
@@ -344,6 +348,14 @@ export function createBot(
         await ctx.reply(messages.analyzing, html);
         await typing(ctx);
         await sendReplies(ctx, [await services.onboarding.analyze(ctx.userId)]);
+        return;
+      }
+      case "document_language": {
+        const saved = await services.onboarding.setConversationLanguage(ctx.userId, action.documentId, action.language);
+        await ctx.answerCallbackQuery({
+          text: saved ? `Marked as ${DOCUMENT_LANGUAGE_NAMES[action.language]} ✅` : messages.expired,
+        });
+        if (saved) await ctx.editMessageReplyMarkup({ reply_markup: analyzeKeyboard() }).catch(() => undefined);
         return;
       }
       case "onboarding_confirm": {

@@ -46,6 +46,15 @@ export type CareerFactKind = (typeof CAREER_FACT_KINDS)[number];
 export const PROFILE_SOURCE_KINDS = ["cv", "linkedin_export", "pasted_text"] as const;
 export type ProfileSourceKind = (typeof PROFILE_SOURCE_KINDS)[number];
 
+export const DOCUMENT_KINDS = ["cv", "linkedin_export"] as const satisfies readonly ProfileSourceKind[];
+export type DocumentKind = (typeof DOCUMENT_KINDS)[number];
+
+export const DOCUMENT_FORMATS = ["pdf", "docx", "doc", "txt", "other"] as const;
+export type DocumentFormat = (typeof DOCUMENT_FORMATS)[number];
+
+export const DOCUMENT_PARSE_STATUSES = ["parsed", "failed", "unsupported"] as const;
+export type DocumentParseStatus = (typeof DOCUMENT_PARSE_STATUSES)[number];
+
 export const PREFERENCE_KINDS = ["hard_constraint", "soft_preference", "dislike", "target_role"] as const;
 export type PreferenceKind = (typeof PREFERENCE_KINDS)[number];
 

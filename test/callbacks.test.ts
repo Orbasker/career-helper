@@ -12,6 +12,8 @@ describe("callback data", () => {
     { type: "tailor_cv", matchId },
     { type: "onboarding_analyze" },
     { type: "onboarding_confirm" },
+    { type: "document_language", documentId: feedbackId, language: "he" },
+    { type: "document_language", documentId: feedbackId, language: "en" },
     { type: "edit_apply", token: "aZ_9-xYw" },
     { type: "edit_cancel", token: "aZ_9-xYw" },
     { type: "feedback_reason", feedbackId, tag: "role" },
@@ -30,7 +32,7 @@ describe("callback data", () => {
     expect(decodeCallback(data)).toEqual(action);
   });
 
-  it.each(["", "job:not-a-uuid", `fb:x:${matchId}`, `unknown:${matchId}`, `job:extra:${matchId}`, "pe:x:abcdefgh", "pe:a:no spaces", "ob:other", `fr:z:${feedbackId}`, `pp:x:${feedbackId}`, "fr:r:not-a-uuid"])(
+  it.each(["", "job:not-a-uuid", `fb:x:${matchId}`, `unknown:${matchId}`, `job:extra:${matchId}`, "pe:x:abcdefgh", "pe:a:no spaces", "ob:other", `fr:z:${feedbackId}`, `pp:x:${feedbackId}`, "fr:r:not-a-uuid", `dl:fr:${feedbackId}`])(
     "rejects %s",
     (data) => {
       expect(decodeCallback(data)).toBeNull();

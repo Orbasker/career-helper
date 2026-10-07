@@ -7,6 +7,8 @@ import type { ProfileSnapshot } from "../src/domain/profile.js";
 const EXPERIENCE_ID = "11111111-1111-4111-8111-111111111111";
 const FACT_ID = "22222222-2222-4222-8222-222222222222";
 const PREFERENCE_ID = "33333333-3333-4333-8333-333333333333";
+const HEBREW_CV_ID = "44444444-4444-4444-8444-444444444444";
+const LINKEDIN_ID = "55555555-5555-4555-8555-555555555555";
 
 const snapshot: ProfileSnapshot = {
   profile: {
@@ -176,12 +178,15 @@ describe("profile change mapping", () => {
           startDate: "2019-01",
           endDate: "2020-01",
           isCurrent: true,
-          source: "linkedin_export",
+          source: 2,
           facts: [{ kind: "responsibility", statement: "Ran hiring" }],
         },
-        { ...{ employer: " ", title: "Ghost", industry: null, location: null, seniority: null, managedHeadcount: null }, startDate: null, endDate: null, isCurrent: false, source: "cv", facts: [] },
+        { ...{ employer: " ", title: "Ghost", industry: null, location: null, seniority: null, managedHeadcount: null }, startDate: null, endDate: null, isCurrent: false, source: 1, facts: [] },
       ],
-      generalFacts: [{ kind: "language", statement: "Hebrew (native)", source: "cv" }],
+      generalFacts: [
+        { kind: "language", statement: "Hebrew (native)", source: 1 },
+        { kind: "skill", statement: "Workday", source: 9 },
+      ],
       preferences: [
         {
           kind: "hard_constraint",
@@ -193,16 +198,46 @@ describe("profile change mapping", () => {
       followUpQuestions: ["Which roles?"],
     };
 
-    expect(extractionToChanges(extraction)).toEqual([
+    const sources = [
+      { kind: "cv" as const, content: "קורות חיים", documentId: HEBREW_CV_ID, language: "he" },
+      { kind: "linkedin_export" as const, content: "Page 1 of 2", documentId: LINKEDIN_ID, language: "en" },
+    ];
+    expect(extractionToChanges(extraction, sources)).toEqual([
       { op: "update_profile", fields: { headline: "HR leader", currentSeniority: "manager" } },
       {
         op: "add_experience",
         ref: "x0",
         origin: "linkedin_import",
+        sourceDocumentId: LINKEDIN_ID,
         experience: expect.objectContaining({ employer: "Acme", startDate: "2019-01-01", endDate: null, isCurrent: true }),
       },
-      { op: "add_fact", kind: "responsibility", statement: "Ran hiring", experienceId: null, experienceRef: "x0", origin: "linkedin_import" },
-      { op: "add_fact", kind: "language", statement: "Hebrew (native)", experienceId: null, experienceRef: null, origin: "cv_upload" },
+      {
+        op: "add_fact",
+        kind: "responsibility",
+        statement: "Ran hiring",
+        experienceId: null,
+        experienceRef: "x0",
+        origin: "linkedin_import",
+        sourceDocumentId: LINKEDIN_ID,
+      },
+      {
+        op: "add_fact",
+        kind: "language",
+        statement: "Hebrew (native)",
+        experienceId: null,
+        experienceRef: null,
+        origin: "cv_upload",
+        sourceDocumentId: HEBREW_CV_ID,
+      },
+      {
+        op: "add_fact",
+        kind: "skill",
+        statement: "Workday",
+        experienceId: null,
+        experienceRef: null,
+        origin: "cv_upload",
+        sourceDocumentId: null,
+      },
       {
         op: "add_preference",
         preference: {

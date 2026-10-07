@@ -8,11 +8,14 @@ import { extractionSchema, interpretationSchema } from "./schemas.js";
 export const PROFILE_MODEL = "anthropic/claude-sonnet-5.5";
 const MAX_SOURCE_CHARS = 60_000;
 
-const EXTRACTION_INSTRUCTIONS = `You turn a job seeker's CV, LinkedIn export and notes into a structured career profile.
+const EXTRACTION_INSTRUCTIONS = `You turn a job seeker's CVs, LinkedIn export and notes into a structured career profile.
 
 Rules:
 - Only record what the sources state. Never invent employers, dates, numbers, skills or achievements.
-- Merge duplicates: the same role often appears in both the CV and the LinkedIn export. Emit it once, preferring the most detailed source, and set "source" to that document's kind.
+- A CV's wording is the candidate's own marketing, not verified truth: keep each claim as stated and the candidate will confirm it.
+- The candidate may send several CVs, often the same career in different languages (e.g. Hebrew and English). Treat them as one career.
+- Merge duplicates: the same role often appears in several documents. Emit it once, preferring the most detailed source, and set "source" to that document's index.
+- Write all profile text in English, translating from other languages. Keep employer and product names as the English document spells them, otherwise transliterate.
 - Facts are short, self-contained statements in the candidate's voice without "I" (e.g. "Managed a team of 6 recruiters"). Keep numbers exactly as written.
 - Put responsibilities, achievements and role-specific skills under the role. Put education, certifications, languages and general skills in generalFacts.
 - Dates use YYYY-MM (or YYYY). Mark the current role with isCurrent=true and endDate=null.
@@ -53,7 +56,10 @@ export class AiProfileAssistant implements ProfileAssistant {
 
   async extract(input: { linkedinUrl: string | null; sources: ProfileSourceText[] }): Promise<ProfileExtraction> {
     const documents = input.sources
-      .map((s, i) => `<document index="${i + 1}" kind="${s.kind}">\n${s.content.slice(0, MAX_SOURCE_CHARS)}\n</document>`)
+      .map((s, i) => {
+        const language = s.language ? ` language="${s.language}"` : "";
+        return `<document index="${i + 1}" kind="${s.kind}"${language}>\n${s.content.slice(0, MAX_SOURCE_CHARS)}\n</document>`;
+      })
       .join("\n\n");
     const { output } = await tracked(this.recorder, "profile.extract", this.modelName, (providerOptions) =>
       generateText({
@@ -64,7 +70,7 @@ export class AiProfileAssistant implements ProfileAssistant {
         output: Output.object({ schema: extractionSchema }),
       }),
     );
-    return { changes: extractionToChanges(output), followUpQuestions: output.followUpQuestions };
+    return { changes: extractionToChanges(output, input.sources), followUpQuestions: output.followUpQuestions };
   }
 
   async interpret(input: { snapshot: ProfileSnapshot; message: string; question: string | null }): Promise<ProfileInterpretation> {

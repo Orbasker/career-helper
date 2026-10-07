@@ -8,9 +8,9 @@ import {
   careerFacts,
   careerProfiles,
   conversationStates,
-  masterCvs,
   preferences,
   profileSources,
+  sourceDocuments,
   users,
   workExperiences,
 } from "../src/db/schema.js";
@@ -31,6 +31,7 @@ import {
 } from "./support/telegram.js";
 
 const CV_TEXT = "Dana Levi\nHR Manager, Acme Ltd, 2019 - present\nManaged a team of 6 recruiters\nCut time-to-hire by 30%";
+const HEBREW_CV_TEXT = "דנה לוי\nמנהלת משאבי אנוש, Acme בעמ, 2019 - היום\nניהלה צוות של 6 מגייסים\nקיצרה את זמן הגיוס ב-30%";
 
 const EXTRACTION: ProfileChange[] = [
   { op: "update_profile", fields: { headline: "HR Manager", currentSeniority: "manager" } },
@@ -139,8 +140,11 @@ describe("career-profile onboarding", () => {
 
     await send(documentUpdate({ fileName: "cv.txt", mimeType: "text/plain" }));
     expect(calls.some((c) => c.method === "getFile")).toBe(true);
-    expect(sent()[0]).toContain("Got your CV (cv.txt)");
-    expect(lastKeyboardData()).toEqual([encodeCallback({ type: "onboarding_analyze" })]);
+    expect(sent()[0]).toContain("Got your CV (cv.txt) · English");
+    expect(lastKeyboardData()).toEqual([
+      expect.stringMatching(/^dl:he:/),
+      encodeCallback({ type: "onboarding_analyze" }),
+    ]);
 
     fileContent = "Dana Levi\nContact\nwww.linkedin.com/in/dana-levi\nExperience\nAcme Ltd\nHR Manager\nPage 1 of 2";
     await send(documentUpdate({ fileName: "Profile.txt", mimeType: "text/plain" }));
@@ -152,8 +156,13 @@ describe("career-profile onboarding", () => {
       {
         linkedinUrl: "https://www.linkedin.com/in/dana-levi",
         sources: [
-          { kind: "cv", content: CV_TEXT },
-          { kind: "linkedin_export", content: expect.stringContaining("Page 1 of 2") },
+          { kind: "cv", content: CV_TEXT, documentId: expect.any(String), language: "en" },
+          {
+            kind: "linkedin_export",
+            content: expect.stringContaining("Page 1 of 2"),
+            documentId: expect.any(String),
+            language: "en",
+          },
         ],
       },
     ]);
@@ -205,8 +214,11 @@ describe("career-profile onboarding", () => {
     expect(pref!.decidedAt).not.toBeNull();
     const [profile] = await db.select().from(careerProfiles).where(eq(careerProfiles.userId, userId));
     expect(profile).toMatchObject({ status: "confirmed", headline: "HR Manager", revision: 2 });
-    const [cv] = await db.select().from(masterCvs).where(eq(masterCvs.userId, userId));
-    expect(cv!.originalText).toBe(CV_TEXT);
+    const documents = await db.select().from(sourceDocuments).where(eq(sourceDocuments.userId, userId));
+    expect(documents.map((d) => [d.kind, d.extractedText])).toEqual([
+      ["cv", CV_TEXT],
+      ["linkedin_export", expect.stringContaining("Page 1 of 2")],
+    ]);
 
     await send(callbackUpdate(encodeCallback({ type: "onboarding_confirm" })));
     expect(sent()).toEqual([messages.expired]);
@@ -255,6 +267,19 @@ describe("career-profile onboarding", () => {
     await start();
     await send(documentUpdate({ fileName: "photo.jpg", mimeType: "image/jpeg" }));
     expect(sent()).toEqual([messages.unreadableDocument]);
+    await send(documentUpdate({ fileName: "cv.doc", mimeType: "application/msword" }));
+    expect(sent()).toEqual([messages.legacyDoc]);
+    const rejected = await db.select().from(sourceDocuments).where(eq(sourceDocuments.userId, await userIdOf(DANA)));
+    expect(rejected).toEqual([
+      expect.objectContaining({ fileName: "photo.jpg", format: "other", parseStatus: "unsupported", kind: null, extractedText: null }),
+      expect.objectContaining({
+        fileName: "cv.doc",
+        format: "doc",
+        parseStatus: "unsupported",
+        parseError: "legacy Word .doc format",
+      }),
+    ]);
+    expect(await db.select().from(profileSources)).toHaveLength(0);
     await send(documentUpdate({ fileName: "huge.pdf", mimeType: "application/pdf", fileSize: 50_000_000 }));
     expect(sent()).toEqual([messages.documentTooLarge]);
 
@@ -275,6 +300,74 @@ describe("career-profile onboarding", () => {
     expect(sent()).toEqual([messages.welcomeNew, messages.askLinkedin]);
     expect(await db.select().from(careerFacts).where(eq(careerFacts.userId, userId))).toHaveLength(0);
     expect(await db.select().from(profileSources).where(eq(profileSources.userId, userId))).toHaveLength(0);
+    expect(await db.select().from(sourceDocuments).where(eq(sourceDocuments.userId, userId))).toHaveLength(1);
+  });
+
+  it("keeps Hebrew and English CVs side by side and traces facts back to each", async () => {
+    await start();
+    await send(textUpdate("skip"));
+    fileContent = HEBREW_CV_TEXT;
+    await send(documentUpdate({ fileName: "cv-he.txt", mimeType: "text/plain", fileSize: 321, caption: " Hebrew 2026 " }));
+    expect(sent()[0]).toContain("Got your CV (cv-he.txt) · Hebrew");
+    expect(lastKeyboardData()).toEqual([expect.stringMatching(/^dl:en:/), encodeCallback({ type: "onboarding_analyze" })]);
+    fileContent = CV_TEXT;
+    await send(documentUpdate({ fileName: "cv-en.txt", mimeType: "text/plain" }));
+    expect(sent()[0]).toContain("Got your CV (cv-en.txt) · English");
+
+    const userId = await userIdOf(DANA);
+    const [hebrew, english] = await db
+      .select()
+      .from(sourceDocuments)
+      .where(eq(sourceDocuments.userId, userId))
+      .orderBy(sourceDocuments.createdAt);
+    expect(hebrew).toMatchObject({
+      kind: "cv",
+      fileName: "cv-he.txt",
+      mimeType: "text/plain",
+      format: "txt",
+      sizeBytes: 321,
+      language: "he",
+      languageConfirmed: false,
+      extractedText: HEBREW_CV_TEXT,
+      parseStatus: "parsed",
+      parseError: null,
+      label: "Hebrew 2026",
+    });
+    expect(english).toMatchObject({ kind: "cv", fileName: "cv-en.txt", language: "en", extractedText: CV_TEXT, label: null });
+
+    await send(callbackUpdate(encodeCallback({ type: "document_language", documentId: hebrew!.id, language: "en" }), NOA));
+    expect(calls.find((c) => c.method === "answerCallbackQuery")!.payload.text).toBe(messages.expired);
+    await send(callbackUpdate(encodeCallback({ type: "document_language", documentId: english!.id, language: "he" })));
+    expect(calls.find((c) => c.method === "answerCallbackQuery")!.payload.text).toBe("Marked as Hebrew ✅");
+    expect(calls.some((c) => c.method === "editMessageReplyMarkup")).toBe(true);
+    await send(callbackUpdate(encodeCallback({ type: "document_language", documentId: english!.id, language: "en" })));
+    const [confirmed] = await db.select().from(sourceDocuments).where(eq(sourceDocuments.id, english!.id));
+    expect(confirmed).toMatchObject({ language: "en", languageConfirmed: true });
+
+    const fromDocument = (change: ProfileChange, documentId: string): ProfileChange =>
+      change.op === "add_experience" || change.op === "add_fact" ? { ...change, sourceDocumentId: documentId } : change;
+    assistant.extraction = {
+      changes: [
+        ...EXTRACTION.slice(0, 4).map((c) => fromDocument(c, english!.id)),
+        fromDocument(EXTRACTION[4]!, hebrew!.id),
+      ],
+      followUpQuestions: [],
+    };
+    await send(callbackUpdate(encodeCallback({ type: "onboarding_analyze" })));
+    expect(assistant.extractCalls[0]!.sources).toEqual([
+      { kind: "cv", content: HEBREW_CV_TEXT, documentId: hebrew!.id, language: "he" },
+      { kind: "cv", content: CV_TEXT, documentId: english!.id, language: "en" },
+    ]);
+    await send(callbackUpdate(encodeCallback({ type: "onboarding_confirm" })));
+
+    const facts = await db.select().from(careerFacts).where(eq(careerFacts.userId, userId)).orderBy(careerFacts.createdAt);
+    expect(facts.map((f) => [f.statement, f.verificationStatus, f.sourceDocumentId])).toEqual([
+      ["Managed a team of 6 recruiters", "verified", english!.id],
+      ["Cut time-to-hire by 30%", "verified", english!.id],
+      ["Workday", "verified", hebrew!.id],
+    ]);
+    const [experience] = await db.select().from(workExperiences).where(eq(workExperiences.userId, userId));
+    expect(experience!.sourceDocumentId).toBe(english!.id);
   });
 });
 

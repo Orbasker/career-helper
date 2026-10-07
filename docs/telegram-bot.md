@@ -19,7 +19,8 @@
 | `/language` (or `/settings`), "switch to Hebrew", "תדבר איתי באנגלית", "change language" | `conversation.setLanguage` | Shows the current language with English / עברית buttons (`lang:<en\|he>`) or saves the requested one. Never touches onboarding state, the profile, matches, feedback or CVs. |
 | `/sites`, `/addsite <site>`, "search on <site>" | `sites.list` / `sites.add` / `sites.remove` | The user's own job sites for the agent to search (see `docs/discovery.md`). |
 | `/connections`, a `.csv`/`.zip` document, "delete my connections" | `connections.summary` / `connections.import` / `connections.forget` | LinkedIn connections shown on matches (see `docs/connections.md`). |
-| Document | `onboarding.addDocument` | During onboarding: stores the CV / LinkedIn PDF text as a `profile_source`. |
+| Document | `onboarding.addDocument` | During onboarding: stores the file as a new `source_document` (the caption becomes its label) and adds it to the run's `profile_sources`. Legacy `.doc` files are rejected with instructions to save as DOCX or PDF. |
+| Language button on an upload | `onboarding.setDocumentLanguage` | Corrects or confirms the detected language of a document (`dl:<he\|en>:<documentId>`). |
 | Any other text | `conversation.handleText` | Onboarding answer, review correction, or a natural-language profile edit. |
 
 ### Onboarding
@@ -28,8 +29,8 @@
 
 0. `language` — English or Hebrew, by button or typed answer. Skipped when `users.preferred_language` is already set (e.g. when restarting onboarding), so the choice is asked only once.
 1. `linkedin` — LinkedIn URL (or *skip*). LinkedIn can't be fetched directly, so the bot asks for the profile's **Save to PDF** export instead.
-2. `documents` — CV / LinkedIn PDF (PDF, DOCX, TXT) or pasted text, repeatable. **Analyze** (`ob:analyze`) starts extraction.
-3. `analyzing` — `ProfileAssistant.extract` turns all sources into unverified `work_experiences` / `career_facts` and `proposed` preferences, plus up to 4 follow-up questions for missing high-value info.
+2. `documents` — CVs / LinkedIn PDF (PDF, DOCX, TXT) or pasted text, repeatable. Each CV is kept separately with its detected language (Hebrew or English), which the user can correct. **Analyze** (`ob:analyze`) starts extraction.
+3. `analyzing` — `ProfileAssistant.extract` merges all sources (including the same career described in several languages) into unverified `work_experiences` / `career_facts` and `proposed` preferences, plus up to 4 follow-up questions for missing high-value info.
 4. `questions` — each answer is interpreted into draft changes; *skip* moves on.
 5. `review` — the full draft is shown; free-text corrections update the draft. **Confirm profile** (`ob:confirm`) verifies all facts, activates preferences and marks the profile `confirmed`.
 

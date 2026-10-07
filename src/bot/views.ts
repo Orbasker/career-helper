@@ -52,7 +52,7 @@ export const messages = {
   welcomeNew: "Hi! I'm your career agent. I'll find jobs that fit your experience — including adjacent roles — and help tailor your CV. Let's build your career profile first.",
   askLinkedin: "First, send me your <b>LinkedIn profile URL</b> (e.g. linkedin.com/in/your-name), or reply <i>skip</i>.",
   askDocuments: [
-    "Now send me your <b>CV / resume</b> (PDF, DOCX or TXT).",
+    "Now send me your <b>CV / resume</b> (PDF, DOCX or TXT). Have it in more than one language, e.g. Hebrew and English? Send each one.",
     "",
     "LinkedIn doesn't let me read profiles directly. To import yours too, open your LinkedIn profile → <b>More</b> → <b>Save to PDF</b> and send me that file.",
     "",
@@ -62,6 +62,7 @@ export const messages = {
   linkedinSkipped: "No LinkedIn URL saved — you can add it later.",
   documentTooLarge: "That file is too large (max 10 MB). Please send a smaller PDF, DOCX or TXT file.",
   unreadableDocument: "I couldn't read text from that file. Please send a PDF, DOCX or TXT file (not a scanned image), or paste the text.",
+  legacyDoc: "I can't read old Word <b>.doc</b> files. In Word choose <b>File → Save As → Word Document (.docx)</b> or <b>PDF</b>, and send me that file.",
   needSource: "I need at least one CV, LinkedIn PDF or a short written summary of your experience before I can analyze it.",
   analyzing: "Reading your documents and building your profile… this can take a minute.",
   analysisFailed: "Sorry, I couldn't analyze your documents this time. Tap <b>Analyze</b> to try again, or send more details.",
@@ -349,6 +350,8 @@ export function addSiteReply(outcome: AddSiteOutcome): string {
   }
 }
 
+export const DOCUMENT_LANGUAGE_NAMES: Record<ConversationLanguage, string> = { en: "English", he: "Hebrew" };
+
 const SOURCE_LABELS: Record<ProfileSourceKind, string> = {
   cv: "your CV",
   linkedin_export: "your LinkedIn export",
@@ -458,6 +461,15 @@ export function languageSettingsView(current: ConversationLanguage | null): View
 export const analyzeKeyboard = () =>
   new InlineKeyboard().text("🔍 Analyze", encodeCallback({ type: "onboarding_analyze" }));
 
+export function documentLanguageKeyboard(documentId: string, detected: ConversationLanguage | null): InlineKeyboard {
+  const keyboard = new InlineKeyboard();
+  for (const language of CONVERSATION_LANGUAGES.filter((l) => l !== detected)) {
+    const label = detected ? `It's ${DOCUMENT_LANGUAGE_NAMES[language]}` : DOCUMENT_LANGUAGE_NAMES[language];
+    keyboard.text(`🌐 ${label}`, encodeCallback({ type: "document_language", documentId, language }));
+  }
+  return keyboard.row().text("🔍 Analyze", encodeCallback({ type: "onboarding_analyze" }));
+}
+
 export function profileReplyViews(reply: ProfileReply): View[] {
   switch (reply.kind) {
     case "ask_language":
@@ -472,15 +484,18 @@ export function profileReplyViews(reply: ProfileReply): View[] {
       return [{ text: `${reply.linkedinSaved ? messages.linkedinSaved : messages.linkedinSkipped}\n\n${messages.askDocuments}` }];
     case "source_received": {
       const name = reply.fileName ? ` (${escapeHtml(reply.fileName)})` : "";
+      const language = reply.language ? ` · ${DOCUMENT_LANGUAGE_NAMES[reply.language]}` : "";
       return [
         {
-          text: `Got ${SOURCE_LABELS[reply.source]}${name} ✅ Send more, or tap <b>Analyze</b> when you're done.`,
-          keyboard: analyzeKeyboard(),
+          text: `Got ${SOURCE_LABELS[reply.source]}${name}${language} ✅ Send more, or tap <b>Analyze</b> when you're done.`,
+          keyboard: reply.documentId ? documentLanguageKeyboard(reply.documentId, reply.language) : analyzeKeyboard(),
         },
       ];
     }
     case "unreadable_document":
       return [{ text: messages.unreadableDocument }];
+    case "legacy_doc":
+      return [{ text: messages.legacyDoc }];
     case "need_source":
       return [{ text: messages.needSource }];
     case "analysis_failed":
