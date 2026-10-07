@@ -50,6 +50,8 @@ export interface DiscoveryOptions {
 export interface DiscoveryReport {
   disabled: boolean;
   users: number;
+  /** Users whose open and site searches all completed without error. */
+  searchedUsers: string[];
   searches: number;
   candidates: number;
   boardsAdded: string[];
@@ -84,6 +86,7 @@ export async function runDiscovery(
   const report: DiscoveryReport = {
     disabled: false,
     users: 0,
+    searchedUsers: [],
     searches: 0,
     candidates: 0,
     boardsAdded: [],
@@ -125,13 +128,16 @@ export async function runDiscovery(
         .orderBy(asc(userJobSites.createdAt));
       const open = searchPlan(profile, [], options.queriesPerUser ?? DEFAULT_QUERIES_PER_USER);
       const plans = sites.length ? [open, { ...open, domains: sites.map((s) => s.domain) }] : [open];
+      let searched = 0;
       for (const plan of plans) {
         if (pastDeadline()) break;
         report.searches++;
         for (const candidate of await discoverer.search(plan)) {
           if (!found.has(candidate.url)) found.set(candidate.url, { ...candidate, userId, site: plan.domains.length > 0 });
         }
+        searched++;
       }
+      if (searched === plans.length) report.searchedUsers.push(userId);
     } catch (error) {
       report.errors.push({ scope: `user:${userId}`, error: errorMessage(error) });
     }

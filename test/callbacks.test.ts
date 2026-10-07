@@ -23,6 +23,8 @@ describe("callback data", () => {
     { type: "cv_document", versionId: feedbackId },
     { type: "site_remove", siteId: feedbackId },
     { type: "connections_delete" },
+    { type: "sources_boards" },
+    { type: "sources_sites" },
     { type: "proposal_decision", preferenceId: feedbackId, accept: false },
   ])("round-trips %o within Telegram's 64-byte limit", (action) => {
     const data = encodeCallback(action);

@@ -43,6 +43,19 @@ export interface MatchSummary {
   connectionCount: number;
 }
 
+/** How a job reached us, from the user's point of view; another user's saved sites count as web search. */
+export type JobOrigin = "board" | "user_site" | "web_search" | "user_link";
+
+export interface JobProvenance {
+  origin: JobOrigin;
+  /** The board source's name, e.g. "Greenhouse job boards". */
+  sourceName: string;
+  /** When any copy of the job was first collected. */
+  firstCollectedAt: Date;
+  /** Other URLs where the same job is posted. */
+  otherUrls: string[];
+}
+
 export interface MatchDetails extends MatchSummary {
   description: string;
   sourceUrl: string;
@@ -56,6 +69,7 @@ export interface MatchDetails extends MatchSummary {
   /** The most relevant contacts at the company, best first. */
   contacts: Contact[];
   connectionsImportedAt: Date | null;
+  provenance: JobProvenance;
 }
 
 export interface ProfileView {
@@ -240,6 +254,42 @@ export interface SiteService {
   remove(userId: string, siteId: string): Promise<boolean>;
 }
 
+export interface SourceCoverage {
+  jobs: number;
+  /** Companies with no job collected before the window. */
+  newCompanies: number;
+}
+
+export interface BoardSourceView {
+  name: string;
+  enabled: boolean;
+  /** Company name, or the board token when the company is unknown. */
+  boards: string[];
+  lastCollectedAt: Date | null;
+}
+
+export type SourceIssue =
+  | { kind: "turned_off"; source: string }
+  | { kind: "unreachable_boards"; source: string; boards: string[] }
+  | { kind: "collection_failed"; source: string }
+  | { kind: "search_failed" }
+  | { kind: "user_search_failed" };
+
+export interface SourcesOverview {
+  coverageDays: number;
+  boardSources: BoardSourceView[];
+  boardCoverage: SourceCoverage;
+  webSearch: { enabled: boolean; lastSearchedAt: Date | null; coverage: SourceCoverage };
+  sites: JobSiteView[];
+  siteCoverage: SourceCoverage;
+  /** Problems seen in the latest finished pipeline run, plus sources that are turned off. */
+  issues: SourceIssue[];
+}
+
+export interface SourceService {
+  overview(userId: string): Promise<SourcesOverview>;
+}
+
 export type ConnectionImport =
   | { kind: "imported"; contacts: number; companies: number; skipped: number }
   | { kind: "not_connections" }
@@ -272,6 +322,7 @@ export interface AppServices {
   cv: CvService;
   conversation: ConversationService;
   sites: SiteService;
+  sources: SourceService;
   stats: StatsService;
   connections: ConnectionService;
 }

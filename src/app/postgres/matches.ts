@@ -1,13 +1,16 @@
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
-import { feedback, jobs, matchEvaluations, matches } from "../../db/schema.js";
+import { feedback, jobSources, jobs, matchEvaluations, matches, rawJobRecords } from "../../db/schema.js";
 import type { Db } from "../../db/types.js";
 import { contactsAtCompanies, contactsFor, rankContacts } from "../../connections/lookup.js";
 import { connections } from "../../db/schema.js";
+import { listGroupSources } from "../../ingestion/dedup.js";
 import { employerRelation, loadEmployerHistory } from "../../matching/employer.js";
-import type { MatchDetails, MatchService, MatchSummary } from "../services.js";
+import type { JobProvenance, MatchDetails, MatchService, MatchSummary } from "../services.js";
+import { jobOrigin } from "./sources.js";
 
 const VISIBLE_STATUSES = ["ready", "notified"] as const;
 const MAX_CONTACTS_SHOWN = 5;
+const MAX_OTHER_URLS = 3;
 
 const summaryColumns = {
   matchId: matches.id,
@@ -55,11 +58,18 @@ export class PgMatchService implements MatchService {
         workMode: jobs.workMode,
         employmentType: jobs.employmentType,
         confidence: matches.confidence,
+        groupId: matches.duplicateGroupId,
+        origin: jobOrigin(userId),
+        sourceName: jobSources.name,
+        collectedAt: jobs.collectedAt,
       })
       .from(matches)
       .innerJoin(jobs, eq(jobs.id, matches.jobId))
+      .innerJoin(jobSources, eq(jobSources.id, jobs.sourceId))
+      .innerJoin(rawJobRecords, eq(rawJobRecords.id, jobs.rawRecordId))
       .where(and(eq(matches.id, matchId), eq(matches.userId, userId)));
     if (!row) return null;
+    const { groupId, origin, sourceName, collectedAt, ...job } = row;
 
     const [evaluation] = await this.db
       .select({ evidence: matchEvaluations.evidence })
@@ -75,22 +85,36 @@ export class PgMatchService implements MatchService {
       .limit(1);
 
     const history = (await loadEmployerHistory(this.db, [userId])).get(userId) ?? [];
-    const contacts = contactsFor(await contactsAtCompanies(this.db, userId, [row.company]), row.company);
+    const contacts = contactsFor(await contactsAtCompanies(this.db, userId, [job.company]), job.company);
     const [imported] = await this.db
       .select({ at: sql<Date | null>`max(${connections.importedAt})`.mapWith((v) => (v ? new Date(v) : null)) })
       .from(connections)
       .where(eq(connections.userId, userId));
     const evidence = evaluation?.evidence;
+    const [group] = await this.db
+      .select({ firstCollectedAt: sql<Date>`min(${jobs.collectedAt})`.mapWith((v) => new Date(v)) })
+      .from(jobs)
+      .where(eq(jobs.duplicateGroupId, groupId));
+    const otherUrls = [...new Set((await listGroupSources(this.db, groupId)).map((s) => s.sourceUrl))]
+      .filter((url) => url !== job.sourceUrl)
+      .slice(0, MAX_OTHER_URLS);
+    const provenance: JobProvenance = {
+      origin,
+      sourceName,
+      firstCollectedAt: group?.firstCollectedAt ?? collectedAt,
+      otherUrls,
+    };
     return {
-      ...row,
-      employerRelation: employerRelation(row.company, history),
+      ...job,
+      employerRelation: employerRelation(job.company, history),
       connectionCount: contacts.length,
-      contacts: rankContacts(contacts, row.title).slice(0, MAX_CONTACTS_SHOWN),
+      contacts: rankContacts(contacts, job.title).slice(0, MAX_CONTACTS_SHOWN),
       connectionsImportedAt: imported?.at ?? null,
       fitEvidence: evidence?.fitEvidence.map((e) => e.claim) ?? [],
       gaps: evidence?.gaps ?? [],
       transferableSkills: evidence?.transferableSkills ?? [],
       feedback: latestFeedback?.verdict ?? null,
+      provenance,
     };
   }
 }
