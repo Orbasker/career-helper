@@ -6,7 +6,7 @@ const MIN_TEXT_LENGTH = 40;
 const OLE_SIGNATURE = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1];
 
 export type ParsedDocument =
-  | { status: "parsed"; format: DocumentFormat; text: string; language: ConversationLanguage | null }
+  | { status: "parsed"; format: DocumentFormat; text: string; language: ConversationLanguage | null; languageCertain: boolean }
   | { status: "unsupported" | "failed"; format: DocumentFormat; error: string };
 
 function extension(fileName: string | null): string {
@@ -23,12 +23,24 @@ export function documentFormat(document: Pick<IncomingDocument, "fileName" | "mi
   return "other";
 }
 
+export interface DetectedLanguage {
+  language: ConversationLanguage | null;
+  /** False for mixed text, where the user should confirm the language. */
+  certain: boolean;
+}
+
 /** Hebrew CVs routinely contain English terms, so a modest share of Hebrew letters is enough to call it Hebrew. */
-export function detectLanguage(text: string): ConversationLanguage | null {
+export function detectDocumentLanguage(text: string): DetectedLanguage {
   const hebrew = text.match(/[\u05D0-\u05EA]/g)?.length ?? 0;
   const latin = text.match(/[A-Za-z]/g)?.length ?? 0;
-  if (hebrew > 0.3 * (hebrew + latin)) return "he";
-  return latin > 0 ? "en" : null;
+  const share = hebrew / (hebrew + latin || 1);
+  if (share > 0.3) return { language: "he", certain: share >= 0.4 };
+  if (latin === 0) return { language: null, certain: false };
+  return { language: "en", certain: share <= 0.05 };
+}
+
+export function detectLanguage(text: string): ConversationLanguage | null {
+  return detectDocumentLanguage(text).language;
 }
 
 async function extractText(format: DocumentFormat, data: Uint8Array): Promise<string> {
@@ -58,7 +70,8 @@ export async function parseDocument(document: IncomingDocument): Promise<ParsedD
   }
   const normalized = text.replace(/\u0000/g, "").replace(/[ \t]+\n/g, "\n").trim();
   if (normalized.length < MIN_TEXT_LENGTH) return { status: "failed", format, error: "no readable text" };
-  return { status: "parsed", format, text: normalized, language: detectLanguage(normalized) };
+  const { language, certain } = detectDocumentLanguage(normalized);
+  return { status: "parsed", format, text: normalized, language, languageCertain: certain };
 }
 
 export function classifySource(text: string): DocumentKind {

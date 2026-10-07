@@ -108,7 +108,7 @@ export type CvVersionStatus = (typeof CV_VERSION_STATUSES)[number];
 export const CV_SECTIONS = ["summary", "experience", "skills", "education", "certifications", "languages", "other"] as const;
 export type CvSection = (typeof CV_SECTIONS)[number];
 
-export const CONVERSATION_FLOWS = ["idle", "onboarding", "preference_update", "profile_edit", "cv_request"] as const;
+export const CONVERSATION_FLOWS = ["idle", "onboarding", "preference_update", "profile_edit", "cv_request", "cv_library"] as const;
 export type ConversationFlow = (typeof CONVERSATION_FLOWS)[number];
 
 export const CONVERSATION_LANGUAGES = ["en", "he"] as const;

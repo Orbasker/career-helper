@@ -1,18 +1,23 @@
 import { Bot, InlineKeyboard, InputFile, type Api, type Context, type BotConfig } from "grammy";
 import { MAX_DOCUMENT_BYTES } from "../app/documents.js";
 import type { AppServices, ProfileReply } from "../app/services.js";
+import { parseCvLibraryRequest } from "../domain/cv-library.js";
 import { CONVERSATION_LANGUAGES, type ConversationLanguage } from "../domain/enums.js";
 import { DEFAULT_LANGUAGE, parseLanguageRequest } from "../domain/language.js";
 import { ALL_STRINGS, strings, type Strings } from "../i18n/index.js";
-import { decodeCallback, encodeCallback } from "./callbacks.js";
+import { decodeCallback, encodeCallback, type DocumentAction } from "./callbacks.js";
 import {
   ASK_LANGUAGE,
   addSiteReply,
   boardsViews,
   botCommands,
+  chooseDefaultView,
   connectionsImportReply,
   connectionsView,
   cvDraftViews,
+  cvLibraryViews,
+  documentCardView,
+  documentName,
   feedbackReasonView,
   jobLinkFailureText,
   jobLinkReadingText,
@@ -24,6 +29,7 @@ import {
   matchListItem,
   profileReplyViews,
   proposalView,
+  removeDocumentView,
   sitesView,
   sourcesView,
   type View,
@@ -251,6 +257,36 @@ export function createBot(
     await ctx.reply(view.text, { ...html, reply_markup: view.keyboard ?? mainMenu(ctx.t) });
   };
   bot.command("connections", showConnections);
+  const showDocuments = async (ctx: BotContext) => {
+    const documents = await services.documents.list(ctx.userId);
+    if (!documents) {
+      await ctx.reply(ctx.t.messages.notOnboarded, html);
+      return;
+    }
+    await sendViews(ctx, cvLibraryViews(ctx.t, documents));
+  };
+  bot.command("cvs", showDocuments);
+  const requestDefaultCv = async (ctx: BotContext, language: ConversationLanguage | null) => {
+    const outcome = await services.documents.requestDefault(ctx.userId, language);
+    const languageName = language ? ctx.t.documentLanguages[language] : null;
+    switch (outcome.kind) {
+      case "not_onboarded":
+        await ctx.reply(ctx.t.messages.notOnboarded, html);
+        return;
+      case "none":
+        await ctx.reply(ctx.t.cvs.noCvs(languageName), { ...html, reply_markup: mainMenu(ctx.t) });
+        return;
+      case "choose":
+        await sendViews(ctx, [chooseDefaultView(ctx.t, outcome.language, outcome.documents)]);
+        return;
+      case "set": {
+        const { document } = outcome;
+        const text = ctx.t.cvs.defaultSet(documentName(ctx.t, document), ctx.t.documentLanguages[document.language!]);
+        await ctx.reply(text, { ...html, reply_markup: mainMenu(ctx.t) });
+        return;
+      }
+    }
+  };
   bot.command("stats", async (ctx) => {
     if (!ctx.from || !options.adminTelegramIds?.includes(ctx.from.id)) {
       await showHelp(ctx);
@@ -295,6 +331,49 @@ export function createBot(
     }, locale(ctx));
     await sendReplies(ctx, replies);
   });
+
+  const handleDocumentAction = async (ctx: BotContext, documentId: string, action: DocumentAction) => {
+    if (action === "default") {
+      const outcome = await services.documents.setDefault(ctx.userId, documentId);
+      if (outcome.kind !== "set") {
+        await ctx.answerCallbackQuery({ text: outcome.kind === "not_eligible" ? ctx.t.cvs.notEligible : ctx.t.messages.expired });
+        return;
+      }
+      await ctx.answerCallbackQuery({ text: ctx.t.cvs.defaultFor(ctx.t.documentLanguages[outcome.document.language!]) });
+      const card = documentCardView(ctx.t, outcome.document);
+      await ctx.editMessageText(card.text, { ...html, reply_markup: card.keyboard }).catch(() => undefined);
+      return;
+    }
+    const document =
+      action === "label"
+        ? await services.documents.awaitLabel(ctx.userId, documentId)
+        : action === "replace"
+          ? await services.documents.awaitReplacement(ctx.userId, documentId)
+          : action === "remove"
+            ? await services.documents.get(ctx.userId, documentId)
+            : await services.documents.remove(ctx.userId, documentId);
+    if (!document) {
+      await ctx.answerCallbackQuery({ text: ctx.t.messages.expired });
+      return;
+    }
+    await ctx.answerCallbackQuery();
+    const name = documentName(ctx.t, document);
+    switch (action) {
+      case "label":
+        await ctx.reply(ctx.t.cvs.labelPrompt(name), html);
+        return;
+      case "replace":
+        await ctx.reply(ctx.t.cvs.replacePrompt(name), html);
+        return;
+      case "remove":
+        await sendViews(ctx, [removeDocumentView(ctx.t, document)]);
+        return;
+      case "confirm_remove":
+        await ctx.editMessageReplyMarkup().catch(() => undefined);
+        await ctx.reply(ctx.t.cvs.removed(name), { ...html, reply_markup: mainMenu(ctx.t) });
+        return;
+    }
+  };
 
   bot.on("callback_query:data", async (ctx) => {
     const action = decodeCallback(ctx.callbackQuery.data);
@@ -443,6 +522,15 @@ export function createBot(
         });
         if (saved) {
           const rows = ctx.callbackQuery.message?.reply_markup?.inline_keyboard ?? [];
+          const cardAction = encodeCallback({ type: "document_action", documentId: action.documentId, action: "label" });
+          if (rows.flat().some((button) => "callback_data" in button && button.callback_data === cardAction)) {
+            const document = await services.documents.get(ctx.userId, action.documentId);
+            if (document) {
+              const card = documentCardView(ctx.t, document);
+              await ctx.editMessageText(card.text, { ...html, reply_markup: card.keyboard }).catch(() => undefined);
+              return;
+            }
+          }
           const kept = rows
             .map((row) => row.filter((button) => !("callback_data" in button && button.callback_data.startsWith("dl:"))))
             .filter((row) => row.length > 0);
@@ -450,6 +538,25 @@ export function createBot(
         }
         return;
       }
+      case "documents": {
+        await ctx.answerCallbackQuery();
+        await showDocuments(ctx);
+        return;
+      }
+      case "document_upload": {
+        await ctx.answerCallbackQuery();
+        await ctx.reply(ctx.t.cvs.uploadHowTo, html);
+        return;
+      }
+      case "document": {
+        const document = await services.documents.get(ctx.userId, action.documentId);
+        await ctx.answerCallbackQuery(document ? undefined : { text: ctx.t.messages.expired });
+        if (document) await sendViews(ctx, [documentCardView(ctx.t, document)]);
+        return;
+      }
+      case "document_action":
+        await handleDocumentAction(ctx, action.documentId, action.action);
+        return;
       case "onboarding_confirm": {
         await ctx.answerCallbackQuery();
         const reply = await services.onboarding.confirm(ctx.userId);
@@ -474,6 +581,21 @@ export function createBot(
   bot.on("message:text", async (ctx) => {
     if (ctx.message.text.startsWith("/")) {
       await showHelp(ctx);
+      return;
+    }
+    const labelled = await services.documents.takeLabel(ctx.userId, ctx.message.text);
+    if (labelled) {
+      await ctx.reply(ctx.t.cvs.labelSaved(documentName(ctx.t, labelled)), html);
+      await sendViews(ctx, [documentCardView(ctx.t, labelled)]);
+      return;
+    }
+    const cvRequest = parseCvLibraryRequest(ctx.message.text);
+    if (cvRequest?.kind === "list") {
+      await showDocuments(ctx);
+      return;
+    }
+    if (cvRequest?.kind === "default") {
+      await requestDefaultCv(ctx, cvRequest.language);
       return;
     }
     const languageRequest = parseLanguageRequest(ctx.message.text);

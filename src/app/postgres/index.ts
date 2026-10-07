@@ -8,6 +8,7 @@ import type { AppServices, ProfileAssistant } from "../services.js";
 import { PgConnectionService } from "./connections.js";
 import { PgConversationService } from "./conversation.js";
 import { PgCvService } from "./cv.js";
+import { PgDocumentService } from "./documents.js";
 import { PgFeedbackService } from "./feedback.js";
 import { PgJobLinkService, type JobLinkDeps } from "./job-links.js";
 import { PgMatchService } from "./matches.js";
@@ -24,13 +25,15 @@ export function createPgServices(
 ): AppServices {
   const onboarding = new PgOnboardingService(db, assistant);
   const sites = new PgSiteService(db, SOURCE_ADAPTERS);
+  const documents = new PgDocumentService(db);
   return {
     users: new PgUserService(db),
     onboarding,
     matches: new PgMatchService(db),
     feedback: new PgFeedbackService(db),
     cv: new PgCvService(db, tailorer),
-    conversation: new PgConversationService(db, onboarding, assistant),
+    conversation: new PgConversationService(db, onboarding, assistant, documents),
+    documents,
     sites,
     sources: new PgSourceService(db, sites),
     connections: new PgConnectionService(db),
