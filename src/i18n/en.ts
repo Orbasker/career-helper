@@ -1,5 +1,6 @@
 import type {
   CareerFactKind,
+  ConversationLanguage,
   MatchRecommendation,
   PreferenceKind,
   ProfileSourceKind,
@@ -24,6 +25,7 @@ export const en = {
   commands: {
     new: "Latest job matches",
     profile: "Your career profile",
+    sources: "Where I search for jobs",
     sites: "Job sites I search for you",
     connections: "Who you know at matched companies",
     language: "Choose English or Hebrew",
@@ -46,6 +48,9 @@ export const en = {
     sendDocument: "📄 Send document",
     deleteConnections: "🗑 Delete my connections",
     analyze: "🔍 Analyze",
+    showBoards: "🏢 Show boards",
+    manageSites: "⭐ Manage my sites",
+    addSite: "⭐ Add a site",
     confirmProfile: "✅ Confirm profile",
     apply: "✅ Apply",
     cancel: "✖️ Cancel",
@@ -59,7 +64,7 @@ export const en = {
       "Hi! I'm your career agent. I'll find jobs that fit your experience — including adjacent roles — and help tailor your CV. Let's build your career profile first.",
     askLinkedin: "First, send me your <b>LinkedIn profile URL</b> (e.g. linkedin.com/in/your-name), or reply <i>skip</i>.",
     askDocuments: [
-      "Now send me your <b>CV / resume</b> (PDF, DOCX or TXT).",
+      "Now send me your <b>CV / resume</b> (PDF, DOCX or TXT). Have it in more than one language, e.g. Hebrew and English? Send each one.",
       "",
       "LinkedIn doesn't let me read profiles directly. To import yours too, open your LinkedIn profile → <b>More</b> → <b>Save to PDF</b> and send me that file.",
       "",
@@ -70,6 +75,8 @@ export const en = {
     documentTooLarge: "That file is too large (max 10 MB). Please send a smaller PDF, DOCX or TXT file.",
     unreadableDocument:
       "I couldn't read text from that file. Please send a PDF, DOCX or TXT file (not a scanned image), or paste the text.",
+    legacyDoc:
+      "I can't read old Word <b>.doc</b> files. In Word choose <b>File → Save As → Word Document (.docx)</b> or <b>PDF</b>, and send me that file.",
     needSource:
       "I need at least one CV, LinkedIn PDF or a short written summary of your experience before I can analyze it.",
     analyzing: "Reading your documents and building your profile… this can take a minute.",
@@ -91,7 +98,10 @@ export const en = {
       "I didn't find anything to change in your profile. Tell me what to add, correct or remove — e.g. <i>\"add that I managed a team of 5\"</i>.",
     notOnboarded: "Let's set up your career profile first — send /start.",
     documentNotExpected:
-      "I only import documents while building your profile. To change your profile, just tell me what to add or correct.",
+      "I can't take documents at this step. Finish setting up your profile first (or send /start), then send it again.",
+    documentNothingNew: "Your profile already covers everything in this document, so there's nothing to change.",
+    documentMergeFailed:
+      "I saved the file, but couldn't compare it with your profile right now. Tell me what to add in your own words, or send it again later.",
     noMatches: "No new matches right now. I'll message you when something relevant shows up.",
     matchNotFound: "I couldn't find that job anymore.",
     feedbackInterested: "Marked as interested 👍",
@@ -115,6 +125,8 @@ export const en = {
       "<b>What I can do</b>",
       "• /new — your latest matches",
       "• /profile — your career profile",
+      "• Send an updated CV (PDF, DOCX or TXT) anytime — I'll show what it adds to your profile before saving anything.",
+      "• /sources — where I search for jobs and what I found there",
       "• /sites — job sites I search for you (add one with /addsite example.co.il)",
       "• /connections — import your LinkedIn connections to see who you know at each company",
       "• /language — choose English or Hebrew",
@@ -216,9 +228,70 @@ export const en = {
       `<b>Your connections</b>\n${plural(contacts, "contact", "contacts")} at ${plural(companies, "company", "companies")}, imported ${date}.\n\nSend a newer Connections.csv any time to replace them.`,
   },
 
+  documentLanguages: { en: "English", he: "Hebrew" } satisfies Record<ConversationLanguage, string>,
+
+  documents: {
+    languageButton: (language: string, detected: boolean) => `🌐 ${detected ? `It's ${language}` : language}`,
+    languageMarked: (language: string) => `Marked as ${language} ✅`,
+    saved: (source: string, fileName: string | null, language: string | null, version: number) =>
+      `Saved ${source}${fileName ? ` (${fileName})` : ""}${language ? ` · ${language}` : ""}${
+        version > 1 ? ` · version ${version}` : ""
+      } ✅ Your earlier documents are kept too.`,
+  },
+
+  jobSources: {
+    title: "<b>Where I search for jobs</b>",
+    boardsHeading: "🏢 <b>Company job boards</b>",
+    boards: (count: number, perSource: string, collected: string | null) =>
+      `${plural(count, "official board", "official boards")} (${perSource}), checked every day. ${
+        collected ? `Last collected ${collected}.` : "Not collected yet."
+      }`,
+    noBoards: "No company boards yet. Board links I find on the web are added here automatically.",
+    webHeading: "🌐 <b>Web search</b>",
+    web: (enabled: boolean, searched: string | null) =>
+      `I search the open web for postings that fit your profile. ${
+        !enabled ? "Turned off right now." : searched ? `Last searched for you ${searched}.` : "Not searched for you yet."
+      }`,
+    sitesHeading: "⭐ <b>Your sites</b>",
+    noSites: "None yet. Add one with <i>/addsite example.co.il</i> and I'll search it too.",
+    sites: (domains: string) => `${domains}, searched together with the web search.`,
+    coverage: (days: number, jobs: number, companies: number) =>
+      `New in the last ${days} days: ${plural(jobs, "job", "jobs")}, ${companies} new ${companies === 1 ? "company" : "companies"}.`,
+    problems: "⚠️ <b>Problems</b>",
+    detailsHint: "<i>A job's Details show where I found it.</i>",
+    turnedOff: (source: string) => `${source} is turned off right now.`,
+    unreachableBoards: (source: string, count: number, boards: string) =>
+      `${source}: couldn't reach ${plural(count, "board", "boards")} in the last run (${boards}).`,
+    collectionFailed: (source: string) => `${source}: the last collection failed. I'll retry in the next daily run.`,
+    searchFailed: "The last web search failed. I'll retry in the next daily run.",
+    userSearchFailed: "My last web search for you failed. I'll retry in the next daily run.",
+    andMore: (count: number) => ` and ${count} more`,
+    boardsListHeading: "<b>Company job boards I check every day</b>",
+    boardsTurnedOff: " — turned off",
+    noBoardsChecked: "I don't check any company job boards yet.",
+  },
+
+  provenance: {
+    heading: "<b>Where I found it</b>",
+    board: (source: string) => `🏢 Official company job board (${source})`,
+    user_site: "⭐ One of your saved sites",
+    web_search: "🌐 My web search",
+    user_link: "🔗 A link you sent me",
+    firstSeen: (origin: string, day: string) => `${origin} · first seen ${day}`,
+    alsoPostedOn: (links: string) => `Also posted on ${links}`,
+  },
+
+  timeAgo: {
+    justNow: "just now",
+    minutes: (n: number) => `${n} min ago`,
+    hours: (n: number) => `${n}h ago`,
+    yesterday: "yesterday",
+    days: (n: number) => `${n} days ago`,
+  },
+
   onboarding: {
-    sourceReceived: (source: string, fileName: string | null) =>
-      `Got ${source}${fileName ? ` (${fileName})` : ""} ✅ Send more, or tap <b>Analyze</b> when you're done.`,
+    sourceReceived: (source: string, fileName: string | null, language: string | null = null) =>
+      `Got ${source}${fileName ? ` (${fileName})` : ""}${language ? ` · ${language}` : ""} ✅ Send more, or tap <b>Analyze</b> when you're done.`,
     question: (position: number, total: number, text: string) =>
       `<i>Question ${position} of ${total}</i>\n${text}\n\n<i>Reply "skip" to skip.</i>`,
   },

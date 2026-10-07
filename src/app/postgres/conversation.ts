@@ -1,11 +1,11 @@
 import { randomBytes } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import type { ConversationLanguage } from "../../domain/enums.js";
-import type { ProfileChange } from "../../domain/profile.js";
-import { strings } from "../../i18n/index.js";
+import type { ProfileChange, ProfileSnapshot } from "../../domain/profile.js";
 import { careerProfiles, conversationStates } from "../../db/schema.js";
 import type { Db } from "../../db/types.js";
-import type { ConversationService, ProfileAssistant, ProfileReply } from "../services.js";
+import { strings } from "../../i18n/index.js";
+import type { ConversationService, IncomingDocument, ProfileAssistant, ProfileReply } from "../services.js";
 import type { PgOnboardingService } from "./onboarding.js";
 import { applyChanges, bumpRevision, describeChanges, loadSnapshot, toProfileView } from "./profile.js";
 
@@ -35,7 +35,50 @@ export class PgConversationService implements ConversationService {
     const snapshot = await loadSnapshot(this.db, userId);
     const { changes, reply } = await this.assistant.interpret({ snapshot, message: text, question: null, language });
     if (changes.length === 0) return [{ kind: "no_change", reply }];
+    return [await this.proposeEdit(userId, changes, snapshot, language)];
+  }
 
+  async addDocument(userId: string, document: IncomingDocument, language: ConversationLanguage): Promise<ProfileReply[]> {
+    const [state] = await this.db
+      .select({ flow: conversationStates.flow })
+      .from(conversationStates)
+      .where(eq(conversationStates.userId, userId));
+    if (state?.flow === "onboarding" || !(await this.isConfirmed(userId))) {
+      return [await this.onboarding.addDocument(userId, document)];
+    }
+
+    const stored = await this.onboarding.storeDocument(userId, document);
+    if (!stored.stored) return [stored.reply];
+    const saved: ProfileReply = {
+      kind: "document_saved",
+      source: stored.kind,
+      fileName: document.fileName,
+      documentId: stored.documentId,
+      language: stored.language,
+      version: stored.version,
+    };
+
+    const snapshot = await loadSnapshot(this.db, userId, { verifiedOnly: true });
+    let changes: ProfileChange[];
+    try {
+      ({ changes } = await this.assistant.mergeDocument({
+        snapshot,
+        document: { kind: stored.kind, content: stored.text, documentId: stored.documentId, language: stored.language },
+      }));
+    } catch (error) {
+      console.error("document merge failed", { userId, documentId: stored.documentId, error });
+      return [saved, { kind: "document_merge_failed" }];
+    }
+    if (changes.length === 0) return [saved, { kind: "document_nothing_new" }];
+    return [saved, await this.proposeEdit(userId, changes, snapshot, language)];
+  }
+
+  private async proposeEdit(
+    userId: string,
+    changes: ProfileChange[],
+    snapshot: ProfileSnapshot,
+    language: ConversationLanguage,
+  ): Promise<ProfileReply> {
     const pending: PendingEdit = { token: randomBytes(6).toString("base64url"), changes };
     await this.db
       .insert(conversationStates)
@@ -44,7 +87,7 @@ export class PgConversationService implements ConversationService {
         target: conversationStates.userId,
         set: { flow: "profile_edit", step: "confirm", context: { ...pending } },
       });
-    return [{ kind: "edit_proposed", token: pending.token, changes: describeChanges(strings(language), changes, snapshot) }];
+    return { kind: "edit_proposed", token: pending.token, changes: describeChanges(strings(language), changes, snapshot) };
   }
 
   async applyEdit(userId: string, token: string): Promise<ProfileReply> {

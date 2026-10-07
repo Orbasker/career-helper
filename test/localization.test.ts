@@ -73,6 +73,13 @@ const hebrewWithLatinContent = (t: Strings) => [
   t.profile.linkedin("linkedin.com/in/dana"),
   t.learning.roleRationale(3, "recruiter"),
   t.matching.mustHaveConflict("Remote only"),
+  t.documents.saved(t.sources.cv, "cv-en.pdf", t.documentLanguages.en, 2),
+  t.jobSources.boards(3, "Greenhouse 2, Lever 1", t.timeAgo.hours(3)),
+  t.jobSources.sites("example.co.il, jobs.example.com"),
+  t.jobSources.unreachableBoards("Greenhouse", 2, "acme, globex"),
+  t.jobSources.turnedOff("Lever"),
+  t.provenance.firstSeen(t.provenance.board("Greenhouse"), "2026-10-01"),
+  t.provenance.alsoPostedOn("linkedin.com"),
 ];
 
 describe("hebrew copy", () => {

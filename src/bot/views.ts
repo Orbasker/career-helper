@@ -8,12 +8,16 @@ import type {
   ConnectionImport,
   ConnectionSummary,
   CvDraftView,
+  JobProvenance,
   JobSiteView,
   MatchDetails,
   MatchSummary,
   PreferenceProposalView,
   ProfileReply,
   ProfileView,
+  SourceCoverage,
+  SourceIssue,
+  SourcesOverview,
 } from "../app/services.js";
 import { FEEDBACK_REASON_TAGS } from "../learning/infer.js";
 import { encodeCallback } from "./callbacks.js";
@@ -31,7 +35,7 @@ export const mainMenu = (t: Strings) => new Keyboard().text(t.menu.whatsNew).tex
 export const ASK_LANGUAGE = "👋 Hi! Which language should I use with you?\nשלום! באיזו שפה נדבר?";
 
 export function botCommands(t: Strings) {
-  return (["new", "profile", "sites", "connections", "language", "start", "help"] as const).map((command) => ({
+  return (["new", "profile", "sources", "sites", "connections", "language", "start", "help"] as const).map((command) => ({
     command,
     description: t.commands[command],
   }));
@@ -125,7 +129,7 @@ export function matchDetailsView(t: Strings, match: MatchDetails): { text: strin
       ? `${match.description.slice(0, DESCRIPTION_PREVIEW_LENGTH)}…`
       : match.description;
   sections.push(escapeHtml(description));
-  sections.push(`<a href="${escapeHtml(match.sourceUrl)}">${t.match.openPosting}</a>`);
+  sections.push(provenanceSection(t, match.sourceUrl, match.provenance));
 
   const { matchId } = match;
   const keyboard = new InlineKeyboard()
@@ -140,6 +144,115 @@ export function matchDetailsView(t: Strings, match: MatchDetails): { text: strin
     .row()
     .text(t.buttons.tailorCv, encodeCallback({ type: "tailor_cv", matchId }));
   return { text: sections.join("\n\n"), keyboard };
+}
+
+const shortSourceName = (name: string) => name.replace(/\s+job boards?$/i, "");
+const isoDay = (date: Date) => date.toISOString().slice(0, 10);
+
+function hostname(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
+function provenanceSection(t: Strings, sourceUrl: string, provenance: JobProvenance): string {
+  const origin =
+    provenance.origin === "board"
+      ? t.provenance.board(escapeHtml(shortSourceName(provenance.sourceName)))
+      : t.provenance[provenance.origin];
+  const lines = [
+    t.provenance.heading,
+    t.provenance.firstSeen(origin, isoDay(provenance.firstCollectedAt)),
+    `<a href="${escapeHtml(sourceUrl)}">${t.match.openPosting}</a>`,
+  ];
+  if (provenance.otherUrls.length > 0) {
+    const links = provenance.otherUrls.map((url) => `<a href="${escapeHtml(url)}">${escapeHtml(hostname(url))}</a>`);
+    lines.push(t.provenance.alsoPostedOn(links.join(", ")));
+  }
+  return lines.join("\n");
+}
+
+/** "5 min ago", "3h ago", "2 days ago". */
+export function timeAgo(t: Strings, date: Date, now = new Date()): string {
+  const minutes = Math.max(0, Math.floor((now.getTime() - date.getTime()) / 60_000));
+  if (minutes < 60) return minutes <= 1 ? t.timeAgo.justNow : t.timeAgo.minutes(minutes);
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return t.timeAgo.hours(hours);
+  const days = Math.floor(hours / 24);
+  return days === 1 ? t.timeAgo.yesterday : t.timeAgo.days(days);
+}
+
+function issueLine(t: Strings, issue: SourceIssue): string {
+  switch (issue.kind) {
+    case "turned_off":
+      return t.jobSources.turnedOff(escapeHtml(issue.source));
+    case "unreachable_boards": {
+      const shown = issue.boards.slice(0, 5).map(escapeHtml).join(", ");
+      const more = issue.boards.length > 5 ? t.jobSources.andMore(issue.boards.length - 5) : "";
+      return t.jobSources.unreachableBoards(escapeHtml(shortSourceName(issue.source)), issue.boards.length, `${shown}${more}`);
+    }
+    case "collection_failed":
+      return t.jobSources.collectionFailed(escapeHtml(issue.source));
+    case "search_failed":
+      return t.jobSources.searchFailed;
+    case "user_search_failed":
+      return t.jobSources.userSearchFailed;
+  }
+}
+
+export function sourcesView(t: Strings, overview: SourcesOverview, now = new Date()): View {
+  const s = t.jobSources;
+  const coverage = (c: SourceCoverage) => s.coverage(overview.coverageDays, c.jobs, c.newCompanies);
+  const active = overview.boardSources.filter((source) => source.enabled && source.boards.length > 0);
+  const boardCount = active.reduce((sum, source) => sum + source.boards.length, 0);
+  const collected = active.flatMap((source) => (source.lastCollectedAt ? [source.lastCollectedAt] : []));
+  const lastCollected = collected.length ? new Date(Math.max(...collected.map((d) => d.getTime()))) : null;
+  const perSource = active.map((source) => `${escapeHtml(shortSourceName(source.name))} ${source.boards.length}`).join(", ");
+  const boardLines = [
+    s.boardsHeading,
+    boardCount > 0 ? s.boards(boardCount, perSource, lastCollected ? timeAgo(t, lastCollected, now) : null) : s.noBoards,
+    coverage(overview.boardCoverage),
+  ];
+
+  const web = overview.webSearch;
+  const webLines = [
+    s.webHeading,
+    s.web(web.enabled, web.lastSearchedAt ? timeAgo(t, web.lastSearchedAt, now) : null),
+    coverage(web.coverage),
+  ];
+
+  const siteLines = [s.sitesHeading];
+  if (overview.sites.length === 0) siteLines.push(s.noSites);
+  else {
+    siteLines.push(s.sites(overview.sites.map((site) => escapeHtml(site.domain)).join(", ")));
+    siteLines.push(coverage(overview.siteCoverage));
+  }
+
+  const sections = [s.title, boardLines.join("\n"), webLines.join("\n"), siteLines.join("\n")];
+  if (overview.issues.length > 0) sections.push(`${s.problems}\n${overview.issues.map((i) => `• ${issueLine(t, i)}`).join("\n")}`);
+  sections.push(s.detailsHint);
+
+  const keyboard = new InlineKeyboard();
+  if (boardCount > 0) keyboard.text(t.buttons.showBoards, encodeCallback({ type: "sources_boards" }));
+  keyboard.text(overview.sites.length > 0 ? t.buttons.manageSites : t.buttons.addSite, encodeCallback({ type: "sources_sites" }));
+  return { text: sections.join("\n\n"), keyboard };
+}
+
+const MAX_BOARDS_LISTED = 60;
+
+export function boardsViews(t: Strings, overview: SourcesOverview): View[] {
+  const sections = overview.boardSources
+    .filter((s) => s.boards.length > 0)
+    .map((s) => {
+      const shown = s.boards.slice(0, MAX_BOARDS_LISTED).map(escapeHtml).join(", ");
+      const more = s.boards.length > MAX_BOARDS_LISTED ? t.jobSources.andMore(s.boards.length - MAX_BOARDS_LISTED) : "";
+      const off = s.enabled ? "" : t.jobSources.boardsTurnedOff;
+      return `<b>${escapeHtml(s.name)}</b> (${s.boards.length}${off})\n${shown}${more}`;
+    });
+  if (sections.length === 0) return [{ text: t.jobSources.noBoardsChecked }];
+  return packMessages([t.jobSources.boardsListHeading, ...sections]).map((text) => ({ text }));
 }
 
 export function feedbackReasonView(t: Strings, feedbackId: string): { text: string; keyboard: InlineKeyboard } {
@@ -327,6 +440,17 @@ export function languageSettingsView(t: Strings, current: ConversationLanguage |
 export const analyzeKeyboard = (t: Strings) =>
   new InlineKeyboard().text(t.buttons.analyze, encodeCallback({ type: "onboarding_analyze" }));
 
+export function documentLanguageKeyboard(t: Strings, documentId: string, detected: ConversationLanguage | null): InlineKeyboard {
+  const keyboard = new InlineKeyboard();
+  for (const language of CONVERSATION_LANGUAGES.filter((l) => l !== detected)) {
+    keyboard.text(
+      t.documents.languageButton(t.documentLanguages[language], detected !== null),
+      encodeCallback({ type: "document_language", documentId, language }),
+    );
+  }
+  return keyboard;
+}
+
 export function profileReplyViews(t: Strings, reply: ProfileReply): View[] {
   const m = t.messages;
   switch (reply.kind) {
@@ -340,15 +464,38 @@ export function profileReplyViews(t: Strings, reply: ProfileReply): View[] {
       return [{ text: m.askLinkedin }];
     case "ask_documents":
       return [{ text: `${reply.linkedinSaved ? m.linkedinSaved : m.linkedinSkipped}\n\n${m.askDocuments}` }];
-    case "source_received":
+    case "source_received": {
+      const fileName = reply.fileName ? escapeHtml(reply.fileName) : null;
+      const language = reply.language ? t.documentLanguages[reply.language] : null;
       return [
         {
-          text: t.onboarding.sourceReceived(t.sources[reply.source], reply.fileName ? escapeHtml(reply.fileName) : null),
-          keyboard: analyzeKeyboard(t),
+          text: t.onboarding.sourceReceived(t.sources[reply.source], fileName, language),
+          keyboard: reply.documentId
+            ? documentLanguageKeyboard(t, reply.documentId, reply.language)
+                .row()
+                .text(t.buttons.analyze, encodeCallback({ type: "onboarding_analyze" }))
+            : analyzeKeyboard(t),
         },
       ];
+    }
+    case "document_saved": {
+      const fileName = reply.fileName ? escapeHtml(reply.fileName) : null;
+      const language = reply.language ? t.documentLanguages[reply.language] : null;
+      return [
+        {
+          text: t.documents.saved(t.sources[reply.source], fileName, language, reply.version),
+          keyboard: documentLanguageKeyboard(t, reply.documentId, reply.language),
+        },
+      ];
+    }
+    case "document_nothing_new":
+      return [{ text: m.documentNothingNew }];
+    case "document_merge_failed":
+      return [{ text: m.documentMergeFailed }];
     case "unreadable_document":
       return [{ text: m.unreadableDocument }];
+    case "legacy_doc":
+      return [{ text: m.legacyDoc }];
     case "need_source":
       return [{ text: m.needSource }];
     case "analysis_failed":

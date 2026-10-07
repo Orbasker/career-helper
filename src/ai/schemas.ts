@@ -4,7 +4,6 @@ import {
   EMPLOYMENT_TYPES,
   PREFERENCE_DIMENSIONS,
   PREFERENCE_KINDS,
-  PROFILE_SOURCE_KINDS,
   SENIORITY_LEVELS,
   WORK_MODES,
 } from "../domain/enums.js";
@@ -12,6 +11,7 @@ import type { PreferenceValue } from "../domain/types.js";
 
 const seniority = z.enum(SENIORITY_LEVELS).nullable();
 const partialDate = z.string().nullable().describe("YYYY-MM, or YYYY when the month is unknown");
+const source = z.number().int().describe("index of the document this was taken from");
 
 export const preferenceValueSchema = z.discriminatedUnion("type", [
   z.object({
@@ -60,7 +60,7 @@ export const extractionSchema = z.object({
   openToAdjacentRoles: z.boolean().nullable(),
   experiences: z.array(
     experienceSchema.extend({
-      source: z.enum(PROFILE_SOURCE_KINDS),
+      source,
       facts: z.array(
         z.object({
           kind: z.enum(["responsibility", "achievement", "skill", "other"]),
@@ -70,7 +70,7 @@ export const extractionSchema = z.object({
     }),
   ),
   generalFacts: z
-    .array(z.object({ kind: z.enum(CAREER_FACT_KINDS), statement: z.string(), source: z.enum(PROFILE_SOURCE_KINDS) }))
+    .array(z.object({ kind: z.enum(CAREER_FACT_KINDS), statement: z.string(), source }))
     .describe("Skills, education, certifications and languages not tied to one role"),
   preferences: z.array(preferenceSchema).describe("Only preferences the candidate explicitly states"),
   followUpQuestions: z.array(z.string()).max(5),

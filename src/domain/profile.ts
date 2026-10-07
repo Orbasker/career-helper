@@ -37,7 +37,13 @@ export interface NewPreference {
 
 export type ProfileChange =
   | { op: "update_profile"; fields: Partial<ProfileFields> }
-  | { op: "add_experience"; ref: string; experience: ExperienceFields; origin: FactOrigin }
+  | {
+      op: "add_experience";
+      ref: string;
+      experience: ExperienceFields;
+      origin: FactOrigin;
+      sourceDocumentId?: string | null;
+    }
   | { op: "update_experience"; experienceId: string; fields: Partial<ExperienceFields> }
   | { op: "remove_experience"; experienceId: string }
   | {
@@ -47,6 +53,7 @@ export type ProfileChange =
       experienceId: string | null;
       experienceRef: string | null;
       origin: FactOrigin;
+      sourceDocumentId?: string | null;
     }
   | { op: "update_fact"; factId: string; kind: CareerFactKind | null; statement: string }
   | { op: "remove_fact"; factId: string }

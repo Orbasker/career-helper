@@ -239,6 +239,7 @@ describe("runDiscovery", () => {
     expect(discoverer.plans[0]!.queries).toEqual(["Backend Engineer jobs Israel"]);
     expect(report).toMatchObject({
       users: 1,
+      searchedUsers: [userId],
       searches: 2,
       candidates: 6,
       boardsAdded: ["greenhouse:newco"],
@@ -284,6 +285,7 @@ describe("runDiscovery", () => {
       throw new Error("search quota exceeded");
     };
     expect(await runDiscovery(db, discoverer, SOURCE_ADAPTERS, { now: () => NOW })).toMatchObject({
+      searchedUsers: [],
       errors: [{ scope: `user:${userId}`, error: "search quota exceeded" }],
     });
 

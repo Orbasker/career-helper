@@ -9,9 +9,12 @@ export type CallbackAction =
   | { type: "cv_document"; versionId: string }
   | { type: "site_remove"; siteId: string }
   | { type: "connections_delete" }
+  | { type: "sources_boards" }
+  | { type: "sources_sites" }
   | { type: "set_language"; language: ConversationLanguage }
   | { type: "onboarding_analyze" }
   | { type: "onboarding_confirm" }
+  | { type: "document_language"; documentId: string; language: ConversationLanguage }
   | { type: "edit_apply"; token: string }
   | { type: "edit_cancel"; token: string }
   | { type: "feedback_reason"; feedbackId: string; tag: FeedbackReasonTag }
@@ -47,12 +50,18 @@ export function encodeCallback(action: CallbackAction): string {
       return `st:x:${action.siteId}`;
     case "connections_delete":
       return "cn:delete";
+    case "sources_boards":
+      return "src:boards";
+    case "sources_sites":
+      return "src:sites";
     case "set_language":
       return `lang:${action.language}`;
     case "onboarding_analyze":
       return "ob:analyze";
     case "onboarding_confirm":
       return "ob:confirm";
+    case "document_language":
+      return `dl:${action.language}:${action.documentId}`;
     case "edit_apply":
       return `pe:a:${action.token}`;
     case "edit_cancel":
@@ -71,6 +80,8 @@ export function decodeCallback(data: string): CallbackAction | null {
   if (data === "ob:analyze") return { type: "onboarding_analyze" };
   if (data === "ob:confirm") return { type: "onboarding_confirm" };
   if (data === "cn:delete") return { type: "connections_delete" };
+  if (data === "src:boards") return { type: "sources_boards" };
+  if (data === "src:sites") return { type: "sources_sites" };
   if (parts.length === 2 && parts[0] === "lang") {
     const language = CONVERSATION_LANGUAGES.find((l) => l === parts[1]);
     if (language) return { type: "set_language", language };
@@ -87,6 +98,10 @@ export function decodeCallback(data: string): CallbackAction | null {
     if (parts[1] === REASON_TEXT_CODE) return { type: "feedback_reason_text", feedbackId: id };
     const tag = (Object.keys(REASON_CODES) as FeedbackReasonTag[]).find((t) => REASON_CODES[t] === parts[1]);
     if (tag) return { type: "feedback_reason", feedbackId: id, tag };
+  }
+  if (parts.length === 3 && parts[0] === "dl") {
+    const language = CONVERSATION_LANGUAGES.find((l) => l === parts[1]);
+    if (language) return { type: "document_language", documentId: id, language };
   }
   if (parts.length === 3 && parts[0] === "st" && parts[1] === "x") return { type: "site_remove", siteId: id };
   if (parts.length === 3 && parts[0] === "cvd" && (parts[1] === "a" || parts[1] === "x")) {

@@ -17,6 +17,7 @@ export const he: Strings = {
   commands: {
     new: "ההתאמות האחרונות",
     profile: "הפרופיל המקצועי שלך",
+    sources: "איפה אני מחפש משרות",
     sites: "אתרי הדרושים שאני מחפש בהם",
     connections: "מי מוכר לך בחברות שהותאמו",
     language: "בחירת עברית או אנגלית",
@@ -39,6 +40,9 @@ export const he: Strings = {
     sendDocument: "📄 שליחת המסמך",
     deleteConnections: "🗑 מחיקת אנשי הקשר",
     analyze: "🔍 ניתוח",
+    showBoards: "🏢 הצגת הלוחות",
+    manageSites: "⭐ ניהול האתרים שלי",
+    addSite: "⭐ הוספת אתר",
     confirmProfile: "✅ אישור הפרופיל",
     apply: "✅ להחיל",
     cancel: "✖️ ביטול",
@@ -51,7 +55,7 @@ export const he: Strings = {
       "היי! אני סוכן הקריירה שלך. אמצא משרות שמתאימות לניסיון שלך, כולל תפקידים קרובים, ואעזור להתאים את קורות החיים. נתחיל בבניית הפרופיל המקצועי.",
     askLinkedin: "קודם כול, שלחו לי את <b>הקישור לפרופיל הלינקדאין</b> (למשל linkedin.com/in/your-name), או כתבו <i>דלג</i>.",
     askDocuments: [
-      "עכשיו שלחו לי את <b>קורות החיים</b> (PDF,‏ DOCX או TXT).",
+      "עכשיו שלחו לי את <b>קורות החיים</b> (PDF,‏ DOCX או TXT). יש לכם אותם ביותר משפה אחת, למשל עברית ואנגלית? שלחו כל אחד מהם.",
       "",
       "לינקדאין לא מאפשר לי לקרוא פרופילים ישירות. כדי לייבא גם אותו, פתחו את הפרופיל בלינקדאין ← <b>עוד</b> ← <b>שמירה כ-PDF</b> ושלחו לי את הקובץ.",
       "",
@@ -61,6 +65,8 @@ export const he: Strings = {
     linkedinSkipped: "לא נשמר קישור ללינקדאין. אפשר להוסיף אותו אחר כך.",
     documentTooLarge: "הקובץ גדול מדי (עד 10MB). שלחו קובץ PDF,‏ DOCX או TXT קטן יותר.",
     unreadableDocument: "לא הצלחתי לקרוא טקסט מהקובץ. שלחו קובץ PDF,‏ DOCX או TXT (לא תמונה סרוקה), או הדביקו את הטקסט.",
+    legacyDoc:
+      "אני לא יכול לקרוא קבצי Word ישנים מסוג <b>.doc</b>. ב-Word בחרו <b>קובץ ← שמירה בשם ← מסמך Word ‏(.docx)</b> או <b>PDF</b>, ושלחו לי את הקובץ.",
     needSource: "כדי לנתח אני צריך לפחות קובץ קורות חיים, PDF של לינקדאין או תקציר קצר של הניסיון שלך.",
     analyzing: "קורא את המסמכים ובונה את הפרופיל… זה יכול לקחת דקה.",
     analysisFailed: "מצטער, לא הצלחתי לנתח את המסמכים הפעם. לחצו על <b>ניתוח</b> כדי לנסות שוב, או שלחו פרטים נוספים.",
@@ -79,7 +85,9 @@ export const he: Strings = {
     expired: "הפעולה הזו כבר לא זמינה.",
     noChange: "לא מצאתי מה לשנות בפרופיל. כתבו לי מה להוסיף, לתקן או להסיר, למשל <i>\"תוסיף שניהלתי צוות של 5\"</i>.",
     notOnboarded: "בואו נגדיר קודם את הפרופיל המקצועי: שלחו ‎/start.",
-    documentNotExpected: "אני מייבא מסמכים רק בזמן בניית הפרופיל. כדי לשנות את הפרופיל, פשוט כתבו לי מה להוסיף או לתקן.",
+    documentNotExpected: "אני לא יכול לקבל מסמכים בשלב הזה. סיימו קודם את הגדרת הפרופיל (או שלחו ‎/start), ואז שלחו אותו שוב.",
+    documentNothingNew: "הפרופיל שלך כבר כולל את כל מה שיש במסמך הזה, אז אין מה לשנות.",
+    documentMergeFailed: "שמרתי את הקובץ, אבל לא הצלחתי להשוות אותו לפרופיל כרגע. כתבו לי במילים שלכם מה להוסיף, או שלחו אותו שוב מאוחר יותר.",
     noMatches: "אין כרגע התאמות חדשות. אשלח הודעה כשיופיע משהו רלוונטי.",
     matchNotFound: "המשרה הזו כבר לא נמצאת.",
     feedbackInterested: "סומן כמעניין 👍",
@@ -103,6 +111,8 @@ export const he: Strings = {
       "<b>מה אני יודע לעשות</b>",
       `${RLM}• ‎/new — ההתאמות האחרונות`,
       `${RLM}• ‎/profile — הפרופיל המקצועי שלך`,
+      "• אפשר לשלוח בכל רגע קורות חיים מעודכנים (PDF,‏ DOCX או TXT). אראה מה הם מוסיפים לפרופיל לפני שאשמור משהו.",
+      `${RLM}• ‎/sources — איפה אני מחפש משרות ומה מצאתי שם`,
       `${RLM}• ‎/sites — אתרי הדרושים שאני מחפש בהם (הוספת אתר: ‎/addsite example.co.il)`,
       `${RLM}• ‎/connections — ייבוא אנשי הקשר מלינקדאין כדי לראות מי מוכר לך בכל חברה`,
       `${RLM}• ‎/language — בחירת עברית או אנגלית`,
@@ -202,9 +212,70 @@ export const he: Strings = {
       `<b>אנשי הקשר שלך</b>\n${count(contacts, "איש קשר אחד", "אנשי קשר")} ב${count(companies, "חברה אחת", "חברות")}, יובאו ב-${date}.\n\nאפשר לשלוח בכל רגע Connections.csv חדש יותר כדי להחליף אותם.`,
   },
 
+  documentLanguages: { en: "אנגלית", he: "עברית" },
+
+  documents: {
+    languageButton: (language, detected) => `🌐 ${detected ? `זה ב${language}` : language}`,
+    languageMarked: (language) => `סומן כ${language} ✅`,
+    saved: (source, fileName, language, version) =>
+      `שמרתי את ${source}${fileName ? ` (${fileName})` : ""}${language ? ` · ${language}` : ""}${
+        version > 1 ? ` · גרסה ${version}` : ""
+      } ✅ גם המסמכים הקודמים נשמרים.`,
+  },
+
+  jobSources: {
+    title: "<b>איפה אני מחפש משרות</b>",
+    boardsHeading: "🏢 <b>לוחות דרושים של חברות</b>",
+    boards: (n, perSource, collected) =>
+      `${count(n, "לוח רשמי אחד", "לוחות רשמיים")} (${perSource}), נבדקים כל יום. ${
+        collected ? `נאספו לאחרונה ${collected}.` : "עוד לא נאספו."
+      }`,
+    noBoards: "עדיין אין לוחות של חברות. קישורים ללוחות שאני מוצא ברשת נוספים לכאן אוטומטית.",
+    webHeading: "🌐 <b>חיפוש ברשת</b>",
+    web: (enabled, searched) =>
+      `אני מחפש ברשת הפתוחה מודעות שמתאימות לפרופיל שלך. ${
+        !enabled ? "כרגע כבוי." : searched ? `חיפשתי בשבילך לאחרונה ${searched}.` : "עוד לא חיפשתי בשבילך."
+      }`,
+    sitesHeading: "⭐ <b>האתרים שלך</b>",
+    noSites: "עדיין אין. הוסיפו אתר עם <i>‎/addsite example.co.il</i> ואחפש גם בו.",
+    sites: (domains) => `${RLM}${domains}, נסרקים יחד עם החיפוש ברשת.`,
+    coverage: (days, jobs, companies) =>
+      `חדש ב-${days} הימים האחרונים: ${count(jobs, "משרה אחת", "משרות")}, ${count(companies, "חברה חדשה אחת", "חברות חדשות")}.`,
+    problems: "⚠️ <b>בעיות</b>",
+    detailsHint: "<i>בפרטי כל משרה מופיע איפה מצאתי אותה.</i>",
+    turnedOff: (source) => `${RLM}${source} כבוי כרגע.`,
+    unreachableBoards: (source, n, boards) =>
+      `${RLM}${source}: לא הצלחתי להגיע ל${count(n, "לוח אחד", "לוחות")} בריצה האחרונה (${boards}).`,
+    collectionFailed: (source) => `${RLM}${source}: האיסוף האחרון נכשל. אנסה שוב בריצה היומית הבאה.`,
+    searchFailed: "החיפוש האחרון ברשת נכשל. אנסה שוב בריצה היומית הבאה.",
+    userSearchFailed: "החיפוש האחרון שלי ברשת בשבילך נכשל. אנסה שוב בריצה היומית הבאה.",
+    andMore: (n) => ` ועוד ${n}`,
+    boardsListHeading: "<b>לוחות הדרושים של החברות שאני בודק כל יום</b>",
+    boardsTurnedOff: " — כבוי",
+    noBoardsChecked: "אני עדיין לא בודק לוחות דרושים של חברות.",
+  },
+
+  provenance: {
+    heading: "<b>איפה מצאתי אותה</b>",
+    board: (source) => `🏢 לוח הדרושים הרשמי של החברה (${source})`,
+    user_site: "⭐ אחד האתרים ששמרת",
+    web_search: "🌐 החיפוש שלי ברשת",
+    user_link: "🔗 קישור ששלחת לי",
+    firstSeen: (origin, day) => `${origin} · נראתה לראשונה ב-${day}`,
+    alsoPostedOn: (links) => `פורסמה גם ב-${links}`,
+  },
+
+  timeAgo: {
+    justNow: "ממש עכשיו",
+    minutes: (n) => `לפני ${n} דקות`,
+    hours: (n) => `לפני ${n} שעות`,
+    yesterday: "אתמול",
+    days: (n) => `לפני ${n} ימים`,
+  },
+
   onboarding: {
-    sourceReceived: (source, fileName) =>
-      `קיבלתי את ${source}${fileName ? ` (${fileName})` : ""} ✅ אפשר לשלוח עוד, או ללחוץ על <b>ניתוח</b> כשסיימתם.`,
+    sourceReceived: (source, fileName, language = null) =>
+      `קיבלתי את ${source}${fileName ? ` (${fileName})` : ""}${language ? ` · ${language}` : ""} ✅ אפשר לשלוח עוד, או ללחוץ על <b>ניתוח</b> כשסיימתם.`,
     question: (position, total, text) => `<i>שאלה ${position} מתוך ${total}</i>\n${text}\n\n<i>אפשר לכתוב "דלג" כדי לדלג.</i>`,
   },
 
