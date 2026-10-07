@@ -15,7 +15,9 @@
 | Reason button | `feedback.addReasonTag` / `feedback.awaitReasonText` | Adds a reason tag, or waits up to 10 minutes for a typed reason. |
 | **Yes** / **No** on a proposal | `feedback.decideProposal` | Activates or rejects a preference learned from feedback. |
 | **Tailor my CV** | `cv.requestTailored`, `cv.tailor` | Creates a CV version for the match and sends the tailored draft for review (see `docs/cv-tailoring.md`). |
-| **Approve** / **Discard** on a CV draft | `cv.decide` | Moves the draft to `approved` or `rejected`. |
+| **Approve** / **Discard** on a CV draft | `cv.decide` | Moves the draft to `approved` or `rejected`; an approved CV is sent as a Word document. |
+| **🌐 Hebrew / English version** on a CV draft or document | `cv.requestLanguage`, `cv.tailor` | Sends the approved CV in that language when there is one, otherwise tailors one that keeps the same facts. |
+| **📕 PDF** / **📝 Word** on a CV document | `cv.document` | Sends the same approved CV in the other format. |
 | `/language` (or `/settings`), "switch to Hebrew", "תדבר איתי באנגלית", "change language" | `conversation.setLanguage` | Shows the current language with English / עברית buttons (`lang:<en\|he>`) or saves the requested one. Never touches onboarding state, the profile, matches, feedback or CVs. |
 | `/sources`, "where are you searching?", "which sites do you check?", "איפה אתה מחפש?" | `sources.overview` | Where the agent searches: company boards (per ATS), web search and the user's own sites, each with when it last ran and the jobs and new companies it found in the last 7 days, plus problems from the latest run. **Show boards** (`src:boards`) lists every board; **Manage my sites** (`src:sites`) opens `/sites`. See `docs/discovery.md`. |
 | `/sites`, `/addsite <site>`, "search on <site>" | `sites.list` / `sites.add` / `sites.remove` | The user's own job sites for the agent to search (see `docs/discovery.md`). |
@@ -49,7 +51,7 @@ The LLM only sees per-request aliases (`e1`, `f2`, `p3`) for the user's own item
 
 `src/ai/profile-assistant.ts` calls `anthropic/claude-sonnet-5.5` through Vercel AI Gateway (AI SDK structured output). On Vercel it authenticates with OIDC automatically; locally run `vercel env pull` (for `VERCEL_OIDC_TOKEN`) or set `AI_GATEWAY_API_KEY`. Tests use a fake assistant.
 
-Callback data is `job:<matchId>`, `fb:<i|n>:<matchId>`, `cv:<matchId>`, `ob:analyze`, `ob:confirm`, `pe:<a|c>:<token>`, `fr:<r|s|l|w|c|p|o>:<feedbackId>`, `pp:<a|r>:<preferenceId>`, `cvd:<a|x>:<versionId>`, `cvf:<versionId>`, `lang:<en|he>`, `st:x:<siteId>`, `src:<boards|sites>`, `cn:delete` (≤ 64 bytes). Only private chats are handled.
+Callback data is `job:<matchId>`, `fb:<i|n>:<matchId>`, `cv:<matchId>`, `ob:analyze`, `ob:confirm`, `pe:<a|c>:<token>`, `fr:<r|s|l|w|c|p|o>:<feedbackId>`, `pp:<a|r>:<preferenceId>`, `cvd:<a|x>:<versionId>`, `cvf:<d|p>:<versionId>` (a bare `cvf:<versionId>` from older messages means Word), `cvl:<en|he>:<versionId>`, `lang:<en|he>`, `st:x:<siteId>`, `src:<boards|sites>`, `cn:delete` (≤ 64 bytes). Only private chats are handled.
 
 ## Running locally
 

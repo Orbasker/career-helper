@@ -1,3 +1,5 @@
+import type { ConversationLanguage } from "../domain/enums.js";
+import { detectLanguage } from "../domain/language.js";
 import { errorMessage } from "../ingestion/ingest.js";
 import { EVAL_PROFILE } from "../matching/deep-match-eval.js";
 import type { ProfileSnapshot } from "../domain/profile.js";
@@ -6,6 +8,7 @@ import type { CvTailorer, TailoredCv, TailoringJob } from "./tailoring.js";
 export interface CvEvalCase {
   id: string;
   job: TailoringJob;
+  language: ConversationLanguage;
   /** Facts a good CV for this job must show among its experience bullets. */
   mustHighlight: string[];
 }
@@ -19,6 +22,7 @@ export interface CvEvalResult {
 export const CV_EVAL_CASES: CvEvalCase[] = [
   {
     id: "hrbp-rnd",
+    language: "en",
     job: {
       title: "Senior HR Business Partner, R&D",
       company: "Lumen Labs",
@@ -29,6 +33,7 @@ export const CV_EVAL_CASES: CvEvalCase[] = [
   },
   {
     id: "people-ops-lead",
+    language: "en",
     job: {
       title: "People Operations Lead",
       company: "Tidewater",
@@ -39,6 +44,7 @@ export const CV_EVAL_CASES: CvEvalCase[] = [
   },
   {
     id: "learning-development",
+    language: "en",
     job: {
       title: "Learning & Development Manager",
       company: "Northwind",
@@ -49,6 +55,7 @@ export const CV_EVAL_CASES: CvEvalCase[] = [
   },
   {
     id: "numbers-heavy-posting",
+    language: "en",
     job: {
       title: "HR Business Partner",
       company: "Quanta",
@@ -56,6 +63,17 @@ export const CV_EVAL_CASES: CvEvalCase[] = [
         "Support 1,200 employees across 6 sites. Cut attrition by 20% within 12 months. 8+ years of HRBP experience, SHRM certification, and experience leading teams of 10.",
     },
     mustHighlight: ["f-partner"],
+  },
+  {
+    id: "hrbp-rnd-hebrew",
+    language: "he",
+    job: {
+      title: "שותפה עסקית משאבי אנוש, מחקר ופיתוח",
+      company: "Lumen Labs",
+      description:
+        "ליווי הנהלת מחקר ופיתוח בארגון של 300 מהנדסים. אחריות על תהליכי הערכת ביצועים, סבבי תגמול, יחסי עובדים ושימור. 5+ שנות ניסיון כ-HRBP בהייטק. עברית ואנגלית.",
+    },
+    mustHighlight: ["f-partner", "f-reviews", "f-attrition"],
   },
 ];
 
@@ -69,6 +87,11 @@ export function checkCv(evalCase: CvEvalCase, cv: TailoredCv, profile: ProfileSn
   const bullets = new Set(cv.items.filter((i) => i.section === "experience").map((i) => i.careerFactId));
   for (const id of evalCase.mustHighlight) if (!bullets.has(id)) problems.push(`missing key fact ${id}`);
   if (!cv.items.some((i) => i.section === "summary")) problems.push("no summary");
+  for (const item of cv.items) {
+    if ((item.section === "summary" || item.section === "experience") && detectLanguage(item.text) !== evalCase.language) {
+      problems.push(`not in ${evalCase.language}: “${item.text}”`);
+    }
+  }
   if (!cv.applicationNote) problems.push("no application note");
   return problems;
 }
@@ -81,7 +104,13 @@ export async function runCvEval(
   return Promise.all(
     cases.map(async (evalCase) => {
       try {
-        const cv = await tailorer.tailor({ profile, job: evalCase.job });
+        const cv = await tailorer.tailor({
+          profile,
+          job: evalCase.job,
+          language: evalCase.language,
+          styleReference: null,
+          keep: { highlights: [], skills: [] },
+        });
         return { case: evalCase, cv, problems: checkCv(evalCase, cv, profile) };
       } catch (error) {
         return { case: evalCase, cv: null, problems: [`error: ${errorMessage(error)}`] };

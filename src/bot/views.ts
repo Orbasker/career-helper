@@ -2,8 +2,11 @@ import { InlineKeyboard, Keyboard } from "grammy";
 import { formatMonth } from "../domain/dates.js";
 import {
   CONVERSATION_LANGUAGES,
+  CV_FILE_FORMATS,
   type CareerFactKind,
   type ConversationLanguage,
+  type CvFileFormat,
+  type CvLanguageSource,
   type MatchRecommendation,
   type PreferenceKind,
   type ProfileSourceKind,
@@ -101,7 +104,11 @@ export const messages = {
   cvFailed: "Sorry, I couldn't prepare the CV this time. Tap <b>Tailor my CV</b> again to retry.",
   cvDraftOutro:
     "Every line comes from your confirmed profile: I only chose, ordered and reworded it for this job. Approve to keep this version, or discard it.",
-  cvApproved: "Saved ✅ Here's your CV for this job as a Word document.",
+  cvLanguageRequested: {
+    en: "I'm preparing the English version, keeping the same highlights. It takes about a minute; I'll send it here for your review.",
+    he: "I'm preparing the Hebrew version, keeping the same highlights. It takes about a minute; I'll send it here for your review.",
+  } satisfies Record<ConversationLanguage, string>,
+  cvApproved: "Saved ✅ Here's your CV for this job as a Word document. Tap below for a PDF or another language.",
   cvDocumentCaption: "Your tailored CV. Every line comes from your confirmed profile.",
   cvDocumentFailed: "Your CV is saved, but I couldn't create the document right now. Tap below to try again.",
   cvDiscarded: "Discarded. Tap <b>Tailor my CV</b> on the job to start over.",
@@ -407,9 +414,20 @@ export function proposalView(proposal: PreferenceProposalView): { text: string; 
   };
 }
 
+const CV_LANGUAGE_REASONS: Record<CvLanguageSource, string> = {
+  requested: "as you asked",
+  job: "the language of the job posting",
+  cv: "the language of your CV",
+  conversation: "the language we chat in",
+};
+const FORMAT_LABELS: Record<CvFileFormat, string> = { docx: "📝 Word", pdf: "📕 PDF" };
+
+const otherLanguage = (language: ConversationLanguage) => CONVERSATION_LANGUAGES.find((l) => l !== language)!;
+
 export function cvDraftViews(draft: CvDraftView): View[] {
   const at = draft.company ? ` at ${escapeHtml(draft.company)}` : "";
-  const sections = [`<b>📝 Tailored CV for ${escapeHtml(draft.jobTitle)}${at}</b>`];
+  const reason = draft.languageSource ? ` (${CV_LANGUAGE_REASONS[draft.languageSource]})` : "";
+  const sections = [`<b>📝 Tailored CV for ${escapeHtml(draft.jobTitle)}${at}</b>\n🌐 ${DOCUMENT_LANGUAGE_NAMES[draft.language]}${reason}`];
   if (draft.summary.length) sections.push(`<b>Summary</b>\n${escapeHtml(draft.summary.join(" "))}`);
   for (const e of draft.experiences) {
     const dates = `${formatMonth(e.startDate) ?? "?"} – ${e.isCurrent ? "present" : (formatMonth(e.endDate) ?? "?")}`;
@@ -428,13 +446,25 @@ export function cvDraftViews(draft: CvDraftView): View[] {
   if (draft.applicationNote) sections.push(`<b>Application note</b>\n${escapeHtml(draft.applicationNote)}`);
 
   const { versionId } = draft;
+  const language = otherLanguage(draft.language);
   return withFinalKeyboard(
     sections,
     messages.cvDraftOutro,
     new InlineKeyboard()
       .text("✅ Approve", encodeCallback({ type: "cv_decision", versionId, approve: true }))
-      .text("🗑 Discard", encodeCallback({ type: "cv_decision", versionId, approve: false })),
+      .text("🗑 Discard", encodeCallback({ type: "cv_decision", versionId, approve: false }))
+      .row()
+      .text(`🌐 ${DOCUMENT_LANGUAGE_NAMES[language]} version`, encodeCallback({ type: "cv_language", versionId, language })),
   );
+}
+
+/** Offers the sent CV in its other file format and in the other language. */
+export function cvDocumentKeyboard(versionId: string, sent: { format: CvFileFormat; language: ConversationLanguage }): InlineKeyboard {
+  const format = CV_FILE_FORMATS.find((f) => f !== sent.format)!;
+  const language = otherLanguage(sent.language);
+  return new InlineKeyboard()
+    .text(FORMAT_LABELS[format], encodeCallback({ type: "cv_document", versionId, format }))
+    .text(`🌐 ${DOCUMENT_LANGUAGE_NAMES[language]} version`, encodeCallback({ type: "cv_language", versionId, language }));
 }
 
 export function sitesView(sites: JobSiteView[]): { text: string; keyboard?: InlineKeyboard } {

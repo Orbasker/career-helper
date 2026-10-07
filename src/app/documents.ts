@@ -1,4 +1,5 @@
 import type { ConversationLanguage, DocumentFormat, DocumentKind } from "../domain/enums.js";
+import { detectLanguage } from "../domain/language.js";
 import type { IncomingDocument } from "./services.js";
 
 export const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
@@ -21,14 +22,6 @@ export function documentFormat(document: Pick<IncomingDocument, "fileName" | "mi
   if (mime === "application/msword" || ext === "doc" || OLE_SIGNATURE.every((b, i) => document.data[i] === b)) return "doc";
   if (mime.startsWith("text/") || ext === "txt" || ext === "md") return "txt";
   return "other";
-}
-
-/** Hebrew CVs routinely contain English terms, so a modest share of Hebrew letters is enough to call it Hebrew. */
-export function detectLanguage(text: string): ConversationLanguage | null {
-  const hebrew = text.match(/[\u05D0-\u05EA]/g)?.length ?? 0;
-  const latin = text.match(/[A-Za-z]/g)?.length ?? 0;
-  if (hebrew > 0.3 * (hebrew + latin)) return "he";
-  return latin > 0 ? "en" : null;
 }
 
 async function extractText(format: DocumentFormat, data: Uint8Array): Promise<string> {

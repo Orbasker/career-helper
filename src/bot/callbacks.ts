@@ -1,4 +1,4 @@
-import { CONVERSATION_LANGUAGES, type ConversationLanguage, type FeedbackVerdict } from "../domain/enums.js";
+import { CONVERSATION_LANGUAGES, type ConversationLanguage, type CvFileFormat, type FeedbackVerdict } from "../domain/enums.js";
 import type { FeedbackReasonTag } from "../learning/infer.js";
 
 export type CallbackAction =
@@ -6,7 +6,8 @@ export type CallbackAction =
   | { type: "feedback"; matchId: string; verdict: FeedbackVerdict }
   | { type: "tailor_cv"; matchId: string }
   | { type: "cv_decision"; versionId: string; approve: boolean }
-  | { type: "cv_document"; versionId: string }
+  | { type: "cv_document"; versionId: string; format: CvFileFormat }
+  | { type: "cv_language"; versionId: string; language: ConversationLanguage }
   | { type: "site_remove"; siteId: string }
   | { type: "connections_delete" }
   | { type: "sources_boards" }
@@ -31,6 +32,7 @@ const REASON_CODES: Record<FeedbackReasonTag, string> = {
   pay: "p",
 };
 const REASON_TEXT_CODE = "o";
+const FORMAT_CODES: Record<CvFileFormat, string> = { docx: "d", pdf: "p" };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TOKEN = /^[A-Za-z0-9_-]{4,32}$/;
 
@@ -45,7 +47,9 @@ export function encodeCallback(action: CallbackAction): string {
     case "cv_decision":
       return `cvd:${action.approve ? "a" : "x"}:${action.versionId}`;
     case "cv_document":
-      return `cvf:${action.versionId}`;
+      return `cvf:${FORMAT_CODES[action.format]}:${action.versionId}`;
+    case "cv_language":
+      return `cvl:${action.language}:${action.versionId}`;
     case "site_remove":
       return `st:x:${action.siteId}`;
     case "connections_delete":
@@ -107,6 +111,14 @@ export function decodeCallback(data: string): CallbackAction | null {
   if (parts.length === 3 && parts[0] === "cvd" && (parts[1] === "a" || parts[1] === "x")) {
     return { type: "cv_decision", versionId: id, approve: parts[1] === "a" };
   }
+  if (parts.length === 3 && parts[0] === "cvf") {
+    const format = (Object.keys(FORMAT_CODES) as CvFileFormat[]).find((f) => FORMAT_CODES[f] === parts[1]);
+    if (format) return { type: "cv_document", versionId: id, format };
+  }
+  if (parts.length === 3 && parts[0] === "cvl") {
+    const language = CONVERSATION_LANGUAGES.find((l) => l === parts[1]);
+    if (language) return { type: "cv_language", versionId: id, language };
+  }
   if (parts.length === 3 && parts[0] === "pp" && (parts[1] === "a" || parts[1] === "r")) {
     return { type: "proposal_decision", preferenceId: id, accept: parts[1] === "a" };
   }
@@ -114,7 +126,7 @@ export function decodeCallback(data: string): CallbackAction | null {
   const matchId = id;
   if (parts.length === 2 && parts[0] === "job") return { type: "job_details", matchId };
   if (parts.length === 2 && parts[0] === "cv") return { type: "tailor_cv", matchId };
-  if (parts.length === 2 && parts[0] === "cvf") return { type: "cv_document", versionId: matchId };
+  if (parts.length === 2 && parts[0] === "cvf") return { type: "cv_document", versionId: matchId, format: "docx" };
   if (parts.length === 3 && parts[0] === "fb") {
     const verdict = (Object.keys(VERDICT_CODES) as FeedbackVerdict[]).find((v) => VERDICT_CODES[v] === parts[1]);
     if (verdict) return { type: "feedback", matchId, verdict };

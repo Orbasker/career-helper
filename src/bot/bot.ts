@@ -1,7 +1,7 @@
 import { Bot, InlineKeyboard, InputFile, type Context, type BotConfig } from "grammy";
 import { MAX_DOCUMENT_BYTES } from "../app/documents.js";
-import type { AppServices, ProfileReply } from "../app/services.js";
-import type { ConversationLanguage } from "../domain/enums.js";
+import type { AppServices, CvRequestOutcome, ProfileReply } from "../app/services.js";
+import type { ConversationLanguage, CvFileFormat } from "../domain/enums.js";
 import { parseLanguageRequest } from "../domain/language.js";
 import { decodeCallback, encodeCallback } from "./callbacks.js";
 import {
@@ -12,6 +12,7 @@ import {
   boardsViews,
   connectionsImportReply,
   connectionsView,
+  cvDocumentKeyboard,
   cvDraftViews,
   feedbackReasonView,
   languageKeyboard,
@@ -93,20 +94,48 @@ export function createBot(
     for (const view of views) await ctx.reply(view.text, { ...html, reply_markup: view.keyboard });
   };
 
-  const sendCvDocument = async (ctx: BotContext, versionId: string) => {
-    const file = await services.cv.document(ctx.userId, versionId).catch((error) => {
-      console.error("cv document failed", { versionId, error });
+  const sendCvDocument = async (ctx: BotContext, versionId: string, format: CvFileFormat = "docx") => {
+    const file = await services.cv.document(ctx.userId, versionId, format).catch((error) => {
+      console.error("cv document failed", { versionId, format, error });
       return null;
     });
     if (!file) {
-      const retry = new InlineKeyboard().text("📄 Send document", encodeCallback({ type: "cv_document", versionId }));
+      const retry = new InlineKeyboard().text("📄 Send document", encodeCallback({ type: "cv_document", versionId, format }));
       await ctx.reply(messages.cvDocumentFailed, { ...html, reply_markup: retry });
       return;
     }
     const document = file.kind === "cached" ? file.fileRef : new InputFile(file.data, file.fileName);
-    const sent = await ctx.replyWithDocument(document, { caption: messages.cvDocumentCaption });
+    const sent = await ctx.replyWithDocument(document, { caption: messages.cvDocumentCaption, reply_markup: cvDocumentKeyboard(versionId, file) });
     const fileRef = sent?.document?.file_id;
-    if (file.kind === "rendered" && fileRef) await services.cv.saveDocumentRef(ctx.userId, versionId, fileRef);
+    if (file.kind === "rendered" && fileRef) await services.cv.saveDocumentRef(ctx.userId, versionId, format, fileRef);
+  };
+
+  /** Sends what a CV request led to, tailoring a new request right away. */
+  const sendCvOutcome = async (ctx: BotContext, outcome: CvRequestOutcome, requestedMessage: string) => {
+    switch (outcome.kind) {
+      case "not_found":
+        await ctx.reply(messages.matchNotFound, html);
+        return;
+      case "in_progress":
+        await ctx.reply(messages.cvInProgress, html);
+        return;
+      case "approved":
+        await sendCvDocument(ctx, outcome.versionId);
+        return;
+      case "draft": {
+        const draft = await services.cv.draft(ctx.userId, outcome.versionId);
+        if (draft) await sendViews(ctx, cvDraftViews(draft));
+        return;
+      }
+      case "requested": {
+        await ctx.reply(requestedMessage, html);
+        await typing(ctx);
+        const result = await services.cv.tailor(ctx.userId, outcome.versionId);
+        if (result.kind === "draft") await sendViews(ctx, cvDraftViews(result.draft));
+        else await ctx.reply(messages.cvFailed, html);
+        return;
+      }
+    }
   };
 
   const typing = (ctx: BotContext) => ctx.replyWithChatAction("typing").catch(() => undefined);
@@ -295,27 +324,13 @@ export function createBot(
       case "tailor_cv": {
         const outcome = await services.cv.requestTailored(ctx.userId, action.matchId);
         await ctx.answerCallbackQuery();
-        switch (outcome.kind) {
-          case "not_found":
-            await ctx.reply(messages.matchNotFound, html);
-            return;
-          case "in_progress":
-            await ctx.reply(messages.cvInProgress, html);
-            return;
-          case "draft": {
-            const draft = await services.cv.draft(ctx.userId, outcome.versionId);
-            if (draft) await sendViews(ctx, cvDraftViews(draft));
-            return;
-          }
-          case "requested": {
-            await ctx.reply(messages.cvRequested, html);
-            await typing(ctx);
-            const result = await services.cv.tailor(ctx.userId, outcome.versionId);
-            if (result.kind === "draft") await sendViews(ctx, cvDraftViews(result.draft));
-            else await ctx.reply(messages.cvFailed, html);
-            return;
-          }
-        }
+        await sendCvOutcome(ctx, outcome, messages.cvRequested);
+        return;
+      }
+      case "cv_language": {
+        const outcome = await services.cv.requestLanguage(ctx.userId, action.versionId, action.language);
+        await ctx.answerCallbackQuery();
+        await sendCvOutcome(ctx, outcome, messages.cvLanguageRequested[action.language]);
         return;
       }
       case "set_language": {
@@ -350,7 +365,7 @@ export function createBot(
       }
       case "cv_document": {
         await ctx.answerCallbackQuery();
-        await sendCvDocument(ctx, action.versionId);
+        await sendCvDocument(ctx, action.versionId, action.format);
         return;
       }
       case "cv_decision": {

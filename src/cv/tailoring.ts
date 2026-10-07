@@ -1,4 +1,5 @@
-import type { CareerFactKind, CvSection } from "../domain/enums.js";
+import type { CareerFactKind, ConversationLanguage, CvSection } from "../domain/enums.js";
+import { detectLanguage } from "../domain/language.js";
 import type { ExperienceSnapshot, FactSnapshot, ProfileSnapshot } from "../domain/profile.js";
 
 export const MAX_SUMMARY_SENTENCES = 3;
@@ -31,7 +32,20 @@ export interface TailoringDraft {
   summary: { text: string; sources: string[] }[];
   highlights: { fact: string; text: string }[];
   skills: string[];
+  /** Translations of skill, education, certification and language facts written in another language than the CV. */
+  translations: { fact: string; text: string }[];
   applicationNote: { text: string; sources: string[] };
+}
+
+export interface TailoringInput {
+  /** Must hold only verified experiences and facts. */
+  profile: ProfileSnapshot;
+  job: TailoringJob;
+  language: ConversationLanguage;
+  /** Text of a CV the user wrote in `language`, a reference for wording only. */
+  styleReference: string | null;
+  /** Fact ids chosen by the version this one translates, in their order; empty for a fresh selection. */
+  keep: { highlights: string[]; skills: string[] };
 }
 
 export interface TailoringAliases {
@@ -56,8 +70,7 @@ export interface TailoredCv {
 export interface CvTailorer {
   readonly model: string;
   readonly promptVersion: string;
-  /** `profile` must hold only verified experiences and facts. */
-  tailor(input: { profile: ProfileSnapshot; job: TailoringJob }): Promise<TailoredCv>;
+  tailor(input: TailoringInput): Promise<TailoredCv>;
 }
 
 /** Where a fact goes on the CV; responsibilities and achievements sit under their role when it is known. */
@@ -97,13 +110,15 @@ export function unsupportedClaims(
 /**
  * Maps a model draft back to real facts and enforces the truth rules: every line cites a verified fact, tailored
  * bullets that claim more than their fact fall back to the fact's own wording, unsupported summary sentences and
- * notes are dropped, and skills, education, certifications and languages are always copied verbatim.
+ * notes are dropped, and skills, education, certifications and languages are copied verbatim unless they are written
+ * in another language than the CV and the model translated them without adding anything.
  */
 export function groundTailoring(
   draft: TailoringDraft,
   aliases: TailoringAliases,
   profile: ProfileSnapshot,
   job: TailoringJob,
+  language: ConversationLanguage,
 ): TailoredCv {
   const facts = new Map(profile.facts.map((f) => [f.id, f]));
   const experiences = new Map(profile.experiences.map((e) => [e.id, e]));
@@ -172,15 +187,30 @@ export function groundTailoring(
     push(fact.id, section, text);
   }
 
+  const translations = new Map<string, string>();
+  for (const translation of draft.translations) {
+    const fact = factFor(translation.fact);
+    if (fact && translation.text.trim() && !translations.has(fact.id)) translations.set(fact.id, translation.text.trim());
+  }
+  const presented = (fact: FactSnapshot) => {
+    const factLanguage = detectLanguage(fact.statement);
+    const translation = translations.get(fact.id);
+    if (!translation || !factLanguage || factLanguage === language || detectLanguage(translation) !== language) return fact.statement;
+    const claims = unsupportedClaims(translation, [fact.statement], context);
+    if (claims.length === 0) return translation;
+    violations.push(`translation “${translation}”: ${claims.join(", ")}`);
+    return fact.statement;
+  };
+
   for (const alias of draft.skills) {
     const fact = factFor(alias);
     if (!fact || fact.kind !== "skill" || used.has(fact.id)) continue;
     used.add(fact.id);
-    push(fact.id, "skills", fact.statement);
+    push(fact.id, "skills", presented(fact));
   }
   for (const fact of profile.facts) {
     const section = VERBATIM_SECTIONS[fact.kind];
-    if (section) push(fact.id, section, fact.statement);
+    if (section) push(fact.id, section, presented(fact));
   }
 
   let applicationNote: string | null = draft.applicationNote.text.trim() || null;

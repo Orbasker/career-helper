@@ -133,7 +133,7 @@ describe("schema", () => {
         verifiedAt: new Date(),
       })
       .returning();
-    const [cv] = await db.insert(cvVersions).values({ userId: user.id, status: "draft" }).returning();
+    const [cv] = await db.insert(cvVersions).values({ userId: user.id, language: "en", status: "draft" }).returning();
 
     await expectDbError(
       db.insert(cvVersionItems).values({
@@ -169,7 +169,7 @@ describe("schema", () => {
         verifiedAt: new Date(),
       })
       .returning();
-    const [cv] = await db.insert(cvVersions).values({ userId: owner.id }).returning();
+    const [cv] = await db.insert(cvVersions).values({ userId: owner.id, language: "en" }).returning();
     await expectDbError(
       db.insert(cvVersionItems).values({
         cvVersionId: cv!.id,

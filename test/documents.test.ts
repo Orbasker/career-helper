@@ -1,6 +1,7 @@
 import { Document, Packer, Paragraph, TextRun } from "docx";
 import { describe, expect, it } from "vitest";
-import { classifySource, detectLanguage, documentFormat, parseDocument, parseLinkedinUrl } from "../src/app/documents.js";
+import { classifySource, documentFormat, parseDocument, parseLinkedinUrl } from "../src/app/documents.js";
+import { detectLanguage } from "../src/domain/language.js";
 
 const HEBREW_CV = ["דנה לוי", "מנהלת משאבי אנוש באקמה בעמ", "ניהלה צוות של שישה מגייסים"];
 const ENGLISH_CV = ["Dana Levi", "HR Manager at Acme Ltd since 2019", "Managed a team of six recruiters"];

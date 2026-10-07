@@ -89,7 +89,13 @@ describe("tracked model calls", () => {
       },
     });
 
-    await new AiCvTailorer(model, recorder).tailor({ profile: EVAL_PROFILE, job: CV_EVAL_CASES[0]!.job });
+    await new AiCvTailorer(model, recorder).tailor({
+      profile: EVAL_PROFILE,
+      job: CV_EVAL_CASES[0]!.job,
+      language: "en",
+      styleReference: null,
+      keep: { highlights: [], skills: [] },
+    });
     expect(seen[0]).toEqual(gatewayOptions("cv.tailor"));
     expect(recorder.calls).toMatchObject([{ purpose: "cv.tailor", model: "sonnet-mock", inputTokens: 900, outputTokens: 80, ok: true }]);
   });
@@ -198,6 +204,11 @@ describe("evaluation harness", () => {
       "no summary",
       "no application note",
     ]);
+
+    const hebrewCase = CV_EVAL_CASES.find((c) => c.language === "he")!;
+    expect(checkCv(hebrewCase, { ...good, items: good.items.map((i) => ({ ...i, text: i.section === "summary" ? "שותפה עסקית" : "Led reviews" })) })).toEqual(
+      hebrewCase.mustHighlight.map(() => "not in he: “Led reviews”"),
+    );
 
     const results = await runCvEval(new FakeCvTailorer());
     expect(results).toHaveLength(CV_EVAL_CASES.length);

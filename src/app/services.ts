@@ -2,6 +2,8 @@ import type {
   CareerFactKind,
   ConfidenceLevel,
   ConversationLanguage,
+  CvFileFormat,
+  CvLanguageSource,
   DocumentKind,
   EmploymentType,
   FeedbackVerdict,
@@ -148,12 +150,16 @@ export type CvRequestOutcome =
   | { kind: "requested"; versionId: string }
   | { kind: "in_progress" }
   | { kind: "draft"; versionId: string }
+  | { kind: "approved"; versionId: string }
   | { kind: "not_found" };
 
 export interface CvDraftView {
   versionId: string;
   jobTitle: string;
   company: string | null;
+  language: ConversationLanguage;
+  /** Null for versions created before languages were chosen. */
+  languageSource: CvLanguageSource | null;
   summary: string[];
   experiences: { title: string; employer: string; startDate: string | null; endDate: string | null; isCurrent: boolean; bullets: string[] }[];
   skills: string[];
@@ -164,9 +170,10 @@ export interface CvDraftView {
   applicationNote: string | null;
 }
 
-export type CvDocumentFile =
-  | { kind: "cached"; fileRef: string; fileName: string }
-  | { kind: "rendered"; data: Uint8Array; fileName: string };
+export type CvDocumentFile = { format: CvFileFormat; fileName: string; language: ConversationLanguage } & (
+  | { kind: "cached"; fileRef: string }
+  | { kind: "rendered"; data: Uint8Array }
+);
 
 export type CvTailorOutcome = { kind: "draft"; draft: CvDraftView } | { kind: "failed" } | { kind: "not_found" };
 export type CvDecision = "approved" | "discarded" | "not_found";
@@ -216,16 +223,18 @@ export interface FeedbackService {
 }
 
 export interface CvService {
-  /** Opens a CV request for the match, or reports the open one; a request stuck for too long is failed and replaced. */
-  requestTailored(userId: string, matchId: string): Promise<CvRequestOutcome>;
+  /** Opens a CV request for the match in the given or chosen language, or reports the open one; a stuck request is failed and replaced. */
+  requestTailored(userId: string, matchId: string, language?: ConversationLanguage): Promise<CvRequestOutcome>;
+  /** Asks for a version in another language that keeps this version's facts, reusing an approved one when it exists. */
+  requestLanguage(userId: string, versionId: string, language: ConversationLanguage): Promise<CvRequestOutcome>;
   /** Generates the tailored draft for a `requested` version. */
   tailor(userId: string, versionId: string): Promise<CvTailorOutcome>;
   draft(userId: string, versionId: string): Promise<CvDraftView | null>;
   decide(userId: string, versionId: string, approve: boolean): Promise<CvDecision>;
-  /** The approved version as a DOCX: the stored Telegram file when it was sent before, otherwise freshly rendered. */
-  document(userId: string, versionId: string): Promise<CvDocumentFile | null>;
+  /** The approved version as a DOCX or PDF: the stored Telegram file when it was sent before, otherwise freshly rendered. */
+  document(userId: string, versionId: string, format: CvFileFormat): Promise<CvDocumentFile | null>;
   /** Remembers the Telegram file of a sent document so it is reused instead of re-rendered. */
-  saveDocumentRef(userId: string, versionId: string, fileRef: string): Promise<void>;
+  saveDocumentRef(userId: string, versionId: string, format: CvFileFormat, fileRef: string): Promise<void>;
 }
 
 export interface ConversationService {
