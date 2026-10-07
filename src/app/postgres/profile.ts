@@ -1,9 +1,9 @@
 import { and, asc, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { formatMonth } from "../../domain/dates.js";
-import type { CareerFactKind, PreferenceKind } from "../../domain/enums.js";
 import type { ExperienceFields, ProfileChange, ProfileFields, ProfileSnapshot } from "../../domain/profile.js";
 import { careerFacts, careerProfiles, preferences, profileSources, workExperiences } from "../../db/schema.js";
 import type { Db } from "../../db/types.js";
+import type { Strings } from "../../i18n/index.js";
 import type { ProfileView } from "../services.js";
 
 export type ApplyMode = "draft" | "confirmed";
@@ -287,58 +287,22 @@ export function toProfileView(snapshot: ProfileSnapshot): ProfileView {
   };
 }
 
-const FACT_KIND_LABELS: Record<CareerFactKind, string> = {
-  responsibility: "responsibility",
-  achievement: "achievement",
-  skill: "skill",
-  education: "education",
-  certification: "certification",
-  language: "language",
-  other: "fact",
-};
-
-export const PREFERENCE_KIND_LABELS: Record<PreferenceKind, string> = {
-  target_role: "target role",
-  hard_constraint: "must-have",
-  soft_preference: "nice-to-have",
-  dislike: "avoid",
-};
-
-const PROFILE_FIELD_LABELS: Record<keyof ProfileFields, string> = {
-  headline: "headline",
-  summary: "summary",
-  currentSeniority: "seniority",
-  managementScope: "management scope",
-  openToAdjacentRoles: "open to adjacent roles",
-};
-
-const EXPERIENCE_FIELD_LABELS: Record<keyof ExperienceFields, string> = {
-  employer: "employer",
-  title: "title",
-  industry: "industry",
-  location: "location",
-  seniority: "seniority",
-  managedHeadcount: "people managed",
-  startDate: "start",
-  endDate: "end",
-  isCurrent: "current role",
-};
-
-function formatValue(value: unknown): string {
+function formatValue(t: Strings["changes"], value: unknown): string {
   if (value === null || value === undefined) return "—";
-  if (typeof value === "boolean") return value ? "yes" : "no";
+  if (typeof value === "boolean") return value ? t.yes : t.no;
   if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return formatMonth(value)!;
   return String(value);
 }
 
-function formatFields(fields: Record<string, unknown>, labels: Record<string, string>): string {
+function formatFields(t: Strings["changes"], fields: Record<string, unknown>, labels: Record<string, string>): string {
   return Object.entries(fields)
-    .map(([key, value]) => `${labels[key] ?? key} → ${formatValue(value)}`)
+    .map(([key, value]) => `${labels[key] ?? key} → ${formatValue(t, value)}`)
     .join(", ");
 }
 
-export function describeChanges(changes: ProfileChange[], snapshot: ProfileSnapshot): string[] {
-  const role = (e: { title: string; employer: string }) => `${e.title} at ${e.employer}`;
+export function describeChanges(strings: Strings, changes: ProfileChange[], snapshot: ProfileSnapshot): string[] {
+  const t = strings.changes;
+  const role = (e: { title: string; employer: string }) => t.roleAt(e.title, e.employer);
   const experienceById = new Map(snapshot.experiences.map((e) => [e.id, e]));
   const factById = new Map(snapshot.facts.map((f) => [f.id, f]));
   const preferenceById = new Map(snapshot.preferences.map((p) => [p.id, p]));
@@ -349,42 +313,42 @@ export function describeChanges(changes: ProfileChange[], snapshot: ProfileSnaps
   return changes.map((change) => {
     switch (change.op) {
       case "update_profile":
-        return `✏️ Profile: ${formatFields(change.fields, PROFILE_FIELD_LABELS)}`;
+        return `✏️ ${t.profile}: ${formatFields(t, change.fields, t.profileFields)}`;
       case "add_experience": {
         const e = change.experience;
-        const end = e.isCurrent ? "present" : (formatMonth(e.endDate) ?? "?");
-        return `➕ Role: ${role(e)} (${formatMonth(e.startDate) ?? "?"} – ${end})`;
+        const end = e.isCurrent ? strings.profile.present : (formatMonth(e.endDate) ?? "?");
+        return `➕ ${t.role}: ${role(e)} (${formatMonth(e.startDate) ?? "?"} – ${end})`;
       }
       case "update_experience": {
         const e = experienceById.get(change.experienceId);
-        return `✏️ ${e ? role(e) : "Role"}: ${formatFields(change.fields, EXPERIENCE_FIELD_LABELS)}`;
+        return `✏️ ${e ? role(e) : t.role}: ${formatFields(t, change.fields, t.experienceFields)}`;
       }
       case "remove_experience": {
         const e = experienceById.get(change.experienceId);
-        return `➖ Role: ${e ? role(e) : "unknown role"}`;
+        return `➖ ${t.role}: ${e ? role(e) : t.unknownRole}`;
       }
       case "add_fact": {
         const e =
           (change.experienceRef && newExperiences.get(change.experienceRef)) ||
           (change.experienceId && experienceById.get(change.experienceId));
-        return `➕ ${FACT_KIND_LABELS[change.kind]}: ${change.statement}${e ? ` (${role(e)})` : ""}`;
+        return `➕ ${t.factKinds[change.kind]}: ${change.statement}${e ? ` (${role(e)})` : ""}`;
       }
       case "update_fact": {
         const old = factById.get(change.factId);
-        return `✏️ ${FACT_KIND_LABELS[change.kind ?? old?.kind ?? "other"]}: “${old?.statement ?? "?"}” → “${change.statement}”`;
+        return `✏️ ${t.factKinds[change.kind ?? old?.kind ?? "other"]}: “${old?.statement ?? "?"}” → “${change.statement}”`;
       }
       case "remove_fact": {
         const old = factById.get(change.factId);
-        return `➖ ${FACT_KIND_LABELS[old?.kind ?? "other"]}: ${old?.statement ?? "unknown fact"}`;
+        return `➖ ${t.factKinds[old?.kind ?? "other"]}: ${old?.statement ?? t.unknownFact}`;
       }
       case "add_preference": {
         const old = change.replacesPreferenceId ? preferenceById.get(change.replacesPreferenceId) : undefined;
-        const label = `➕ ${PREFERENCE_KIND_LABELS[change.preference.kind]}: ${change.preference.label}`;
-        return old ? `${label} (replaces “${old.label}”)` : label;
+        const label = `➕ ${t.preferenceKinds[change.preference.kind]}: ${change.preference.label}`;
+        return old ? `${label} ${t.replaces(old.label)}` : label;
       }
       case "remove_preference": {
         const old = preferenceById.get(change.preferenceId);
-        return `➖ ${old ? `${PREFERENCE_KIND_LABELS[old.kind]}: ${old.label}` : "unknown preference"}`;
+        return `➖ ${old ? `${t.preferenceKinds[old.kind]}: ${old.label}` : t.unknownPreference}`;
       }
     }
   });

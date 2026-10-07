@@ -1,21 +1,14 @@
 import { InlineKeyboard, Keyboard } from "grammy";
 import { formatMonth } from "../domain/dates.js";
-import {
-  CONVERSATION_LANGUAGES,
-  type CareerFactKind,
-  type ConversationLanguage,
-  type MatchRecommendation,
-  type PreferenceKind,
-  type ProfileSourceKind,
-} from "../domain/enums.js";
+import { CONVERSATION_LANGUAGES, type ConversationLanguage, type PreferenceKind } from "../domain/enums.js";
 import { DEFAULT_LANGUAGE, LANGUAGE_NAMES } from "../domain/language.js";
+import type { Strings } from "../i18n/index.js";
 import type {
   AddSiteOutcome,
   ConnectionImport,
   JobLinkOutcome,
   ConnectionSummary,
   CvDraftView,
-  JobOrigin,
   JobProvenance,
   JobSiteView,
   MatchDetails,
@@ -27,214 +20,96 @@ import type {
   SourceIssue,
   SourcesOverview,
 } from "../app/services.js";
-import type { FeedbackReasonTag } from "../learning/infer.js";
+import { FEEDBACK_REASON_TAGS } from "../learning/infer.js";
 import { encodeCallback } from "./callbacks.js";
 
-export const WHATS_NEW_LABEL = "What's new?";
-export const MY_PROFILE_LABEL = "👤 My profile";
 const DESCRIPTION_PREVIEW_LENGTH = 1200;
 const MAX_MESSAGE_LENGTH = 3800;
-
-const RECOMMENDATION_LABELS: Record<MatchRecommendation, string> = {
-  strong_fit: "Strong fit",
-  good_fit: "Good fit",
-  stretch: "Stretch",
-  not_recommended: "Not recommended",
-};
 
 export function escapeHtml(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-export const mainMenu = new Keyboard().text(WHATS_NEW_LABEL).text(MY_PROFILE_LABEL).resized().persistent();
+export const mainMenu = (t: Strings) => new Keyboard().text(t.menu.whatsNew).text(t.menu.myProfile).resized().persistent();
 
-export const messages = {
-  askLanguage: "👋 Hi! Which language should I use with you?\nשלום! באיזו שפה נדבר?",
-  languageSaved: {
-    en: "Got it, I'll talk to you in English. Change it anytime with /language.",
-    he: "מעולה, מעכשיו נדבר בעברית. אפשר לשנות בכל רגע עם ‎/language.",
-  } satisfies Record<ConversationLanguage, string>,
-  welcomeBack: "Welcome back! Tap <b>What's new?</b> for your latest matches, or just tell me what you'd like to change in your preferences.",
-  welcomeNew: "Hi! I'm your career agent. I'll find jobs that fit your experience — including adjacent roles — and help tailor your CV. Let's build your career profile first.",
-  askLinkedin: "First, send me your <b>LinkedIn profile URL</b> (e.g. linkedin.com/in/your-name), or reply <i>skip</i>.",
-  askDocuments: [
-    "Now send me your <b>CV / resume</b> (PDF, DOCX or TXT). Have it in more than one language, e.g. Hebrew and English? Send each one.",
-    "",
-    "LinkedIn doesn't let me read profiles directly. To import yours too, open your LinkedIn profile → <b>More</b> → <b>Save to PDF</b> and send me that file.",
-    "",
-    "No documents? Just paste or type a summary of your work history. Tap <b>Analyze</b> when you've sent everything.",
-  ].join("\n"),
-  linkedinSaved: "Saved your LinkedIn URL ✅",
-  linkedinSkipped: "No LinkedIn URL saved — you can add it later.",
-  documentTooLarge: "That file is too large (max 10 MB). Please send a smaller PDF, DOCX or TXT file.",
-  unreadableDocument: "I couldn't read text from that file. Please send a PDF, DOCX or TXT file (not a scanned image), or paste the text.",
-  legacyDoc: "I can't read old Word <b>.doc</b> files. In Word choose <b>File → Save As → Word Document (.docx)</b> or <b>PDF</b>, and send me that file.",
-  needSource: "I need at least one CV, LinkedIn PDF or a short written summary of your experience before I can analyze it.",
-  analyzing: "Reading your documents and building your profile… this can take a minute.",
-  analysisFailed: "Sorry, I couldn't analyze your documents this time. Tap <b>Analyze</b> to try again, or send more details.",
-  busy: "I'm still working on your profile — I'll message you when it's ready. If nothing arrives in a few minutes, send /start to begin again.",
-  reviewIntro: "<b>Here's what I extracted.</b> Please check it carefully — nothing is saved as fact until you confirm.",
-  reviewUpdated: "<b>Updated.</b> Here's your profile now:",
-  reviewOutro: "Reply with any corrections in your own words (e.g. <i>\"I left Acme in 2023\"</i>, <i>\"remove the Python skill\"</i>, <i>\"I managed 8 people there\"</i>), or tap <b>Confirm profile</b>.",
-  onboardingDone: "Your profile is confirmed ✅ I'll start looking for matches and let you know when something fits.\n\nYou can update your profile anytime — just tell me, e.g. <i>\"I'm no longer interested in recruiting roles\"</i> or <i>\"add that I managed the payroll migration\"</i>.",
-  profileOutro: "To change anything, just tell me in your own words.",
-  editProposed: "<b>I'll make these changes to your profile:</b>",
-  editApplied: "Done — your profile is updated ✅",
-  editCancelled: "OK, nothing changed.",
-  expired: "That action is no longer available.",
-  noChange: "I didn't find anything to change in your profile. Tell me what to add, correct or remove — e.g. <i>\"add that I managed a team of 5\"</i>.",
-  notOnboarded: "Let's set up your career profile first — send /start.",
-  documentNotExpected: "I can't take documents at this step. Finish setting up your profile first (or send /start), then send it again.",
-  documentNothingNew: "Your profile already covers everything in this document, so there's nothing to change.",
-  documentMergeFailed: "I saved the file, but couldn't compare it with your profile right now. Tell me what to add in your own words, or send it again later.",
-  noMatches: "No new matches right now. I'll message you when something relevant shows up.",
-  matchNotFound: "I couldn't find that job anymore.",
-  feedbackInterested: "Marked as interested 👍",
-  feedbackNotInterested: "Got it, I'll show fewer jobs like this.",
-  feedbackReasonPrompt: "What put you off? It's optional, but it helps me learn what to skip.",
-  feedbackReasonNoted: "Noted, thanks.",
-  feedbackReasonTextPrompt: "Tell me in one message what put you off.",
-  feedbackReasonTextSaved: "Thanks, that helps.",
-  proposalAccepted: "Done ✅ I'll use this for new matches.",
-  proposalRejected: "OK, I won't use that.",
-  cvRequested: "I'm preparing a tailored CV for this job. It takes about a minute; I'll send it here for your review.",
-  cvInProgress: "A tailored CV for this job is already being prepared.",
-  cvFailed: "Sorry, I couldn't prepare the CV this time. Tap <b>Tailor my CV</b> again to retry.",
-  cvDraftOutro:
-    "Every line comes from your confirmed profile: I only chose, ordered and reworded it for this job. Approve to keep this version, or discard it.",
-  cvApproved: "Saved ✅ Here's your CV for this job as a Word document.",
-  cvDocumentCaption: "Your tailored CV. Every line comes from your confirmed profile.",
-  cvDocumentFailed: "Your CV is saved, but I couldn't create the document right now. Tap below to try again.",
-  cvDiscarded: "Discarded. Tap <b>Tailor my CV</b> on the job to start over.",
-  help: [
-    "<b>What I can do</b>",
-    "• /new — your latest matches",
-    "• /profile — your career profile",
-    "• Send an updated CV (PDF, DOCX or TXT) anytime — I'll show what it adds to your profile before saving anything.",
-    "• /sources — where I search for jobs and what I found there",
-    "• /sites — job sites I search for you (add one with /addsite example.co.il)",
-    "• /connections — import your LinkedIn connections to see who you know at each company",
-    "• Send me a link to a job posting and I'll tell you how well it fits you.",
-    "• /language — choose English or Hebrew",
-    "• /start — set up your profile",
-    "• Tell me anything to update your profile (e.g. \"no more than 40 minutes commute\", \"add that I managed X\").",
-  ].join("\n"),
-  error: "Something went wrong on my side. Please try again in a moment.",
-  connectionsHowTo: [
-    "<b>Import your LinkedIn connections</b>",
-    "I'll show you who you know at each company I match you with.",
-    "",
-    "1. On LinkedIn open <b>Settings → Data privacy → Get a copy of your data</b>.",
-    "2. Choose <b>Connections</b> and request the archive. LinkedIn emails it within minutes.",
-    "3. Send me <b>Connections.csv</b> (or the whole ZIP) here.",
-    "",
-    "I only use your contacts to show them on your own matches. You can delete them any time.",
-  ].join("\n"),
-  connectionsNotRecognized: "That file doesn't look like a LinkedIn connections export. Send <b>Connections.csv</b> or the export ZIP — see /connections.",
-  connectionsEmpty: "I couldn't find any contacts in that file. Send /connections for how to export them.",
-  connectionsDeleted: "Deleted your contacts. Send a new export any time with /connections.",
-  connectionsNone: "You have no imported contacts.",
-  noSites:
-    "Besides the company job boards I check every day, I search the web for jobs that fit your profile.\n\nAdd your favourite job sites and I'll search them too: send <b>/addsite</b> followed by the site, e.g. <i>/addsite example.co.il</i>.",
-  sitesIntro: "<b>Job sites I search for you</b>\nI also search the open web and the company job boards I check every day.",
-  sitesOutro: "Add another with <b>/addsite</b> followed by the site. Tap a site to remove it.",
-  siteUsage: "Send <b>/addsite</b> followed by the site, e.g. <i>/addsite example.co.il</i>.",
-  siteInvalid: "That doesn't look like a website. Send something like <i>/addsite example.co.il</i>.",
-  siteLimit: "You already have 20 sites, the most I can search. Remove one with /sites first.",
-  siteRemoved: "Removed. I won't search that site anymore.",
-  jobLinkKnown: "I already had this job. Here's how it fits you:",
-  jobLinkFits: "Here's how this job fits you:",
-  jobLinkFailsMustHave: "⚠️ This job breaks one of your must-haves, so I didn't evaluate it further. If that must-have has changed, just tell me.",
-  jobLinkConnectionsTip: "Send /connections to see who you know at {company}.",
-};
+/** Asked before a language is known, so it speaks every supported language. */
+export const ASK_LANGUAGE = "👋 Hi! Which language should I use with you?\nשלום! באיזו שפה נדבר?";
 
-const JOB_LINK_FAILURES: Record<Exclude<JobLinkOutcome["kind"], "evaluated" | "fails_must_have">, string> = {
-  not_onboarded: messages.notOnboarded,
-  invalid: "That link doesn't look like a public web page I can open.",
-  inaccessible:
-    "I couldn't open that page: the site may be down or may not allow automated reading. Try again later, or send a link to the same job on the company's careers page.",
-  login_required:
-    "That page needs a login, so I can't read it. Send a link to the same job on the company's careers page or another public job site.",
-  gone: "That page no longer exists, so the job was probably taken down.",
-  closed: "That posting is closed or expired, so I didn't evaluate it.",
-  not_a_job:
-    "I couldn't find a single open job posting on that page. Send the link to the posting itself, not a list of jobs or a company page.",
-  unavailable: "I can't read job links right now. Please try again later.",
-  evaluation_failed: "I saved the job but couldn't evaluate it right now. I'll include it in my next daily check.",
-};
+export function botCommands(t: Strings) {
+  return (["new", "profile", "sources", "sites", "connections", "language", "start", "help"] as const).map((command) => ({
+    command,
+    description: t.commands[command],
+  }));
+}
+
+type JobLinkFailure = Exclude<JobLinkOutcome["kind"], "evaluated" | "fails_must_have">;
 
 const linkHost = (link: string) => escapeHtml(new URL(link).hostname.replace(/^www\./, ""));
 
-export function jobLinkReadingText(link: string, several: boolean): string {
-  return several
-    ? `🔎 Reading the job at <b>${linkHost(link)}</b>…`
-    : "🔎 Reading the job posting and checking how it fits you. This can take up to a minute.";
+export function jobLinkReadingText(t: Strings, link: string, several: boolean): string {
+  return several ? t.jobLinks.readingOneOf(linkHost(link)) : t.jobLinks.reading;
 }
 
 /** Why a link could not be evaluated; `link` names it when the user sent several. */
-export function jobLinkFailureText(outcome: { kind: keyof typeof JOB_LINK_FAILURES }, link: string | null): string {
-  const text = JOB_LINK_FAILURES[outcome.kind];
+export function jobLinkFailureText(t: Strings, outcome: { kind: JobLinkFailure }, link: string | null): string {
+  const text = outcome.kind === "not_onboarded" ? t.messages.notOnboarded : t.jobLinks.failures[outcome.kind];
   return link ? `<b>${linkHost(link)}</b>: ${text}` : text;
 }
 
 export function jobLinkResultView(
+  t: Strings,
   outcome: Extract<JobLinkOutcome, { kind: "evaluated" | "fails_must_have" }>,
   match: MatchDetails,
 ): View {
-  const intro = outcome.kind === "fails_must_have" ? messages.jobLinkFailsMustHave : outcome.known ? messages.jobLinkKnown : messages.jobLinkFits;
-  const view = matchDetailsView(match);
+  const intro = outcome.kind === "fails_must_have" ? t.jobLinks.failsMustHave : outcome.known ? t.jobLinks.known : t.jobLinks.fits;
+  const view = matchDetailsView(t, match);
   const sections = [intro, view.text];
-  if (match.company && !match.connectionsImportedAt) {
-    sections.push(`<i>${messages.jobLinkConnectionsTip.replace("{company}", escapeHtml(match.company))}</i>`);
-  }
+  if (match.company && !match.connectionsImportedAt) sections.push(t.jobLinks.connectionsTip(escapeHtml(match.company)));
   return { text: sections.join("\n\n"), keyboard: view.keyboard };
 }
 
-export function employerNote(match: Pick<MatchSummary, "employerRelation">): string | null {
+export function employerNote(t: Strings, match: Pick<MatchSummary, "employerRelation">): string | null {
   const relation = match.employerRelation;
   if (!relation) return null;
   const employer = escapeHtml(relation.employer);
-  return relation.kind === "current"
-    ? `🏢 <b>Internal opportunity at ${employer}</b>, where you work today. Internal moves are often easier: you already know the product and the people, so ask your manager or HR about it.`
-    : `↩️ <b>You worked at ${employer} before.</b> That's an advantage: mention it, and reach out to former colleagues there.`;
+  return relation.kind === "current" ? t.match.currentEmployer(employer) : t.match.formerEmployer(employer);
 }
 
-export function connectionsNote(match: Pick<MatchSummary, "connectionCount" | "company">): string | null {
+export function connectionsNote(t: Strings, match: Pick<MatchSummary, "connectionCount" | "company">): string | null {
   if (match.connectionCount === 0 || !match.company) return null;
-  const people = match.connectionCount === 1 ? "1 connection" : `${match.connectionCount} connections`;
-  return `👥 ${people} at ${escapeHtml(match.company)}`;
+  return t.match.connections(match.connectionCount, escapeHtml(match.company));
 }
 
 const STALE_CONNECTIONS_MS = 90 * 86_400_000;
 
-function contactsSection(match: MatchDetails, now = new Date()): string | null {
+function contactsSection(t: Strings, match: MatchDetails, now = new Date()): string | null {
   if (match.contacts.length === 0 || !match.company) return null;
   const lines = match.contacts.map((c) => {
     const name = c.profileUrl ? `<a href="${escapeHtml(c.profileUrl)}">${escapeHtml(c.fullName)}</a>` : escapeHtml(c.fullName);
     return `• ${name}${c.position ? ` — ${escapeHtml(c.position)}` : ""}`;
   });
   const more = match.connectionCount - match.contacts.length;
-  if (more > 0) lines.push(`<i>and ${more} more</i>`);
+  if (more > 0) lines.push(t.match.contactsMore(more));
   const imported = match.connectionsImportedAt;
   if (imported && now.getTime() - imported.getTime() > STALE_CONNECTIONS_MS) {
-    lines.push(`<i>From your LinkedIn export of ${imported.toISOString().slice(0, 7)}. Send /connections to refresh it.</i>`);
+    lines.push(t.match.contactsStale(imported.toISOString().slice(0, 7)));
   }
-  return `<b>People you know at ${escapeHtml(match.company)}</b>\n${lines.join("\n")}`;
+  return `${t.match.contactsHeading(escapeHtml(match.company))}\n${lines.join("\n")}`;
 }
 
-export function matchListItem(match: MatchSummary): { text: string; keyboard: InlineKeyboard } {
+export function matchListItem(t: Strings, match: MatchSummary): { text: string; keyboard: InlineKeyboard } {
   const lines = [`<b>${escapeHtml(match.title)}</b>`];
   const meta = [match.company, match.location].filter((v): v is string => Boolean(v)).map(escapeHtml);
   if (meta.length > 0) lines.push(meta.join(" · "));
-  const note = employerNote(match);
+  const note = employerNote(t, match);
   if (note) lines.push(note);
-  const people = connectionsNote(match);
+  const people = connectionsNote(t, match);
   if (people) lines.push(people);
-  if (match.recommendation) lines.push(`<i>${RECOMMENDATION_LABELS[match.recommendation]}</i>`);
+  if (match.recommendation) lines.push(`<i>${t.recommendations[match.recommendation]}</i>`);
   if (match.explanation) lines.push(escapeHtml(match.explanation));
   return {
     text: lines.join("\n"),
-    keyboard: new InlineKeyboard().text("Details", encodeCallback({ type: "job_details", matchId: match.matchId })),
+    keyboard: new InlineKeyboard().text(t.buttons.details, encodeCallback({ type: "job_details", matchId: match.matchId })),
   };
 }
 
@@ -242,39 +117,38 @@ const DIGEST_BUTTON_TITLE_LENGTH = 40;
 const DIGEST_EXPLANATION_LENGTH = 300;
 const clip = (text: string, max: number) => (text.length > max ? `${text.slice(0, max)}…` : text);
 
-export function digestView(matches: MatchSummary[], remaining: number): { text: string; keyboard: InlineKeyboard } {
-  const heading = matches.length === 1 ? "<b>1 new job match for you</b>" : `<b>${matches.length} new job matches for you</b>`;
+export function digestView(t: Strings, matches: MatchSummary[], remaining: number): { text: string; keyboard: InlineKeyboard } {
   const items = matches.map((match, i) => {
     const meta = [match.company, match.location].filter((v): v is string => Boolean(v)).map(escapeHtml);
     const lines = [`${i + 1}. <b>${escapeHtml(match.title)}</b>${meta.length > 0 ? ` — ${meta.join(" · ")}` : ""}`];
-    const note = employerNote(match);
+    const note = employerNote(t, match);
     if (note) lines.push(note);
-    const people = connectionsNote(match);
+    const people = connectionsNote(t, match);
     if (people) lines.push(people);
-    if (match.recommendation) lines.push(`<i>${RECOMMENDATION_LABELS[match.recommendation]}</i>`);
+    if (match.recommendation) lines.push(`<i>${t.recommendations[match.recommendation]}</i>`);
     if (match.explanation) lines.push(escapeHtml(clip(match.explanation, DIGEST_EXPLANATION_LENGTH)));
     return lines.join("\n");
   });
-  const outro = remaining > 0 ? [`<i>+${remaining} more — tap <b>${WHATS_NEW_LABEL}</b> to see them.</i>`] : [];
+  const outro = remaining > 0 ? [t.digest.more(remaining, t.menu.whatsNew)] : [];
 
   const keyboard = new InlineKeyboard();
   matches.forEach((match, i) => {
     const label = `${i + 1}. ${clip(match.title, DIGEST_BUTTON_TITLE_LENGTH)}`;
     keyboard.text(label, encodeCallback({ type: "job_details", matchId: match.matchId })).row();
   });
-  return { text: [heading, ...items, ...outro].join("\n\n"), keyboard };
+  return { text: [t.digest.heading(matches.length), ...items, ...outro].join("\n\n"), keyboard };
 }
 
-export function matchDetailsView(match: MatchDetails): { text: string; keyboard: InlineKeyboard } {
-  const { text: header } = matchListItem(match);
+export function matchDetailsView(t: Strings, match: MatchDetails): { text: string; keyboard: InlineKeyboard } {
+  const { text: header } = matchListItem(t, match);
   const sections = [header];
   const bulletSection = (title: string, items: string[]) => {
-    if (items.length > 0) sections.push(`<b>${title}</b>\n${items.map((i) => `• ${escapeHtml(i)}`).join("\n")}`);
+    if (items.length > 0) sections.push(`<b>${title}</b>\n${bullets(items)}`);
   };
-  bulletSection("Why it fits", match.fitEvidence);
-  bulletSection("Transferable skills", match.transferableSkills);
-  bulletSection("Gaps", match.gaps);
-  const people = contactsSection(match);
+  bulletSection(t.match.whyItFits, match.fitEvidence);
+  bulletSection(t.match.transferableSkills, match.transferableSkills);
+  bulletSection(t.match.gaps, match.gaps);
+  const people = contactsSection(t, match);
   if (people) sections.push(people);
 
   const description =
@@ -282,26 +156,23 @@ export function matchDetailsView(match: MatchDetails): { text: string; keyboard:
       ? `${match.description.slice(0, DESCRIPTION_PREVIEW_LENGTH)}…`
       : match.description;
   sections.push(escapeHtml(description));
-  sections.push(provenanceSection(match.sourceUrl, match.provenance));
+  sections.push(provenanceSection(t, match.sourceUrl, match.provenance));
 
   const { matchId } = match;
   const keyboard = new InlineKeyboard()
-    .text(match.feedback === "interested" ? "✅ Interested" : "👍 Interested", encodeCallback({ type: "feedback", matchId, verdict: "interested" }))
     .text(
-      match.feedback === "not_interested" ? "✅ Not interested" : "👎 Not interested",
+      match.feedback === "interested" ? t.buttons.interestedChosen : t.buttons.interested,
+      encodeCallback({ type: "feedback", matchId, verdict: "interested" }),
+    )
+    .text(
+      match.feedback === "not_interested" ? t.buttons.notInterestedChosen : t.buttons.notInterested,
       encodeCallback({ type: "feedback", matchId, verdict: "not_interested" }),
     )
     .row()
-    .text("📝 Tailor my CV", encodeCallback({ type: "tailor_cv", matchId }))
-    .url("🔗 Original posting", match.sourceUrl);
+    .text(t.buttons.tailorCv, encodeCallback({ type: "tailor_cv", matchId }))
+    .url(t.buttons.originalPosting, match.sourceUrl);
   return { text: sections.join("\n\n"), keyboard };
 }
-
-const ORIGIN_LABELS: Record<Exclude<JobOrigin, "board">, string> = {
-  user_site: "⭐ One of your saved sites",
-  web_search: "🌐 My web search",
-  user_link: "🔗 A link you sent me",
-};
 
 const shortSourceName = (name: string) => name.replace(/\s+job boards?$/i, "");
 const isoDay = (date: Date) => date.toISOString().slice(0, 10);
@@ -314,247 +185,203 @@ function hostname(url: string): string {
   }
 }
 
-function provenanceSection(sourceUrl: string, provenance: JobProvenance): string {
+function provenanceSection(t: Strings, sourceUrl: string, provenance: JobProvenance): string {
   const origin =
     provenance.origin === "board"
-      ? `🏢 Official company job board (${escapeHtml(shortSourceName(provenance.sourceName))})`
-      : ORIGIN_LABELS[provenance.origin];
+      ? t.provenance.board(escapeHtml(shortSourceName(provenance.sourceName)))
+      : t.provenance[provenance.origin];
   const lines = [
-    "<b>Where I found it</b>",
-    `${origin} · first seen ${isoDay(provenance.firstCollectedAt)}`,
-    `<a href="${escapeHtml(sourceUrl)}">Open original posting</a>`,
+    t.provenance.heading,
+    t.provenance.firstSeen(origin, isoDay(provenance.firstCollectedAt)),
+    `<a href="${escapeHtml(sourceUrl)}">${t.match.openPosting}</a>`,
   ];
   if (provenance.otherUrls.length > 0) {
     const links = provenance.otherUrls.map((url) => `<a href="${escapeHtml(url)}">${escapeHtml(hostname(url))}</a>`);
-    lines.push(`Also posted on ${links.join(", ")}`);
+    lines.push(t.provenance.alsoPostedOn(links.join(", ")));
   }
   return lines.join("\n");
 }
 
 /** "5 min ago", "3h ago", "2 days ago". */
-export function timeAgo(date: Date, now = new Date()): string {
+export function timeAgo(t: Strings, date: Date, now = new Date()): string {
   const minutes = Math.max(0, Math.floor((now.getTime() - date.getTime()) / 60_000));
-  if (minutes < 60) return minutes <= 1 ? "just now" : `${minutes} min ago`;
+  if (minutes < 60) return minutes <= 1 ? t.timeAgo.justNow : t.timeAgo.minutes(minutes);
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) return t.timeAgo.hours(hours);
   const days = Math.floor(hours / 24);
-  return days === 1 ? "yesterday" : `${days} days ago`;
+  return days === 1 ? t.timeAgo.yesterday : t.timeAgo.days(days);
 }
 
-const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
-
-function coverageLine(coverage: SourceCoverage, days: number): string {
-  return `New in the last ${days} days: ${plural(coverage.jobs, "job")}, ${coverage.newCompanies} new ${coverage.newCompanies === 1 ? "company" : "companies"}.`;
-}
-
-function issueLine(issue: SourceIssue): string {
+function issueLine(t: Strings, issue: SourceIssue): string {
   switch (issue.kind) {
     case "turned_off":
-      return `${escapeHtml(issue.source)} is turned off right now.`;
+      return t.jobSources.turnedOff(escapeHtml(issue.source));
     case "unreachable_boards": {
       const shown = issue.boards.slice(0, 5).map(escapeHtml).join(", ");
-      const more = issue.boards.length > 5 ? ` and ${issue.boards.length - 5} more` : "";
-      return `${escapeHtml(shortSourceName(issue.source))}: couldn't reach ${plural(issue.boards.length, "board")} in the last run (${shown}${more}).`;
+      const more = issue.boards.length > 5 ? t.jobSources.andMore(issue.boards.length - 5) : "";
+      return t.jobSources.unreachableBoards(escapeHtml(shortSourceName(issue.source)), issue.boards.length, `${shown}${more}`);
     }
     case "collection_failed":
-      return `${escapeHtml(issue.source)}: the last collection failed. I'll retry in the next daily run.`;
+      return t.jobSources.collectionFailed(escapeHtml(issue.source));
     case "search_failed":
-      return "The last web search failed. I'll retry in the next daily run.";
+      return t.jobSources.searchFailed;
     case "user_search_failed":
-      return "My last web search for you failed. I'll retry in the next daily run.";
+      return t.jobSources.userSearchFailed;
   }
 }
 
-export function sourcesView(overview: SourcesOverview, now = new Date()): View {
-  const days = overview.coverageDays;
-  const active = overview.boardSources.filter((s) => s.enabled && s.boards.length > 0);
-  const boardCount = active.reduce((sum, s) => sum + s.boards.length, 0);
-  const collected = active.flatMap((s) => (s.lastCollectedAt ? [s.lastCollectedAt] : []));
+export function sourcesView(t: Strings, overview: SourcesOverview, now = new Date()): View {
+  const s = t.jobSources;
+  const coverage = (c: SourceCoverage) => s.coverage(overview.coverageDays, c.jobs, c.newCompanies);
+  const active = overview.boardSources.filter((source) => source.enabled && source.boards.length > 0);
+  const boardCount = active.reduce((sum, source) => sum + source.boards.length, 0);
+  const collected = active.flatMap((source) => (source.lastCollectedAt ? [source.lastCollectedAt] : []));
   const lastCollected = collected.length ? new Date(Math.max(...collected.map((d) => d.getTime()))) : null;
+  const perSource = active.map((source) => `${escapeHtml(shortSourceName(source.name))} ${source.boards.length}`).join(", ");
   const boardLines = [
-    "🏢 <b>Company job boards</b>",
-    boardCount > 0
-      ? `${plural(boardCount, "official board")} (${active.map((s) => `${escapeHtml(shortSourceName(s.name))} ${s.boards.length}`).join(", ")}), checked every day. ${lastCollected ? `Last collected ${timeAgo(lastCollected, now)}.` : "Not collected yet."}`
-      : "No company boards yet. Board links I find on the web are added here automatically.",
-    coverageLine(overview.boardCoverage, days),
+    s.boardsHeading,
+    boardCount > 0 ? s.boards(boardCount, perSource, lastCollected ? timeAgo(t, lastCollected, now) : null) : s.noBoards,
+    coverage(overview.boardCoverage),
   ];
 
   const web = overview.webSearch;
   const webLines = [
-    "🌐 <b>Web search</b>",
-    `I search the open web for postings that fit your profile. ${
-      !web.enabled ? "Turned off right now." : web.lastSearchedAt ? `Last searched for you ${timeAgo(web.lastSearchedAt, now)}.` : "Not searched for you yet."
-    }`,
-    coverageLine(web.coverage, days),
+    s.webHeading,
+    s.web(web.enabled, web.lastSearchedAt ? timeAgo(t, web.lastSearchedAt, now) : null),
+    coverage(web.coverage),
   ];
 
-  const siteLines = ["⭐ <b>Your sites</b>"];
-  if (overview.sites.length === 0) siteLines.push("None yet. Add one with <i>/addsite example.co.il</i> and I'll search it too.");
+  const siteLines = [s.sitesHeading];
+  if (overview.sites.length === 0) siteLines.push(s.noSites);
   else {
-    siteLines.push(`${overview.sites.map((s) => escapeHtml(s.domain)).join(", ")}, searched together with the web search.`);
-    siteLines.push(coverageLine(overview.siteCoverage, days));
+    siteLines.push(s.sites(overview.sites.map((site) => escapeHtml(site.domain)).join(", ")));
+    siteLines.push(coverage(overview.siteCoverage));
   }
 
-  const sections = ["<b>Where I search for jobs</b>", boardLines.join("\n"), webLines.join("\n"), siteLines.join("\n")];
-  if (overview.issues.length > 0) sections.push(`⚠️ <b>Problems</b>\n${overview.issues.map((i) => `• ${issueLine(i)}`).join("\n")}`);
-  sections.push("<i>A job's Details show where I found it.</i>");
+  const sections = [s.title, boardLines.join("\n"), webLines.join("\n"), siteLines.join("\n")];
+  if (overview.issues.length > 0) sections.push(`${s.problems}\n${overview.issues.map((i) => `• ${issueLine(t, i)}`).join("\n")}`);
+  sections.push(s.detailsHint);
 
   const keyboard = new InlineKeyboard();
-  if (boardCount > 0) keyboard.text("🏢 Show boards", encodeCallback({ type: "sources_boards" }));
-  keyboard.text(overview.sites.length > 0 ? "⭐ Manage my sites" : "⭐ Add a site", encodeCallback({ type: "sources_sites" }));
+  if (boardCount > 0) keyboard.text(t.buttons.showBoards, encodeCallback({ type: "sources_boards" }));
+  keyboard.text(overview.sites.length > 0 ? t.buttons.manageSites : t.buttons.addSite, encodeCallback({ type: "sources_sites" }));
   return { text: sections.join("\n\n"), keyboard };
 }
 
 const MAX_BOARDS_LISTED = 60;
 
-export function boardsViews(overview: SourcesOverview): View[] {
+export function boardsViews(t: Strings, overview: SourcesOverview): View[] {
   const sections = overview.boardSources
     .filter((s) => s.boards.length > 0)
     .map((s) => {
       const shown = s.boards.slice(0, MAX_BOARDS_LISTED).map(escapeHtml).join(", ");
-      const more = s.boards.length > MAX_BOARDS_LISTED ? ` and ${s.boards.length - MAX_BOARDS_LISTED} more` : "";
-      const off = s.enabled ? "" : " — turned off";
+      const more = s.boards.length > MAX_BOARDS_LISTED ? t.jobSources.andMore(s.boards.length - MAX_BOARDS_LISTED) : "";
+      const off = s.enabled ? "" : t.jobSources.boardsTurnedOff;
       return `<b>${escapeHtml(s.name)}</b> (${s.boards.length}${off})\n${shown}${more}`;
     });
-  if (sections.length === 0) return [{ text: "I don't check any company job boards yet." }];
-  return packMessages(["<b>Company job boards I check every day</b>", ...sections]).map((text) => ({ text }));
+  if (sections.length === 0) return [{ text: t.jobSources.noBoardsChecked }];
+  return packMessages([t.jobSources.boardsListHeading, ...sections]).map((text) => ({ text }));
 }
 
-const REASON_LABELS: [FeedbackReasonTag, string][] = [
-  ["role", "🧭 Not my kind of role"],
-  ["seniority", "📶 Wrong level"],
-  ["location", "📍 Location"],
-  ["work_mode", "🏠 Remote / office setup"],
-  ["company", "🏢 Company"],
-  ["pay", "💰 Pay"],
-];
-
-export function feedbackReasonView(feedbackId: string): { text: string; keyboard: InlineKeyboard } {
+export function feedbackReasonView(t: Strings, feedbackId: string): { text: string; keyboard: InlineKeyboard } {
   const keyboard = new InlineKeyboard();
-  REASON_LABELS.forEach(([tag, label], i) => {
-    keyboard.text(label, encodeCallback({ type: "feedback_reason", feedbackId, tag }));
+  FEEDBACK_REASON_TAGS.forEach((tag, i) => {
+    keyboard.text(t.feedbackReasons[tag], encodeCallback({ type: "feedback_reason", feedbackId, tag }));
     if (i % 2 === 1) keyboard.row();
   });
-  keyboard.text("✍️ Something else", encodeCallback({ type: "feedback_reason_text", feedbackId }));
-  return { text: messages.feedbackReasonPrompt, keyboard };
+  keyboard.text(t.buttons.somethingElse, encodeCallback({ type: "feedback_reason_text", feedbackId }));
+  return { text: t.messages.feedbackReasonPrompt, keyboard };
 }
 
-export function proposalView(proposal: PreferenceProposalView): { text: string; keyboard: InlineKeyboard } {
+export function proposalView(t: Strings, proposal: PreferenceProposalView): { text: string; keyboard: InlineKeyboard } {
   const label = `<b>${escapeHtml(proposal.label)}</b>`;
   const question =
     proposal.kind === "dislike"
-      ? `Should I skip ${label} from now on?`
+      ? t.proposal.dislike(label)
       : proposal.kind === "hard_constraint"
-        ? `Should I make ${label} a must-have?`
-        : `Should I add ${label} to your ${PREFERENCE_SECTION_TITLES[proposal.kind].toLowerCase()}?`;
+        ? t.proposal.mustHave(label)
+        : t.proposal.add(label, t.profile.preferenceSections[proposal.kind]);
   const { preferenceId } = proposal;
   return {
     text: `💡 ${escapeHtml(proposal.rationale)}\n${question}`,
     keyboard: new InlineKeyboard()
-      .text("✅ Yes", encodeCallback({ type: "proposal_decision", preferenceId, accept: true }))
-      .text("✖️ No", encodeCallback({ type: "proposal_decision", preferenceId, accept: false })),
+      .text(t.buttons.yes, encodeCallback({ type: "proposal_decision", preferenceId, accept: true }))
+      .text(t.buttons.no, encodeCallback({ type: "proposal_decision", preferenceId, accept: false })),
   };
 }
 
-export function cvDraftViews(draft: CvDraftView): View[] {
-  const at = draft.company ? ` at ${escapeHtml(draft.company)}` : "";
-  const sections = [`<b>📝 Tailored CV for ${escapeHtml(draft.jobTitle)}${at}</b>`];
-  if (draft.summary.length) sections.push(`<b>Summary</b>\n${escapeHtml(draft.summary.join(" "))}`);
+const period = (t: Strings, e: { startDate: string | null; endDate: string | null; isCurrent: boolean }) =>
+  `${formatMonth(e.startDate) ?? "?"} – ${e.isCurrent ? t.profile.present : (formatMonth(e.endDate) ?? "?")}`;
+
+export function cvDraftViews(t: Strings, draft: CvDraftView): View[] {
+  const sections = [t.cv.title(escapeHtml(draft.jobTitle), draft.company ? escapeHtml(draft.company) : null)];
+  if (draft.summary.length) sections.push(`<b>${t.cv.summary}</b>\n${escapeHtml(draft.summary.join(" "))}`);
   for (const e of draft.experiences) {
-    const dates = `${formatMonth(e.startDate) ?? "?"} – ${e.isCurrent ? "present" : (formatMonth(e.endDate) ?? "?")}`;
-    const lines = [`<b>${escapeHtml(e.title)}</b> — ${escapeHtml(e.employer)}`, `<i>${dates}</i>`];
+    const lines = [`<b>${escapeHtml(e.title)}</b> — ${escapeHtml(e.employer)}`, `<i>${period(t, e)}</i>`];
     if (e.bullets.length) lines.push(bullets(e.bullets));
     sections.push(lines.join("\n"));
   }
-  if (draft.skills.length) sections.push(`<b>Skills</b>\n${escapeHtml(draft.skills.join(" · "))}`);
+  if (draft.skills.length) sections.push(`<b>${t.cv.skills}</b>\n${escapeHtml(draft.skills.join(" · "))}`);
   const list: [string, string[]][] = [
-    ["Education", draft.education],
-    ["Certifications", draft.certifications],
-    ["Languages", draft.languages],
-    ["Other", draft.other],
+    [t.cv.education, draft.education],
+    [t.cv.certifications, draft.certifications],
+    [t.cv.languages, draft.languages],
+    [t.cv.other, draft.other],
   ];
   for (const [title, items] of list) if (items.length) sections.push(`<b>${title}</b>\n${bullets(items)}`);
-  if (draft.applicationNote) sections.push(`<b>Application note</b>\n${escapeHtml(draft.applicationNote)}`);
+  if (draft.applicationNote) sections.push(`<b>${t.cv.applicationNote}</b>\n${escapeHtml(draft.applicationNote)}`);
 
   const { versionId } = draft;
   return withFinalKeyboard(
     sections,
-    messages.cvDraftOutro,
+    t.messages.cvDraftOutro,
     new InlineKeyboard()
-      .text("✅ Approve", encodeCallback({ type: "cv_decision", versionId, approve: true }))
-      .text("🗑 Discard", encodeCallback({ type: "cv_decision", versionId, approve: false })),
+      .text(t.buttons.approve, encodeCallback({ type: "cv_decision", versionId, approve: true }))
+      .text(t.buttons.discard, encodeCallback({ type: "cv_decision", versionId, approve: false })),
   );
 }
 
-export function sitesView(sites: JobSiteView[]): { text: string; keyboard?: InlineKeyboard } {
-  if (sites.length === 0) return { text: messages.noSites };
+export function sitesView(t: Strings, sites: JobSiteView[]): { text: string; keyboard?: InlineKeyboard } {
+  if (sites.length === 0) return { text: t.messages.noSites };
   const keyboard = new InlineKeyboard();
   for (const site of sites) keyboard.text(`✖️ ${site.domain}`, encodeCallback({ type: "site_remove", siteId: site.id })).row();
   const list = sites.map((s) => `• ${escapeHtml(s.domain)}`).join("\n");
-  return { text: `${messages.sitesIntro}\n\n${list}\n\n${messages.sitesOutro}`, keyboard };
+  return { text: `${t.messages.sitesIntro}\n\n${list}\n\n${t.messages.sitesOutro}`, keyboard };
 }
 
-export function connectionsImportReply(outcome: ConnectionImport): string {
+export function connectionsImportReply(t: Strings, outcome: ConnectionImport): string {
   switch (outcome.kind) {
-    case "imported": {
-      const skipped = outcome.skipped ? ` (${outcome.skipped} rows without a name were skipped)` : "";
-      return `Imported ${outcome.contacts} contacts at ${outcome.companies} companies ✅${skipped}\nI'll show who you know when I match you with one of their companies.`;
-    }
+    case "imported":
+      return t.connections.imported(outcome.contacts, outcome.companies, outcome.skipped);
     case "empty":
-      return messages.connectionsEmpty;
+      return t.messages.connectionsEmpty;
     case "not_connections":
-      return messages.connectionsNotRecognized;
+      return t.messages.connectionsNotRecognized;
   }
 }
 
-export function connectionsView(summary: ConnectionSummary | null): { text: string; keyboard?: InlineKeyboard } {
-  if (!summary) return { text: messages.connectionsHowTo };
-  const date = summary.importedAt.toISOString().slice(0, 10);
+export function connectionsView(t: Strings, summary: ConnectionSummary | null): { text: string; keyboard?: InlineKeyboard } {
+  if (!summary) return { text: t.messages.connectionsHowTo };
   return {
-    text: `<b>Your connections</b>\n${summary.contacts} contacts at ${summary.companies} companies, imported ${date}.\n\nSend a newer Connections.csv any time to replace them.`,
-    keyboard: new InlineKeyboard().text("🗑 Delete my connections", encodeCallback({ type: "connections_delete" })),
+    text: t.connections.summary(summary.contacts, summary.companies, summary.importedAt.toISOString().slice(0, 10)),
+    keyboard: new InlineKeyboard().text(t.buttons.deleteConnections, encodeCallback({ type: "connections_delete" })),
   };
 }
 
-export function addSiteReply(outcome: AddSiteOutcome): string {
+export function addSiteReply(t: Strings, outcome: AddSiteOutcome): string {
   switch (outcome.kind) {
     case "added":
-      return `Added <b>${escapeHtml(outcome.site.domain)}</b> ✅ I'll search it for jobs that fit you in my next daily search.`;
+      return t.siteAdded(escapeHtml(outcome.site.domain));
     case "exists":
-      return `I'm already searching <b>${escapeHtml(outcome.site.domain)}</b> for you.`;
+      return t.siteExists(escapeHtml(outcome.site.domain));
     case "board":
-      return "That's a company job board, so I added it to the boards I check every day ✅";
+      return t.messages.siteBoard;
     case "invalid":
-      return messages.siteInvalid;
+      return t.messages.siteInvalid;
     case "limit":
-      return messages.siteLimit;
+      return t.messages.siteLimit;
   }
 }
-
-export const DOCUMENT_LANGUAGE_NAMES: Record<ConversationLanguage, string> = { en: "English", he: "Hebrew" };
-
-const SOURCE_LABELS: Record<ProfileSourceKind, string> = {
-  cv: "your CV",
-  linkedin_export: "your LinkedIn export",
-  pasted_text: "your notes",
-};
-
-const FACT_SECTION_TITLES: Record<CareerFactKind, string> = {
-  skill: "Skills",
-  education: "Education",
-  certification: "Certifications",
-  language: "Languages",
-  responsibility: "Other experience",
-  achievement: "Achievements",
-  other: "Other",
-};
-
-const PREFERENCE_SECTION_TITLES: Record<PreferenceKind, string> = {
-  target_role: "Target roles",
-  hard_constraint: "Must-haves",
-  soft_preference: "Nice-to-haves",
-  dislike: "Avoid",
-};
 
 export interface View {
   text: string;
@@ -562,23 +389,21 @@ export interface View {
 }
 
 const bullets = (items: string[]) => items.map((i) => `• ${escapeHtml(i)}`).join("\n");
-const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-function profileSections(profile: ProfileView): string[] {
+function profileSections(t: Strings, profile: ProfileView): string[] {
   const sections: string[] = [];
   const header: string[] = [];
   if (profile.headline) header.push(`<b>${escapeHtml(profile.headline)}</b>`);
   if (profile.summary) header.push(escapeHtml(profile.summary));
-  if (profile.currentSeniority) header.push(`Seniority: ${capitalize(profile.currentSeniority)}`);
-  if (profile.managementScope) header.push(`Management scope: ${escapeHtml(profile.managementScope)}`);
-  header.push(`Open to adjacent roles: ${profile.openToAdjacentRoles ? "yes" : "no"}`);
-  if (profile.linkedinUrl) header.push(`LinkedIn: ${escapeHtml(profile.linkedinUrl)}`);
+  if (profile.currentSeniority) header.push(t.profile.seniority(t.seniority[profile.currentSeniority]));
+  if (profile.managementScope) header.push(t.profile.managementScope(escapeHtml(profile.managementScope)));
+  header.push(t.profile.openToAdjacent(profile.openToAdjacentRoles));
+  if (profile.linkedinUrl) header.push(t.profile.linkedin(escapeHtml(profile.linkedinUrl)));
   sections.push(header.join("\n"));
 
-  if (profile.experiences.length > 0) sections.push("<b>Experience</b>");
+  if (profile.experiences.length > 0) sections.push(`<b>${t.profile.experience}</b>`);
   for (const e of profile.experiences) {
-    const dates = `${formatMonth(e.startDate) ?? "?"} – ${e.isCurrent ? "present" : (formatMonth(e.endDate) ?? "?")}`;
-    const meta = [dates, e.industry, e.location, e.managedHeadcount ? `managed ${e.managedHeadcount}` : null]
+    const meta = [period(t, e), e.industry, e.location, e.managedHeadcount ? t.profile.managed(e.managedHeadcount) : null]
       .filter((v): v is string => Boolean(v))
       .map(escapeHtml)
       .join(" · ");
@@ -590,15 +415,15 @@ function profileSections(profile: ProfileView): string[] {
   const factKinds = [...new Set(profile.otherFacts.map((f) => f.kind))];
   for (const kind of factKinds) {
     const items = profile.otherFacts.filter((f) => f.kind === kind).map((f) => f.statement);
-    sections.push(`<b>${FACT_SECTION_TITLES[kind]}</b>\n${bullets(items)}`);
+    sections.push(`<b>${t.profile.factSections[kind]}</b>\n${bullets(items)}`);
   }
 
-  const preferenceKinds = (Object.keys(PREFERENCE_SECTION_TITLES) as PreferenceKind[]).filter((k) =>
+  const preferenceKinds = (Object.keys(t.profile.preferenceSections) as PreferenceKind[]).filter((k) =>
     profile.preferences.some((p) => p.kind === k),
   );
   for (const kind of preferenceKinds) {
     const items = profile.preferences.filter((p) => p.kind === kind).map((p) => p.label);
-    sections.push(`<b>${PREFERENCE_SECTION_TITLES[kind]}</b>\n${bullets(items)}`);
+    sections.push(`<b>${t.profile.preferenceSections[kind]}</b>\n${bullets(items)}`);
   }
   return sections;
 }
@@ -633,108 +458,109 @@ export function languageKeyboard(current: ConversationLanguage | null = null): I
   return keyboard;
 }
 
-export function languageSettingsView(current: ConversationLanguage | null): View {
-  const name = LANGUAGE_NAMES[current ?? DEFAULT_LANGUAGE];
-  const status = current ? `<b>${name}</b>` : `<b>${name}</b> (you haven't chosen one yet)`;
-  return { text: `🌐 I talk to you in ${status}.\nTap a language to change it:`, keyboard: languageKeyboard(current) };
+export function languageSettingsView(t: Strings, current: ConversationLanguage | null): View {
+  return {
+    text: t.languageStatus(LANGUAGE_NAMES[current ?? DEFAULT_LANGUAGE], current !== null),
+    keyboard: languageKeyboard(current),
+  };
 }
 
-export const analyzeKeyboard = () =>
-  new InlineKeyboard().text("🔍 Analyze", encodeCallback({ type: "onboarding_analyze" }));
+export const analyzeKeyboard = (t: Strings) =>
+  new InlineKeyboard().text(t.buttons.analyze, encodeCallback({ type: "onboarding_analyze" }));
 
-export function documentLanguageKeyboard(documentId: string, detected: ConversationLanguage | null): InlineKeyboard {
+export function documentLanguageKeyboard(t: Strings, documentId: string, detected: ConversationLanguage | null): InlineKeyboard {
   const keyboard = new InlineKeyboard();
   for (const language of CONVERSATION_LANGUAGES.filter((l) => l !== detected)) {
-    const label = detected ? `It's ${DOCUMENT_LANGUAGE_NAMES[language]}` : DOCUMENT_LANGUAGE_NAMES[language];
-    keyboard.text(`🌐 ${label}`, encodeCallback({ type: "document_language", documentId, language }));
+    keyboard.text(
+      t.documents.languageButton(t.documentLanguages[language], detected !== null),
+      encodeCallback({ type: "document_language", documentId, language }),
+    );
   }
   return keyboard;
 }
 
-export function profileReplyViews(reply: ProfileReply): View[] {
+export function profileReplyViews(t: Strings, reply: ProfileReply): View[] {
+  const m = t.messages;
   switch (reply.kind) {
     case "ask_language":
-      return [{ text: messages.askLanguage, keyboard: languageKeyboard() }];
+      return [{ text: ASK_LANGUAGE, keyboard: languageKeyboard() }];
     case "language_saved":
-      return [{ text: messages.languageSaved[reply.language] }];
+      return [{ text: m.languageSaved }];
     case "onboarding_welcome":
-      return [{ text: messages.welcomeNew }];
+      return [{ text: m.welcomeNew }];
     case "ask_linkedin":
-      return [{ text: messages.askLinkedin }];
+      return [{ text: m.askLinkedin }];
     case "ask_documents":
-      return [{ text: `${reply.linkedinSaved ? messages.linkedinSaved : messages.linkedinSkipped}\n\n${messages.askDocuments}` }];
+      return [{ text: `${reply.linkedinSaved ? m.linkedinSaved : m.linkedinSkipped}\n\n${m.askDocuments}` }];
     case "source_received": {
-      const name = reply.fileName ? ` (${escapeHtml(reply.fileName)})` : "";
-      const language = reply.language ? ` · ${DOCUMENT_LANGUAGE_NAMES[reply.language]}` : "";
+      const fileName = reply.fileName ? escapeHtml(reply.fileName) : null;
+      const language = reply.language ? t.documentLanguages[reply.language] : null;
       return [
         {
-          text: `Got ${SOURCE_LABELS[reply.source]}${name}${language} ✅ Send more, or tap <b>Analyze</b> when you're done.`,
+          text: t.onboarding.sourceReceived(t.sources[reply.source], fileName, language),
           keyboard: reply.documentId
-            ? documentLanguageKeyboard(reply.documentId, reply.language).row().text("🔍 Analyze", encodeCallback({ type: "onboarding_analyze" }))
-            : analyzeKeyboard(),
+            ? documentLanguageKeyboard(t, reply.documentId, reply.language)
+                .row()
+                .text(t.buttons.analyze, encodeCallback({ type: "onboarding_analyze" }))
+            : analyzeKeyboard(t),
         },
       ];
     }
     case "document_saved": {
-      const name = reply.fileName ? ` (${escapeHtml(reply.fileName)})` : "";
-      const language = reply.language ? ` · ${DOCUMENT_LANGUAGE_NAMES[reply.language]}` : "";
-      const version = reply.version > 1 ? ` · version ${reply.version}` : "";
+      const fileName = reply.fileName ? escapeHtml(reply.fileName) : null;
+      const language = reply.language ? t.documentLanguages[reply.language] : null;
       return [
         {
-          text: `Saved ${SOURCE_LABELS[reply.source]}${name}${language}${version} ✅ Your earlier documents are kept too.`,
-          keyboard: documentLanguageKeyboard(reply.documentId, reply.language),
+          text: t.documents.saved(t.sources[reply.source], fileName, language, reply.version),
+          keyboard: documentLanguageKeyboard(t, reply.documentId, reply.language),
         },
       ];
     }
     case "document_nothing_new":
-      return [{ text: messages.documentNothingNew }];
+      return [{ text: m.documentNothingNew }];
     case "document_merge_failed":
-      return [{ text: messages.documentMergeFailed }];
+      return [{ text: m.documentMergeFailed }];
     case "unreadable_document":
-      return [{ text: messages.unreadableDocument }];
+      return [{ text: m.unreadableDocument }];
     case "legacy_doc":
-      return [{ text: messages.legacyDoc }];
+      return [{ text: m.legacyDoc }];
     case "need_source":
-      return [{ text: messages.needSource }];
+      return [{ text: m.needSource }];
     case "analysis_failed":
-      return [{ text: messages.analysisFailed, keyboard: analyzeKeyboard() }];
+      return [{ text: m.analysisFailed, keyboard: analyzeKeyboard(t) }];
     case "busy":
-      return [{ text: messages.busy }];
+      return [{ text: m.busy }];
     case "question":
-      return [
-        {
-          text: `<i>Question ${reply.position} of ${reply.total}</i>\n${escapeHtml(reply.text)}\n\n<i>Reply \"skip\" to skip.</i>`,
-        },
-      ];
+      return [{ text: t.onboarding.question(reply.position, reply.total, escapeHtml(reply.text)) }];
     case "review":
       return withFinalKeyboard(
-        [reply.note ? messages.reviewUpdated : messages.reviewIntro, ...profileSections(reply.profile)],
-        messages.reviewOutro,
-        new InlineKeyboard().text("✅ Confirm profile", encodeCallback({ type: "onboarding_confirm" })),
+        [reply.note ? m.reviewUpdated : m.reviewIntro, ...profileSections(t, reply.profile)],
+        m.reviewOutro,
+        new InlineKeyboard().text(t.buttons.confirmProfile, encodeCallback({ type: "onboarding_confirm" })),
       );
     case "onboarding_done":
-      return [{ text: messages.onboardingDone }];
+      return [{ text: m.onboardingDone }];
     case "profile":
-      return withFinalKeyboard(profileSections(reply.profile), messages.profileOutro);
+      return withFinalKeyboard(profileSections(t, reply.profile), m.profileOutro);
     case "edit_proposed":
       return withFinalKeyboard(
-        [messages.editProposed, reply.changes.map(escapeHtml).join("\n")],
-        "Apply these changes?",
+        [m.editProposed, reply.changes.map(escapeHtml).join("\n")],
+        m.editConfirm,
         new InlineKeyboard()
-          .text("✅ Apply", encodeCallback({ type: "edit_apply", token: reply.token }))
-          .text("✖️ Cancel", encodeCallback({ type: "edit_cancel", token: reply.token })),
+          .text(t.buttons.apply, encodeCallback({ type: "edit_apply", token: reply.token }))
+          .text(t.buttons.cancel, encodeCallback({ type: "edit_cancel", token: reply.token })),
       );
     case "edit_applied":
-      return [{ text: messages.editApplied }];
+      return [{ text: m.editApplied }];
     case "edit_cancelled":
-      return [{ text: messages.editCancelled }];
+      return [{ text: m.editCancelled }];
     case "expired":
-      return [{ text: messages.expired }];
+      return [{ text: m.expired }];
     case "no_change":
-      return [{ text: reply.reply ? escapeHtml(reply.reply) : messages.noChange }];
+      return [{ text: reply.reply ? escapeHtml(reply.reply) : m.noChange }];
     case "not_onboarded":
-      return [{ text: messages.notOnboarded }];
+      return [{ text: m.notOnboarded }];
     case "document_not_expected":
-      return [{ text: messages.documentNotExpected }];
+      return [{ text: m.documentNotExpected }];
   }
 }

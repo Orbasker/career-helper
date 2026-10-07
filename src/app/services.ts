@@ -183,7 +183,8 @@ export interface OnboardingService {
   addDocument(userId: string, document: IncomingDocument): Promise<ProfileReply>;
   /** Records the user's confirmation of a document's language; false when the document is not theirs. */
   setDocumentLanguage(userId: string, documentId: string, language: ConversationLanguage): Promise<boolean>;
-  analyze(userId: string): Promise<ProfileReply>;
+  /** `language` is the language follow-up questions are asked in. */
+  analyze(userId: string, language: ConversationLanguage): Promise<ProfileReply>;
   confirm(userId: string): Promise<ProfileReply>;
 }
 
@@ -211,7 +212,7 @@ export interface FeedbackService {
   /** Stores `text` as the awaited reason; false when no reason is awaited, so the text is handled normally. */
   takeReasonText(userId: string, text: string): Promise<boolean>;
   /** Turns repeated feedback into new proposed preferences for the user to confirm. */
-  learn(userId: string): Promise<PreferenceProposalView[]>;
+  learn(userId: string, language: ConversationLanguage): Promise<PreferenceProposalView[]>;
   decideProposal(userId: string, preferenceId: string, accept: boolean): Promise<ProposalDecision>;
 }
 
@@ -229,12 +230,14 @@ export interface CvService {
 }
 
 export interface ConversationService {
-  handleText(userId: string, text: string): Promise<ProfileReply[]>;
+  /** `language` is the language the assistant replies in and proposed changes are described in. */
+  handleText(userId: string, text: string, language: ConversationLanguage): Promise<ProfileReply[]>;
   applyEdit(userId: string, token: string): Promise<ProfileReply>;
   cancelEdit(userId: string, token: string): Promise<ProfileReply>;
   showProfile(userId: string): Promise<ProfileReply>;
   /** During onboarding adds the file to the run; once onboarded, proposes what the file adds to the profile as an edit to approve. */
-  addDocument(userId: string, document: IncomingDocument): Promise<ProfileReply[]>;
+  /** `language` is the language proposed changes are described in. */
+  addDocument(userId: string, document: IncomingDocument, language: ConversationLanguage): Promise<ProfileReply[]>;
   /** Saves the default conversation language without touching the profile, and resumes onboarding when it was waiting for it. */
   setLanguage(userId: string, language: ConversationLanguage): Promise<ProfileReply[]>;
 }
@@ -257,8 +260,13 @@ export interface ProfileInterpretation {
 }
 
 export interface ProfileAssistant {
-  extract(input: { linkedinUrl: string | null; sources: ProfileSourceText[] }): Promise<ProfileExtraction>;
-  interpret(input: { snapshot: ProfileSnapshot; message: string; question: string | null }): Promise<ProfileInterpretation>;
+  extract(input: { linkedinUrl: string | null; sources: ProfileSourceText[]; language: ConversationLanguage }): Promise<ProfileExtraction>;
+  interpret(input: {
+    snapshot: ProfileSnapshot;
+    message: string;
+    question: string | null;
+    language: ConversationLanguage;
+  }): Promise<ProfileInterpretation>;
   /** Changes that a newly uploaded document adds to an existing profile, attributed to that document. */
   mergeDocument(input: { snapshot: ProfileSnapshot; document: ProfileSourceText }): Promise<ProfileInterpretation>;
 }

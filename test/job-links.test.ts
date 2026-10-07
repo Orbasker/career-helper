@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createPgServices } from "../src/app/postgres/index.js";
 import { createBot, jobLinksFromText, siteRequestFrom } from "../src/bot/bot.js";
 import { encodeCallback } from "../src/bot/callbacks.js";
-import { messages } from "../src/bot/views.js";
 import {
   careerProfiles,
   duplicateGroups,
@@ -22,11 +21,14 @@ import { atsPostingFromUrl } from "../src/discovery/ats.js";
 import type { PostingCheck } from "../src/discovery/page.js";
 import { assertPublicUrl, isPublicAddress, publicFetch } from "../src/discovery/safe-fetch.js";
 import { USER_SUBMITTED_SOURCE_KEY, submittedUrl, type SubmittedPostingPayload } from "../src/discovery/submitted.js";
+import { strings } from "../src/i18n/index.js";
 import type { DeepMatchJob, DeepMatchVerdict, DeepMatcher } from "../src/matching/deep-match.js";
 import { FakeProfileAssistant } from "./support/assistant.js";
 import { createTestDb, type TestDb } from "./support/db.js";
 import { FakeCvTailorer } from "./support/tailorer.js";
 import { BOT_INFO, captureApiCalls, textUpdate, type ApiCall } from "./support/telegram.js";
+
+const { jobLinks } = strings("en");
 
 const NOW = new Date("2026-10-07T10:00:00Z");
 const PUBLIC_IP = "93.184.216.34";
@@ -211,7 +213,7 @@ describe("analyzing a job link in the bot", () => {
     const replies = sent();
     expect(replies[0]!.text).toContain("Reading the job posting");
     const result = replies.at(-1)!;
-    expect(result.text).toContain(messages.jobLinkFits);
+    expect(result.text).toContain(jobLinks.fits);
     expect(result.text).toContain("Good fit");
     expect(result.text).toContain("Partnered with R&amp;D leaders");
     expect(result.text).toContain("No org design");
@@ -241,7 +243,7 @@ describe("analyzing a job link in the bot", () => {
     await send(textUpdate("https://careers.acme.com/jobs/hrbp"));
     await send(textUpdate("https://careers.acme.com/jobs/hrbp#apply"));
 
-    expect(sent().at(-1)!.text).toContain(messages.jobLinkKnown);
+    expect(sent().at(-1)!.text).toContain(jobLinks.known);
     expect(await db.select().from(jobs)).toHaveLength(1);
     expect(await db.select().from(matches)).toHaveLength(1);
     expect(matcher.calls).toHaveLength(1);
@@ -322,7 +324,7 @@ describe("analyzing a job link in the bot", () => {
     await send(textUpdate("https://job-boards.greenhouse.io/acme/jobs/123"));
 
     expect(requested).toEqual([]);
-    expect(sent().at(-1)!.text).toContain(messages.jobLinkKnown);
+    expect(sent().at(-1)!.text).toContain(jobLinks.known);
     expect(matcher.calls.map((j) => j.title)).toEqual(["HR Business Partner"]);
   });
 
@@ -339,7 +341,7 @@ describe("analyzing a job link in the bot", () => {
 
     await send(textUpdate(`https://jobs.lever.co/justt/${id}/apply`));
 
-    expect(sent().at(-1)!.text).toContain(messages.jobLinkFits);
+    expect(sent().at(-1)!.text).toContain(jobLinks.fits);
     const [job] = await db.select().from(jobs);
     expect(job).toMatchObject({ title: "People Partner", externalId: `lever:justt:${id}`, employmentType: "full_time" });
     const [raw] = await db.select().from(rawJobRecords);
@@ -393,7 +395,7 @@ describe("analyzing a job link in the bot", () => {
     await send(textUpdate("https://careers.acme.com/jobs/hrbp and https://news.example/story"));
 
     const texts = sent().map((p) => p.text as string);
-    expect(texts.some((t) => t.includes(messages.jobLinkFits))).toBe(true);
+    expect(texts.some((t) => t.includes(jobLinks.fits))).toBe(true);
     expect(texts.at(-1)).toContain("<b>news.example</b>: I couldn't find a single open job posting");
     expect(await db.select().from(jobs)).toHaveLength(1);
   });
@@ -414,7 +416,7 @@ describe("analyzing a job link in the bot", () => {
     await send(textUpdate("https://careers.acme.com/jobs/hrbp"));
 
     const result = sent().at(-1)!.text as string;
-    expect(result).toContain(messages.jobLinkFailsMustHave.slice(0, 30));
+    expect(result).toContain(jobLinks.failsMustHave.slice(0, 30));
     expect(result).toContain("Haifa only");
     expect(matcher.calls).toHaveLength(0);
     const [match] = await db.select().from(matches);

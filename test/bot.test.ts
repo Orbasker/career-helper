@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createPgServices } from "../src/app/postgres/index.js";
 import { createBot } from "../src/bot/bot.js";
 import { encodeCallback } from "../src/bot/callbacks.js";
-import { WHATS_NEW_LABEL, messages } from "../src/bot/views.js";
 import {
   duplicateGroups,
   feedback,
@@ -14,10 +13,14 @@ import {
   rawJobRecords,
   users,
 } from "../src/db/schema.js";
+import { strings } from "../src/i18n/index.js";
 import { FakeProfileAssistant } from "./support/assistant.js";
 import { FakeCvTailorer } from "./support/tailorer.js";
 import { createTestDb, type TestDb } from "./support/db.js";
 import { BOT_INFO, TELEGRAM_USER_ID, callbackUpdate, captureApiCalls, textUpdate, type ApiCall } from "./support/telegram.js";
+
+const en = strings("en");
+const messages = en.messages;
 
 let db: TestDb;
 let close: () => Promise<void>;
@@ -102,7 +105,7 @@ describe("telegram bot", () => {
     await send(textUpdate("/help"));
     const matchId = await seedMatch(await currentUserId());
 
-    await send(textUpdate(WHATS_NEW_LABEL));
+    await send(textUpdate(en.menu.whatsNew));
     expect(sent()).toHaveLength(1);
     expect(sent()[0]).toContain("Acme &lt;Ltd&gt;");
     const listMsg = calls[0]!.payload;

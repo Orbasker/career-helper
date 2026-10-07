@@ -96,6 +96,6 @@ This does not change the recommendation. It is shown in the match list, the deta
 - **Current employer:** "🏢 Internal opportunity at Via, where you work today", with a nudge to talk to their manager or HR.
 - **Former employer:** "↩️ You worked at Juganu before".
 
-The deep matcher also tells the explanation model about it (an `<employer>` note, prompt `deep-match-v3`), so the explanation frames the job as an internal move or a return.
+The deep matcher also tells the explanation model about it (an `<employer>` note, prompt `deep-match-v4`, which also writes the explanation and evidence in the user's language), so the explanation frames the job as an internal move or a return.
 
 The flag is only as current as the profile. If the user changes jobs, they update it by telling the bot (e.g. "I left Via in 2025, I now work at X").

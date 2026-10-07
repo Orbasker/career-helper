@@ -2,7 +2,12 @@ import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import type { MatchSummary } from "../app/services.js";
 import { careerProfiles, jobs, matches, users } from "../db/schema.js";
 import type { Db } from "../db/types.js";
-import { CONFIDENCE_LEVELS, type ConfidenceLevel, type MatchRecommendation } from "../domain/enums.js";
+import {
+  CONFIDENCE_LEVELS,
+  type ConfidenceLevel,
+  type ConversationLanguage,
+  type MatchRecommendation,
+} from "../domain/enums.js";
 import { errorMessage } from "../ingestion/ingest.js";
 import { contactsAtCompanies, contactsFor } from "../connections/lookup.js";
 import { employerRelation, loadEmployerHistory } from "../matching/employer.js";
@@ -46,7 +51,8 @@ export function qualifyingConfidences(threshold: NotificationThreshold): Confide
 export class RecipientUnavailableError extends Error {}
 
 export interface Notifier {
-  sendDigest(chatId: number, matches: MatchSummary[], remaining: number): Promise<void>;
+  /** `language` is the user's chosen language, or null for the default. */
+  sendDigest(chatId: number, matches: MatchSummary[], remaining: number, language: ConversationLanguage | null): Promise<void>;
 }
 
 export interface NotificationOptions {
@@ -90,6 +96,7 @@ export async function runNotifications(
     .select({
       userId: users.id,
       chatId: users.telegramChatId,
+      language: users.preferredLanguage,
       matchId: matches.id,
       title: jobs.title,
       company: jobs.company,
@@ -155,6 +162,7 @@ export async function runNotifications(
           connectionCount: contactsFor(contacts, company).length,
         })),
         rows.length - picked.length,
+        rows[0]!.language,
       );
       report.digestsSent++;
       report.matchesNotified += digest.length;

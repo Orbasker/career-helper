@@ -1,7 +1,8 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { loadSnapshot } from "../app/postgres/profile.js";
-import { careerProfiles, duplicateGroups, jobs, matchEvaluations, matches } from "../db/schema.js";
+import { careerProfiles, duplicateGroups, jobs, matchEvaluations, matches, users } from "../db/schema.js";
 import type { Db } from "../db/types.js";
+import { DEFAULT_LANGUAGE } from "../domain/language.js";
 import { saveDeepVerdict, type DeepMatcher } from "./deep-match.js";
 import { applyHardFilters } from "./hard-filters.js";
 import { RELEVANCE_THRESHOLD, buildRelevanceProfile, scoreRelevance } from "./relevance.js";
@@ -26,8 +27,9 @@ export async function matchGroupNow(
 ): Promise<OnDemandMatch> {
   const now = options.now ?? (() => new Date());
   const [profile] = await db
-    .select({ revision: careerProfiles.revision })
+    .select({ revision: careerProfiles.revision, language: users.preferredLanguage })
     .from(careerProfiles)
+    .innerJoin(users, eq(users.id, careerProfiles.userId))
     .where(and(eq(careerProfiles.userId, userId), eq(careerProfiles.status, "confirmed")));
   if (!profile) throw new Error(`User ${userId} has no confirmed profile`);
   const [job] = await db
@@ -54,7 +56,7 @@ export async function matchGroupNow(
   if (match.stageReached === "cheap_relevance" && (match.status === "pending" || match.status === "filtered_out")) {
     try {
       const snapshot = await loadSnapshot(db, userId, { verifiedOnly: true });
-      const verdict = await matcher.evaluate({ profile: snapshot, job });
+      const verdict = await matcher.evaluate({ profile: snapshot, job, language: profile.language ?? DEFAULT_LANGUAGE });
       await saveDeepVerdict(db, matcher, {
         matchId: match.id,
         profileRevision: profile.revision,

@@ -247,7 +247,7 @@ export async function runDeepMatchEval(
   return Promise.all(
     cases.map(async (evalCase) => {
       try {
-        const verdict = await matcher.evaluate({ profile, job: evalCase.job });
+        const verdict = await matcher.evaluate({ profile, job: evalCase.job, language: "en" });
         return { case: evalCase, verdict, problems: checkVerdict(evalCase, verdict) };
       } catch (error) {
         return { case: evalCase, verdict: null, problems: [`error: ${errorMessage(error)}`] };

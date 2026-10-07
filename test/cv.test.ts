@@ -7,7 +7,6 @@ import { PgCvService, STALE_REQUEST_MS } from "../src/app/postgres/cv.js";
 import { createPgServices } from "../src/app/postgres/index.js";
 import { createBot } from "../src/bot/bot.js";
 import { encodeCallback } from "../src/bot/callbacks.js";
-import { messages } from "../src/bot/views.js";
 import { groundTailoring, sectionFor, unsupportedClaims, type TailoringDraft, type TailoringJob } from "../src/cv/tailoring.js";
 import {
   careerFacts,
@@ -24,10 +23,14 @@ import {
   workExperiences,
 } from "../src/db/schema.js";
 import type { ProfileSnapshot } from "../src/domain/profile.js";
+import { strings } from "../src/i18n/index.js";
 import { FakeProfileAssistant } from "./support/assistant.js";
 import { createTestDb, type TestDb } from "./support/db.js";
 import { FakeCvTailorer } from "./support/tailorer.js";
 import { BOT_INFO, TELEGRAM_USER_ID, callbackUpdate, captureApiCalls, type ApiCall } from "./support/telegram.js";
+
+const en = strings("en");
+const messages = en.messages;
 
 const profile: ProfileSnapshot = {
   profile: { headline: "HR Business Partner", summary: null, currentSeniority: "senior", managementScope: null, openToAdjacentRoles: true, linkedinUrl: null },

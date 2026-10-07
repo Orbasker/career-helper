@@ -5,7 +5,6 @@ import { PgFeedbackService, REASON_TEXT_TTL_MS } from "../src/app/postgres/feedb
 import { loadSnapshot } from "../src/app/postgres/profile.js";
 import { createBot } from "../src/bot/bot.js";
 import { encodeCallback } from "../src/bot/callbacks.js";
-import { messages } from "../src/bot/views.js";
 import {
   careerProfiles,
   duplicateGroups,
@@ -21,11 +20,15 @@ import {
 } from "../src/db/schema.js";
 import type { WorkMode } from "../src/domain/enums.js";
 import type { PreferenceSnapshot } from "../src/domain/profile.js";
+import { strings } from "../src/i18n/index.js";
 import { inferPreferences, type FeedbackSignal } from "../src/learning/infer.js";
 import { FakeProfileAssistant } from "./support/assistant.js";
 import { FakeCvTailorer } from "./support/tailorer.js";
 import { createTestDb, type TestDb } from "./support/db.js";
 import { BOT_INFO, TELEGRAM_USER_ID, callbackUpdate, captureApiCalls, textUpdate, type ApiCall } from "./support/telegram.js";
+
+const en = strings("en");
+const messages = en.messages;
 
 let signalCount = 0;
 function signal(title: string, overrides: Partial<FeedbackSignal> = {}): FeedbackSignal {
@@ -53,7 +56,7 @@ const workModePreference = (modes: WorkMode[], overrides: Partial<PreferenceSnap
 });
 
 const infer = (signals: FeedbackSignal[], preferences: PreferenceSnapshot[] = [], ownTitles = ["HR Business Partner"]) =>
-  inferPreferences({ signals, ownTitles, preferences });
+  inferPreferences({ signals, ownTitles, preferences, language: "en" });
 
 describe("inferPreferences", () => {
   it("proposes avoiding a title word after three passes, citing the feedback", () => {
@@ -67,6 +70,15 @@ describe("inferPreferences", () => {
       },
     ]);
     expect(infer(signals.slice(0, 2))).toEqual([]);
+  });
+
+  it("words proposals in the user's language", () => {
+    const signals = [signal("Technical Recruiter"), signal("Senior Recruiter"), signal("Recruiter, EMEA")];
+    const [proposal] = inferPreferences({ signals, ownTitles: [], preferences: [], language: "he" });
+    expect(proposal).toMatchObject({
+      preference: { label: "תפקידי recruiter", value: { terms: ["recruiter"] } },
+      rationale: "דילגת על 3 משרות עם “recruiter” בכותרת.",
+    });
   });
 
   it("proposes one preference when several title words cover the same jobs", () => {
@@ -261,12 +273,12 @@ describe("feedback loop", () => {
   it("proposes a preference once, keeps it out of matching until accepted, then activates it", async () => {
     await pass("Technical Recruiter");
     await pass("Recruiter II");
-    expect(await service.learn(userId)).toEqual([]);
+    expect(await service.learn(userId, "en")).toEqual([]);
     await pass("Lead Recruiter");
 
-    const [proposal] = await service.learn(userId);
+    const [proposal] = await service.learn(userId, "en");
     expect(proposal).toMatchObject({ kind: "dislike", label: "Recruiter roles" });
-    expect(await service.learn(userId)).toEqual([]);
+    expect(await service.learn(userId, "en")).toEqual([]);
     expect(await db.select().from(preferenceEvidence).where(eq(preferenceEvidence.preferenceId, proposal!.preferenceId))).toHaveLength(3);
     expect((await loadSnapshot(db, userId)).preferences).toEqual([]);
 
@@ -280,11 +292,11 @@ describe("feedback loop", () => {
 
   it("never proposes a rejected preference again", async () => {
     for (const title of ["Recruiter", "Recruiter II", "Lead Recruiter"]) await pass(title);
-    const [proposal] = await service.learn(userId);
+    const [proposal] = await service.learn(userId, "en");
     expect(await service.decideProposal(userId, proposal!.preferenceId, false)).toBe("rejected");
 
     await pass("Senior Recruiter");
-    expect(await service.learn(userId)).toEqual([]);
+    expect(await service.learn(userId, "en")).toEqual([]);
     expect((await loadSnapshot(db, userId)).preferences).toEqual([]);
   });
 
@@ -306,7 +318,7 @@ describe("feedback loop", () => {
       await service.addReasonTag(userId, await pass(title, { workMode: "onsite" }), "work_mode");
     }
 
-    const [proposal] = await service.learn(userId);
+    const [proposal] = await service.learn(userId, "en");
     await service.decideProposal(userId, proposal!.preferenceId, true);
 
     const rows = await db.select().from(preferences).where(eq(preferences.userId, userId));
@@ -320,7 +332,7 @@ describe("feedback loop", () => {
 
   it("only lets the owner decide a proposal", async () => {
     for (const title of ["Recruiter", "Recruiter II", "Lead Recruiter"]) await pass(title);
-    const [proposal] = await service.learn(userId);
+    const [proposal] = await service.learn(userId, "en");
     const [other] = await db.insert(users).values({ telegramUserId: 9, telegramChatId: 9 }).returning();
     expect(await service.decideProposal(other!.id, proposal!.preferenceId, true)).toBe("not_found");
     const [row] = await db.select().from(preferences).where(and(eq(preferences.id, proposal!.preferenceId)));

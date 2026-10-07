@@ -1,5 +1,7 @@
 import { Api, GrammyError, HttpError } from "grammy";
 import type { MatchSummary } from "../app/services.js";
+import type { ConversationLanguage } from "../domain/enums.js";
+import { strings } from "../i18n/index.js";
 import { RecipientUnavailableError, type Notifier } from "../pipeline/notify.js";
 import { digestView } from "./views.js";
 
@@ -22,8 +24,13 @@ export class TelegramNotifier implements Notifier {
     this.sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   }
 
-  async sendDigest(chatId: number, matches: MatchSummary[], remaining: number): Promise<void> {
-    const view = digestView(matches, remaining);
+  async sendDigest(
+    chatId: number,
+    matches: MatchSummary[],
+    remaining: number,
+    language: ConversationLanguage | null,
+  ): Promise<void> {
+    const view = digestView(strings(language), matches, remaining);
     const send = () =>
       this.api.sendMessage(chatId, view.text, {
         parse_mode: "HTML",
