@@ -114,8 +114,25 @@ export type CvLanguageSource = (typeof CV_LANGUAGE_SOURCES)[number];
 export const CV_FILE_FORMATS = ["docx", "pdf"] as const;
 export type CvFileFormat = (typeof CV_FILE_FORMATS)[number];
 
-export const CONVERSATION_FLOWS = ["idle", "onboarding", "preference_update", "profile_edit", "cv_request", "cv_library"] as const;
+export const CONVERSATION_FLOWS = [
+  "idle",
+  "onboarding",
+  "preference_update",
+  "profile_edit",
+  "cv_request",
+  "cv_library",
+  "application",
+] as const;
 export type ConversationFlow = (typeof CONVERSATION_FLOWS)[number];
 
 export const CONVERSATION_LANGUAGES = ["en", "he"] as const;
 export type ConversationLanguage = (typeof CONVERSATION_LANGUAGES)[number];
+
+export const APPLICATION_STATUSES = ["applied", "screening", "interviewing", "offer", "rejected", "withdrawn", "no_response"] as const;
+export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
+
+export const APPLICATION_EVENT_KINDS = ["status_changed", "note_added", "cv_linked"] as const;
+export type ApplicationEventKind = (typeof APPLICATION_EVENT_KINDS)[number];
+
+export const APPLICATION_EVENT_SOURCES = ["user", "email", "system"] as const;
+export type ApplicationEventSource = (typeof APPLICATION_EVENT_SOURCES)[number];

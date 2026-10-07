@@ -1,4 +1,6 @@
 import type {
+  ApplicationEventSource,
+  ApplicationStatus,
   CareerFactKind,
   ConversationLanguage,
   CvLanguageSource,
@@ -29,6 +31,7 @@ export const en = {
     new: "Latest job matches",
     profile: "Your career profile",
     cvs: "Your CVs and the default for each language",
+    applications: "Jobs you applied to and where they stand",
     sources: "Where I search for jobs",
     sites: "Job sites I search for you",
     connections: "Who you know at matched companies",
@@ -70,6 +73,12 @@ export const en = {
     remove: "🗑 Remove",
     confirmRemove: "🗑 Yes, remove it",
     keep: "✖️ Keep it",
+    applied: "📨 I applied",
+    appliedStatus: (status: string) => `📌 Applied · ${status}`,
+    appliedWithCv: "📨 I applied with this CV",
+    myApplications: "📨 My applications",
+    logApplication: "➕ Log an application",
+    addNote: "📝 Add a note",
   },
 
   messages: {
@@ -145,6 +154,7 @@ export const en = {
       "• /profile — your career profile",
       "• Send an updated CV (PDF, DOCX or TXT) anytime — I'll show what it adds to your profile before saving anything.",
       "• /cvs — your CVs: rename, replace or remove them, and choose the default for each language",
+      "• /applications — jobs you applied to: update where each one stands or add notes. Log one I didn't find with /applied",
       "• /sources — where I search for jobs and what I found there",
       "• /sites — job sites I search for you (add one with /addsite example.co.il)",
       "• /connections — import your LinkedIn connections to see who you know at each company",
@@ -394,6 +404,51 @@ export const en = {
     uploadHowTo:
       "Send me the CV here as a PDF, DOCX or TXT file. Add a caption to name it, e.g. <i>Product manager CV</i>. I'll detect its language and show you what it adds to your profile.",
     askLanguage: "I'm not sure which language this CV is in. Which is it?",
+  },
+
+  applications: {
+    title: "<b>📨 Your applications</b>",
+    empty:
+      "You haven't logged any applications yet. Tap <b>📨 I applied</b> on a job, or log one you found elsewhere with the button below.",
+    outro: "Tap an application to update its status or add a note. Applied somewhere I didn't find? Tap <b>Log an application</b>.",
+    group: (status: string, n: number) => `<b>${status}</b> (${n})`,
+    item: (position: number, title: string, company: string | null, day: string) =>
+      `${position}. <b>${title}</b>${company ? ` — ${company}` : ""} · applied ${day}`,
+    statuses: {
+      applied: "📨 Applied",
+      screening: "📞 Screening",
+      interviewing: "🗣 Interviewing",
+      offer: "🎉 Offer",
+      rejected: "✖️ Rejected",
+      withdrawn: "↩️ Withdrawn",
+      no_response: "🔇 No response",
+    } satisfies Record<ApplicationStatus, string>,
+    cardTitle: (title: string, company: string | null) => `📨 <b>${title}</b>${company ? ` — ${company}` : ""}`,
+    status: (status: string, updated: string) => `Status: <b>${status}</b> · updated ${updated}`,
+    appliedOn: (day: string, cvLanguage: string | null) =>
+      `Applied ${day}${cvLanguage ? ` with your tailored ${cvLanguage} CV` : ""}`,
+    openPosting: "Open the posting",
+    history: "<b>History</b>",
+    eventApplied: (day: string) => `${day} · Applied`,
+    eventStatus: (day: string, from: string, to: string) => `${day} · ${from} → ${to}`,
+    eventNote: (day: string, note: string) => `${day} · 📝 ${note}`,
+    eventCv: (day: string, language: string | null) => `${day} · 📄 Linked your tailored ${language ? `${language} ` : ""}CV`,
+    eventSources: { user: "", email: " (from your email)", system: " (automatically)" } satisfies Record<ApplicationEventSource, string>,
+    cardOutro: "Tap the new status when something changes.",
+    created: (title: string) =>
+      `Recorded ✅ I'll keep track of your application to <b>${title}</b> and won't suggest this job again.`,
+    exists: (title: string) => `You already logged your application to <b>${title}</b>. Here's where it stands:`,
+    statusChanged: (status: string) => `Updated: ${status}`,
+    statusUnchanged: "That's already its status.",
+    logPrompt:
+      "Which job did you apply to? Send the link to the posting, or the company and the job title, e.g. <i>Acme — HR Manager</i>.",
+    logInvalid:
+      "I couldn't tell the company and the job title apart. Send them like <i>Acme — HR Manager</i>, or send the link to the posting.",
+    logLinkFailed:
+      "To log it anyway, send the company and the job title together with the link, e.g. <i>Acme — HR Manager https://…</i>.",
+    notePrompt: (title: string) =>
+      `Send me your note on <b>${title}</b>, e.g. <i>Spoke with the recruiter, interview on Monday</i>.`,
+    noteSaved: "Note saved ✅",
   },
 
   sources: {

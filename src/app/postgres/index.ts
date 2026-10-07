@@ -5,6 +5,7 @@ import { SOURCE_ADAPTERS } from "../../ingestion/sources/index.js";
 import { buildStats, formatStats, type SpendLookup } from "../../observability/report.js";
 import type { Db } from "../../db/types.js";
 import type { AppServices, ProfileAssistant } from "../services.js";
+import { PgApplicationService } from "./applications.js";
 import { PgConnectionService } from "./connections.js";
 import { PgConversationService } from "./conversation.js";
 import { PgCvService } from "./cv.js";
@@ -38,6 +39,7 @@ export function createPgServices(
     sources: new PgSourceService(db, sites),
     connections: new PgConnectionService(db),
     jobLinks: new PgJobLinkService(db, options.jobLinks ?? { reader: new AiJobDiscoverer(), matcher: new AiDeepMatcher() }),
+    applications: new PgApplicationService(db),
     stats: { report: async (days) => formatStats(await buildStats(db, { days, spend: options.spend }), { html: true }) },
   };
 }

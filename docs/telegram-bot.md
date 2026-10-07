@@ -27,6 +27,9 @@
 | Language button on an upload | `onboarding.setDocumentLanguage` | Corrects or confirms the detected language of a document (`dl:<he\|en>:<documentId>`). When the language is unclear (mixed Hebrew and English text) the reply asks which one it is and offers both. |
 | `/cvs`, "show my CVs", "קורות החיים שלי" | `documents.list` | CV management (below). |
 | "use my English CV by default", "השתמש בקורות החיים באנגלית כברירת מחדל" | `documents.requestDefault` | Makes the only CV in that language the default, or lists that language's CVs to pick one (`doc:d:<documentId>`). |
+| **📨 I applied** on a job, **📨 I applied with this CV** on a CV document | `applications.applyToMatch` / `applications.applyWithCv` | Records the application with the tailored CV used and shows its card (see `docs/applications.md`). |
+| `/applications`, "my applications", "המועמדויות שלי" | `applications.list` | Applications grouped by status; tapping one shows its history, status buttons and **Add a note**. |
+| `/applied <company — title or link>`, **➕ Log an application** | `applications.logManual` (`jobLinks.analyze` for a link) | Logs an application for a job the agent did not surface. |
 | Any other text | `conversation.handleText` | Onboarding answer, review correction, or a natural-language profile edit. |
 
 ### Onboarding
@@ -75,7 +78,7 @@ The LLM only sees per-request aliases (`e1`, `f2`, `p3`) for the user's own item
 
 `src/ai/profile-assistant.ts` calls `anthropic/claude-sonnet-5.5` through Vercel AI Gateway (AI SDK structured output). On Vercel it authenticates with OIDC automatically; locally run `vercel env pull` (for `VERCEL_OIDC_TOKEN`) or set `AI_GATEWAY_API_KEY`. Tests use a fake assistant.
 
-Callback data is `job:<matchId>`, `fb:<i|n>:<matchId>`, `cv:<matchId>`, `ob:analyze`, `ob:confirm`, `pe:<a|c>:<token>`, `fr:<r|s|l|w|c|p|o>:<feedbackId>`, `pp:<a|r>:<preferenceId>`, `cvd:<a|x>:<versionId>`, `cvf:<d|p>:<versionId>` (a bare `cvf:<versionId>` from older messages means Word), `cvl:<en|he>:<versionId>`, `lang:<en|he>`, `st:x:<siteId>`, `src:<boards|sites>`, `cn:delete`, `doc:<list|add>`, `doc:<documentId>`, `doc:<d|l|r|x|y>:<documentId>` (≤ 64 bytes). Only private chats are handled.
+Callback data is `job:<matchId>`, `fb:<i|n>:<matchId>`, `cv:<matchId>`, `ob:analyze`, `ob:confirm`, `pe:<a|c>:<token>`, `fr:<r|s|l|w|c|p|o>:<feedbackId>`, `pp:<a|r>:<preferenceId>`, `cvd:<a|x>:<versionId>`, `cvf:<d|p>:<versionId>` (a bare `cvf:<versionId>` from older messages means Word), `cvl:<en|he>:<versionId>`, `lang:<en|he>`, `st:x:<siteId>`, `src:<boards|sites>`, `cn:delete`, `doc:<list|add>`, `doc:<documentId>`, `doc:<d|l|r|x|y>:<documentId>`, `ap:<list|add>`, `ap:<applicationId>`, `ap:m:<matchId>`, `ap:v:<versionId>`, `ap:s:<a|s|i|o|r|w|n>:<applicationId>`, `ap:n:<applicationId>` (≤ 64 bytes). Only private chats are handled.
 
 ## Running locally
 

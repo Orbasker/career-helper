@@ -37,7 +37,7 @@ Because matches are per duplicate group, the same posting from several sources i
 
 ## Notifications
 
-A match is pushed when it is `ready`, has never been notified, its recommendation and confidence meet the threshold, the user's profile is `confirmed` and `users.notifications_enabled` is true.
+A match is pushed when it is `ready`, has never been notified, its recommendation and confidence meet the threshold, the user's profile is `confirmed`, `users.notifications_enabled` is true and the user has not applied to the job (see `docs/applications.md`).
 
 | Env var | Values | Default |
 | --- | --- | --- |

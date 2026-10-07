@@ -12,7 +12,8 @@ Each daily run inserts a row when it starts and fills in `finished_at`, `failed`
 
 Decisions keep their own provenance:
 - every match stage writes a `match_evaluations` row (outcome, explanation, evidence, `profile_revision`, `model`, `prompt_version`);
-- tailored CVs keep their items' fact ids, `profile_revision`, `model` and `prompt_version`.
+- tailored CVs keep their items' fact ids, `profile_revision`, `model` and `prompt_version`;
+- every application status change, note and linked CV appends an `application_events` row with its source (`user`, `email`, `system`) and optional evidence reference.
 
 ## Model calls (`model_calls`)
 
@@ -38,7 +39,7 @@ A failing recorder never fails the call.
 `buildStats(db, { days })` / `formatStats` cover the last N days:
 - runs (total, failed, cut off) and the last run's stage summary;
 - new jobs per source and the match funnel (must-haves → relevance → deep match → recommended → notified, plus pending);
-- feedback and CVs;
+- feedback, CVs and applications (logged, from matches, status changes);
 - AI calls per purpose (calls, failures, tokens, average duration);
 - AI spend per purpose.
 

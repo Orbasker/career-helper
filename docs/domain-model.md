@@ -13,6 +13,7 @@ Source of truth: `src/db/schema.ts` (Drizzle) and `src/domain/enums.ts`. Migrati
 | Matching | `matches`, `match_evaluations` | One match per user and duplicate group, so the same posting is never notified twice. Each funnel stage appends an evaluation with outcome, evidence, model and prompt version. |
 | Network | `connections` | The user's LinkedIn contacts (name, profile URL, company, position), imported from their export and used only on their own matches. See `docs/connections.md`. |
 | Feedback | `feedback` | Append-only interested / not-interested history with optional reason tags and free-text reason. See `docs/feedback-learning.md`. |
+| Applications | `applications`, `application_events` | Jobs the user applied to, with status (`applied`, `screening`, `interviewing`, `offer`, `rejected`, `withdrawn`, `no_response`), the match and duplicate group when the agent found the job, the tailored CV used, and normalized company and title for jobs logged by hand. `application_events` is the append-only history of status changes, notes and linked CVs, each with its source (`user`, `email`, `system`) and an optional evidence reference. See `docs/applications.md`. |
 | CV | `cv_versions`, `cv_version_items`, `cv_version_files` | Facts hold verified truth; `cv_version_items.generated_text` holds tailored wording and must point at a verified fact owned by the same user (enforced by trigger). Each version has a `language`, why it was chosen (`language_source`), the uploaded CV it was based on and, for another language of a version, `based_on_version_id`. `cv_version_files` keeps the Telegram file of each format sent. See `docs/cv-tailoring.md`. |
 
 ## Invariants enforced in the database
@@ -23,6 +24,8 @@ Source of truth: `src/db/schema.ts` (Drizzle) and `src/domain/enums.ts`. Migrati
 - Inferred preferences need an explicit user decision before becoming active.
 - Tailored CV lines can only cite verified facts belonging to the CV owner.
 - Only one open (`requested`/`draft`) CV version per user, match and language.
+- At most one application per user and duplicate group.
+- A status-change event has a new status and a note event has a note; nothing else does.
 - A source document is `parsed` if and only if it has extracted text and a kind; otherwise it has a `parse_error`.
 - An onboarding source is either a document reference or pasted text, never both.
 - A user has at most one chosen default CV per language, and only a readable, not removed CV with a known language can be one.

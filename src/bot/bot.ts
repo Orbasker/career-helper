@@ -1,6 +1,7 @@
 import { Bot, InlineKeyboard, InputFile, type Api, type Context, type BotConfig } from "grammy";
 import { MAX_DOCUMENT_BYTES } from "../app/documents.js";
-import type { AppServices, CvRequestOutcome, ProfileReply } from "../app/services.js";
+import type { AppServices, ApplicationView, ApplyOutcome, CvRequestOutcome, ProfileReply } from "../app/services.js";
+import { applicationLink, isApplicationsRequest, parseApplicationDetails } from "../domain/applications.js";
 import { parseCvLibraryRequest } from "../domain/cv-library.js";
 import { CONVERSATION_LANGUAGES, type ConversationLanguage, type CvFileFormat } from "../domain/enums.js";
 import { DEFAULT_LANGUAGE, parseLanguageRequest } from "../domain/language.js";
@@ -9,6 +10,8 @@ import { decodeCallback, encodeCallback, type DocumentAction } from "./callbacks
 import {
   ASK_LANGUAGE,
   addSiteReply,
+  applicationCardView,
+  applicationsViews,
   boardsViews,
   botCommands,
   chooseDefaultView,
@@ -19,6 +22,7 @@ import {
   cvLibraryViews,
   documentCardView,
   documentName,
+  escapeHtml,
   feedbackReasonView,
   jobLinkFailureText,
   jobLinkReadingText,
@@ -298,6 +302,71 @@ export function createBot(
     await sendViews(ctx, cvLibraryViews(ctx.t, documents));
   };
   bot.command("cvs", showDocuments);
+
+  const showApplications = async (ctx: BotContext) => {
+    const list = await services.applications.list(ctx.userId);
+    if (!list) {
+      await ctx.reply(ctx.t.messages.notOnboarded, html);
+      return;
+    }
+    await sendViews(ctx, applicationsViews(ctx.t, list));
+  };
+  bot.command("applications", showApplications);
+
+  const sendApplication = (ctx: BotContext, application: ApplicationView) =>
+    sendViews(ctx, [applicationCardView(ctx.t, application)]);
+
+  const sendApplyOutcome = async (ctx: BotContext, outcome: ApplyOutcome) => {
+    if (outcome.kind === "not_found") {
+      await ctx.reply(ctx.t.messages.matchNotFound, html);
+      return;
+    }
+    const title = escapeHtml(outcome.application.title);
+    await ctx.reply(outcome.kind === "created" ? ctx.t.applications.created(title) : ctx.t.applications.exists(title), html);
+    await sendApplication(ctx, outcome.application);
+  };
+
+  const askApplicationDetails = async (ctx: BotContext, prompt: string) => {
+    if (!(await services.applications.awaitDetails(ctx.userId))) {
+      await ctx.reply(ctx.t.messages.notOnboarded, html);
+      return;
+    }
+    await ctx.reply(prompt, html);
+  };
+
+  /** Logs an application from "Acme — HR Manager" and/or a link, matching a linked posting first when it can be read. */
+  const logApplication = async (ctx: BotContext, text: string) => {
+    const link = applicationLink(text);
+    const details = parseApplicationDetails(text);
+    if (link) {
+      await ctx.reply(jobLinkReadingText(ctx.t, link, false), html);
+      await typing(ctx);
+      const outcome = await services.jobLinks.analyze(ctx.userId, link);
+      if (outcome.kind === "evaluated" || outcome.kind === "fails_must_have") {
+        await sendApplyOutcome(ctx, await services.applications.applyToMatch(ctx.userId, outcome.matchId));
+        return;
+      }
+      if (!details) {
+        await askApplicationDetails(ctx, `${jobLinkFailureText(ctx.t, outcome, null)}\n\n${ctx.t.applications.logLinkFailed}`);
+        return;
+      }
+    }
+    if (!details) {
+      await askApplicationDetails(ctx, ctx.t.applications.logInvalid);
+      return;
+    }
+    await sendApplyOutcome(ctx, await services.applications.logManual(ctx.userId, { ...details, url: link }));
+  };
+
+  bot.command("applied", async (ctx) => {
+    const text = ctx.match.trim();
+    if (!text || !ctx.hasProfile) {
+      await askApplicationDetails(ctx, ctx.t.applications.logPrompt);
+      return;
+    }
+    await logApplication(ctx, text);
+  });
+
   const requestDefaultCv = async (ctx: BotContext, language: ConversationLanguage | null) => {
     const outcome = await services.documents.requestDefault(ctx.userId, language);
     const languageName = language ? ctx.t.documentLanguages[language] : null;
@@ -582,6 +651,53 @@ export function createBot(
         await sendReplies(ctx, [reply]);
         return;
       }
+      case "applications": {
+        await ctx.answerCallbackQuery();
+        await showApplications(ctx);
+        return;
+      }
+      case "application_log": {
+        await ctx.answerCallbackQuery();
+        await askApplicationDetails(ctx, ctx.t.applications.logPrompt);
+        return;
+      }
+      case "application": {
+        const application = await services.applications.get(ctx.userId, action.applicationId);
+        await ctx.answerCallbackQuery(application ? undefined : { text: ctx.t.messages.expired });
+        if (application) await sendApplication(ctx, application);
+        return;
+      }
+      case "apply_match": {
+        await ctx.answerCallbackQuery();
+        const outcome = await services.applications.applyToMatch(ctx.userId, action.matchId);
+        const details = outcome.kind === "not_found" ? null : await services.matches.details(ctx.userId, action.matchId);
+        if (details) await ctx.editMessageReplyMarkup({ reply_markup: matchDetailsView(ctx.t, details).keyboard }).catch(() => undefined);
+        await sendApplyOutcome(ctx, outcome);
+        return;
+      }
+      case "apply_cv": {
+        await ctx.answerCallbackQuery();
+        await sendApplyOutcome(ctx, await services.applications.applyWithCv(ctx.userId, action.versionId));
+        return;
+      }
+      case "application_status": {
+        const change = await services.applications.setStatus(ctx.userId, action.applicationId, action.status);
+        if (change.kind === "not_found") {
+          await ctx.answerCallbackQuery({ text: ctx.t.messages.expired });
+          return;
+        }
+        const { statusChanged, statusUnchanged, statuses } = ctx.t.applications;
+        await ctx.answerCallbackQuery({ text: change.kind === "changed" ? statusChanged(statuses[action.status]) : statusUnchanged });
+        const card = applicationCardView(ctx.t, change.application);
+        await ctx.editMessageText(card.text, { ...html, reply_markup: card.keyboard }).catch(() => undefined);
+        return;
+      }
+      case "application_note": {
+        const application = await services.applications.awaitNote(ctx.userId, action.applicationId);
+        await ctx.answerCallbackQuery(application ? undefined : { text: ctx.t.messages.expired });
+        if (application) await ctx.reply(ctx.t.applications.notePrompt(escapeHtml(application.title)), html);
+        return;
+      }
       case "edit_apply":
       case "edit_cancel": {
         await ctx.answerCallbackQuery();
@@ -605,6 +721,20 @@ export function createBot(
     if (labelled) {
       await ctx.reply(ctx.t.cvs.labelSaved(documentName(ctx.t, labelled)), html);
       await sendViews(ctx, [documentCardView(ctx.t, labelled)]);
+      return;
+    }
+    const noted = await services.applications.takeNote(ctx.userId, ctx.message.text);
+    if (noted) {
+      await ctx.reply(ctx.t.applications.noteSaved, html);
+      await sendApplication(ctx, noted);
+      return;
+    }
+    if (await services.applications.takeDetails(ctx.userId)) {
+      await logApplication(ctx, ctx.message.text);
+      return;
+    }
+    if (isApplicationsRequest(ctx.message.text)) {
+      await showApplications(ctx);
       return;
     }
     const cvRequest = parseCvLibraryRequest(ctx.message.text);

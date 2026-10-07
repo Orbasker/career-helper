@@ -1,4 +1,10 @@
-import { CONVERSATION_LANGUAGES, type ConversationLanguage, type CvFileFormat, type FeedbackVerdict } from "../domain/enums.js";
+import {
+  CONVERSATION_LANGUAGES,
+  type ApplicationStatus,
+  type ConversationLanguage,
+  type CvFileFormat,
+  type FeedbackVerdict,
+} from "../domain/enums.js";
 import type { FeedbackReasonTag } from "../learning/infer.js";
 
 export const DOCUMENT_ACTIONS = ["default", "label", "replace", "remove", "confirm_remove"] as const;
@@ -27,7 +33,14 @@ export type CallbackAction =
   | { type: "edit_cancel"; token: string }
   | { type: "feedback_reason"; feedbackId: string; tag: FeedbackReasonTag }
   | { type: "feedback_reason_text"; feedbackId: string }
-  | { type: "proposal_decision"; preferenceId: string; accept: boolean };
+  | { type: "proposal_decision"; preferenceId: string; accept: boolean }
+  | { type: "applications" }
+  | { type: "application_log" }
+  | { type: "application"; applicationId: string }
+  | { type: "apply_match"; matchId: string }
+  | { type: "apply_cv"; versionId: string }
+  | { type: "application_status"; applicationId: string; status: ApplicationStatus }
+  | { type: "application_note"; applicationId: string };
 
 const VERDICT_CODES: Record<FeedbackVerdict, string> = { interested: "i", not_interested: "n" };
 const REASON_CODES: Record<FeedbackReasonTag, string> = {
@@ -46,6 +59,15 @@ const DOCUMENT_ACTION_CODES: Record<DocumentAction, string> = {
   replace: "r",
   remove: "x",
   confirm_remove: "y",
+};
+const STATUS_CODES: Record<ApplicationStatus, string> = {
+  applied: "a",
+  screening: "s",
+  interviewing: "i",
+  offer: "o",
+  rejected: "r",
+  withdrawn: "w",
+  no_response: "n",
 };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TOKEN = /^[A-Za-z0-9_-]{4,32}$/;
@@ -98,6 +120,20 @@ export function encodeCallback(action: CallbackAction): string {
       return `fr:${REASON_TEXT_CODE}:${action.feedbackId}`;
     case "proposal_decision":
       return `pp:${action.accept ? "a" : "r"}:${action.preferenceId}`;
+    case "applications":
+      return "ap:list";
+    case "application_log":
+      return "ap:add";
+    case "application":
+      return `ap:${action.applicationId}`;
+    case "apply_match":
+      return `ap:m:${action.matchId}`;
+    case "apply_cv":
+      return `ap:v:${action.versionId}`;
+    case "application_status":
+      return `ap:s:${STATUS_CODES[action.status]}:${action.applicationId}`;
+    case "application_note":
+      return `ap:n:${action.applicationId}`;
   }
 }
 
@@ -110,6 +146,8 @@ export function decodeCallback(data: string): CallbackAction | null {
   if (data === "src:sites") return { type: "sources_sites" };
   if (data === "doc:list") return { type: "documents" };
   if (data === "doc:add") return { type: "document_upload" };
+  if (data === "ap:list") return { type: "applications" };
+  if (data === "ap:add") return { type: "application_log" };
   if (parts.length === 2 && parts[0] === "lang") {
     const language = CONVERSATION_LANGUAGES.find((l) => l === parts[1]);
     if (language) return { type: "set_language", language };
@@ -147,6 +185,15 @@ export function decodeCallback(data: string): CallbackAction | null {
   if (parts.length === 3 && parts[0] === "cvl") {
     const language = CONVERSATION_LANGUAGES.find((l) => l === parts[1]);
     if (language) return { type: "cv_language", versionId: id, language };
+  }
+  if (parts[0] === "ap") {
+    if (parts.length === 2) return { type: "application", applicationId: id };
+    if (parts.length === 3 && parts[1] === "m") return { type: "apply_match", matchId: id };
+    if (parts.length === 3 && parts[1] === "v") return { type: "apply_cv", versionId: id };
+    if (parts.length === 3 && parts[1] === "n") return { type: "application_note", applicationId: id };
+    const status = (Object.keys(STATUS_CODES) as ApplicationStatus[]).find((s) => STATUS_CODES[s] === parts[2]);
+    if (parts.length === 4 && parts[1] === "s" && status) return { type: "application_status", applicationId: id, status };
+    return null;
   }
   if (parts.length === 3 && parts[0] === "pp" && (parts[1] === "a" || parts[1] === "r")) {
     return { type: "proposal_decision", preferenceId: id, accept: parts[1] === "a" };

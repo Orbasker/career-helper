@@ -226,6 +226,7 @@ describe("analyzing a job link in the bot", () => {
       encodeCallback({ type: "feedback", matchId: match!.id, verdict: "not_interested" }),
       encodeCallback({ type: "tailor_cv", matchId: match!.id }),
       "https://careers.acme.com/jobs/hrbp",
+      encodeCallback({ type: "apply_match", matchId: match!.id }),
     ]);
 
     const [job] = await db.select().from(jobs).innerJoin(jobSources, eq(jobSources.id, jobs.sourceId));

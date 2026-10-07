@@ -1,6 +1,8 @@
 import { InlineKeyboard, Keyboard } from "grammy";
+import { APPLICATION_STATUS_ORDER } from "../domain/applications.js";
 import { formatMonth } from "../domain/dates.js";
 import {
+  APPLICATION_STATUSES,
   CONVERSATION_LANGUAGES,
   CV_FILE_FORMATS,
   type ConversationLanguage,
@@ -12,6 +14,9 @@ import { DEFAULT_LANGUAGE, LANGUAGE_NAMES } from "../domain/language.js";
 import type { Strings } from "../i18n/index.js";
 import type {
   AddSiteOutcome,
+  ApplicationEventView,
+  ApplicationSummary,
+  ApplicationView,
   ConnectionImport,
   JobLinkOutcome,
   ConnectionSummary,
@@ -47,7 +52,7 @@ export const mainMenu = (t: Strings) => new Keyboard().text(t.menu.whatsNew).tex
 export const ASK_LANGUAGE = "👋 Hi! Which language should I use with you?\nשלום! באיזו שפה נדבר?";
 
 export function botCommands(t: Strings) {
-  return (["new", "profile", "cvs", "sources", "sites", "connections", "language", "start", "help"] as const).map((command) => ({
+  return (["new", "profile", "cvs", "applications", "sources", "sites", "connections", "language", "start", "help"] as const).map((command) => ({
     command,
     description: t.commands[command],
   }));
@@ -181,7 +186,17 @@ export function matchDetailsView(t: Strings, match: MatchDetails): { text: strin
     )
     .row()
     .text(t.buttons.tailorCv, encodeCallback({ type: "tailor_cv", matchId }))
-    .url(t.buttons.originalPosting, match.sourceUrl);
+    .url(t.buttons.originalPosting, match.sourceUrl)
+    .row();
+  const { application } = match;
+  if (application) {
+    keyboard.text(
+      t.buttons.appliedStatus(t.applications.statuses[application.status]),
+      encodeCallback({ type: "application", applicationId: application.id }),
+    );
+  } else {
+    keyboard.text(t.buttons.applied, encodeCallback({ type: "apply_match", matchId }));
+  }
   return { text: sections.join("\n\n"), keyboard };
 }
 
@@ -370,7 +385,75 @@ export function cvDocumentKeyboard(
   const language = otherLanguage(sent.language);
   return new InlineKeyboard()
     .text(format === "pdf" ? t.buttons.pdf : t.buttons.word, encodeCallback({ type: "cv_document", versionId, format }))
-    .text(t.buttons.cvInLanguage(t.documentLanguages[language]), encodeCallback({ type: "cv_language", versionId, language }));
+    .text(t.buttons.cvInLanguage(t.documentLanguages[language]), encodeCallback({ type: "cv_language", versionId, language }))
+    .row()
+    .text(t.buttons.appliedWithCv, encodeCallback({ type: "apply_cv", versionId }));
+}
+
+const MAX_APPLICATION_BUTTONS = 40;
+const APPLICATION_BUTTON_TITLE_LENGTH = 40;
+const APPLICATION_BUTTON_COMPANY_LENGTH = 20;
+const MAX_HISTORY_SHOWN = 20;
+
+export function applicationsViews(t: Strings, list: ApplicationSummary[]): View[] {
+  const logButton = [t.buttons.logApplication, encodeCallback({ type: "application_log" })] as const;
+  if (list.length === 0) return [{ text: t.applications.empty, keyboard: new InlineKeyboard().text(...logButton) }];
+
+  const ordered = APPLICATION_STATUS_ORDER.flatMap((status) => list.filter((a) => a.status === status));
+  const sections = APPLICATION_STATUS_ORDER.flatMap((status) => {
+    const group = ordered.filter((a) => a.status === status);
+    if (group.length === 0) return [];
+    const items = group.map((a) => {
+      const company = a.company ? escapeHtml(a.company) : null;
+      return t.applications.item(ordered.indexOf(a) + 1, escapeHtml(a.title), company, isoDay(a.appliedAt));
+    });
+    return [[t.applications.group(t.applications.statuses[status], group.length), ...items].join("\n")];
+  });
+  const keyboard = new InlineKeyboard();
+  ordered.slice(0, MAX_APPLICATION_BUTTONS).forEach((a, i) => {
+    const company = a.company ? ` · ${clip(a.company, APPLICATION_BUTTON_COMPANY_LENGTH)}` : "";
+    keyboard.text(`${i + 1}. ${clip(a.title, APPLICATION_BUTTON_TITLE_LENGTH)}${company}`, encodeCallback({ type: "application", applicationId: a.id })).row();
+  });
+  keyboard.text(...logButton);
+  return withFinalKeyboard([t.applications.title, ...sections], t.applications.outro, keyboard);
+}
+
+function applicationEventLine(t: Strings, event: ApplicationEventView): string {
+  const day = isoDay(event.at);
+  const a = t.applications;
+  const line =
+    event.kind === "note_added"
+      ? a.eventNote(day, escapeHtml(event.note ?? ""))
+      : event.kind === "cv_linked"
+        ? a.eventCv(day, event.cvLanguage ? t.documentLanguages[event.cvLanguage] : null)
+        : event.fromStatus
+          ? a.eventStatus(day, a.statuses[event.fromStatus], a.statuses[event.toStatus!])
+          : a.eventApplied(day);
+  return `• ${line}${a.eventSources[event.source]}`;
+}
+
+export function applicationCardView(t: Strings, application: ApplicationView, now = new Date()): View {
+  const a = t.applications;
+  const company = application.company ? escapeHtml(application.company) : null;
+  const lines = [
+    a.cardTitle(escapeHtml(application.title), company),
+    a.status(a.statuses[application.status], timeAgo(t, application.lastEventAt, now)),
+    a.appliedOn(isoDay(application.appliedAt), application.cvLanguage ? t.documentLanguages[application.cvLanguage] : null),
+  ];
+  if (application.sourceUrl) lines.push(`<a href="${escapeHtml(application.sourceUrl)}">${a.openPosting}</a>`);
+  const history = application.events.slice(-MAX_HISTORY_SHOWN).map((e) => applicationEventLine(t, e));
+  const sections = [lines.join("\n"), [a.history, ...history].join("\n"), a.cardOutro];
+
+  const keyboard = new InlineKeyboard();
+  APPLICATION_STATUSES.filter((s) => s !== application.status).forEach((status, i) => {
+    keyboard.text(a.statuses[status], encodeCallback({ type: "application_status", applicationId: application.id, status }));
+    if (i % 2 === 1) keyboard.row();
+  });
+  keyboard
+    .row()
+    .text(t.buttons.addNote, encodeCallback({ type: "application_note", applicationId: application.id }))
+    .text(t.buttons.myApplications, encodeCallback({ type: "applications" }));
+  return { text: packMessages(sections)[0]!, keyboard };
 }
 
 export function sitesView(t: Strings, sites: JobSiteView[]): { text: string; keyboard?: InlineKeyboard } {

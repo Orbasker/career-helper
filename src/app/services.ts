@@ -1,4 +1,7 @@
 import type {
+  ApplicationEventKind,
+  ApplicationEventSource,
+  ApplicationStatus,
   CareerFactKind,
   ConfidenceLevel,
   ConversationLanguage,
@@ -75,6 +78,8 @@ export interface MatchDetails extends MatchSummary {
   contacts: Contact[];
   connectionsImportedAt: Date | null;
   provenance: JobProvenance;
+  /** The user's application for this job, when they applied. */
+  application: { id: string; status: ApplicationStatus } | null;
 }
 
 export interface ProfileView {
@@ -428,6 +433,76 @@ export interface JobLinkService {
   analyze(userId: string, url: string): Promise<JobLinkOutcome>;
 }
 
+export interface ApplicationSummary {
+  id: string;
+  title: string;
+  company: string | null;
+  status: ApplicationStatus;
+  appliedAt: Date;
+  lastEventAt: Date;
+}
+
+export interface ApplicationEventView {
+  kind: ApplicationEventKind;
+  fromStatus: ApplicationStatus | null;
+  toStatus: ApplicationStatus | null;
+  note: string | null;
+  /** The language of the tailored CV the event linked. */
+  cvLanguage: ConversationLanguage | null;
+  source: ApplicationEventSource;
+  at: Date;
+}
+
+export interface ApplicationView extends ApplicationSummary {
+  matchId: string | null;
+  sourceUrl: string | null;
+  /** The language of the tailored CV the user applied with, when one is linked. */
+  cvLanguage: ConversationLanguage | null;
+  notes: string | null;
+  /** Oldest first. */
+  events: ApplicationEventView[];
+}
+
+export interface ManualApplication {
+  company: string;
+  title: string;
+  url: string | null;
+}
+
+export type ApplyOutcome =
+  | { kind: "created"; application: ApplicationView }
+  | { kind: "exists"; application: ApplicationView }
+  | { kind: "not_found" };
+
+export type StatusChange = { kind: "changed" | "unchanged"; application: ApplicationView } | { kind: "not_found" };
+
+export interface ApplicationService {
+  /** The user's applications, most recently updated first; null before the profile is confirmed. */
+  list(userId: string): Promise<ApplicationSummary[] | null>;
+  get(userId: string, applicationId: string): Promise<ApplicationView | null>;
+  /** Records that the user applied to a matched job, with the latest tailored CV they approved for it. */
+  applyToMatch(userId: string, matchId: string): Promise<ApplyOutcome>;
+  /** Records that the user applied with an approved tailored CV, linking it to an existing application for the job. */
+  applyWithCv(userId: string, versionId: string): Promise<ApplyOutcome>;
+  /** Logs an application for a job the agent did not surface, linked to the user's match for it when there is one. */
+  logManual(userId: string, details: ManualApplication): Promise<ApplyOutcome>;
+  /** Changes the status and appends it to the application's history; setting the current status records nothing. */
+  setStatus(
+    userId: string,
+    applicationId: string,
+    status: ApplicationStatus,
+    origin?: { source: ApplicationEventSource; evidenceRef?: string | null },
+  ): Promise<StatusChange>;
+  /** Makes the user's next text message the details of an application to log, for a short while. */
+  awaitDetails(userId: string): Promise<boolean>;
+  /** Returns true and stops waiting when details were awaited, so the text is logged instead of handled normally. */
+  takeDetails(userId: string): Promise<boolean>;
+  /** Makes the user's next text message a note on the application, for a short while. */
+  awaitNote(userId: string, applicationId: string): Promise<ApplicationView | null>;
+  /** Saves `text` as the awaited note; null when no note is awaited, so the text is handled normally. */
+  takeNote(userId: string, text: string): Promise<ApplicationView | null>;
+}
+
 export interface StatsService {
   /** Operator report for the last `days` days, formatted for Telegram. */
   report(days: number): Promise<string>;
@@ -446,4 +521,5 @@ export interface AppServices {
   connections: ConnectionService;
   jobLinks: JobLinkService;
   documents: DocumentService;
+  applications: ApplicationService;
 }

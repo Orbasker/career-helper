@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { APPLICATION_STATUSES } from "../src/domain/enums.js";
 import { decodeCallback, encodeCallback, type CallbackAction } from "../src/bot/callbacks.js";
 
 const matchId = "0b6f3f8e-8a55-4d5e-9a43-3c1f1f2b9d10";
@@ -39,6 +40,13 @@ describe("callback data", () => {
     { type: "document_action", documentId: feedbackId, action: "replace" },
     { type: "document_action", documentId: feedbackId, action: "remove" },
     { type: "document_action", documentId: feedbackId, action: "confirm_remove" },
+    { type: "applications" },
+    { type: "application_log" },
+    { type: "application", applicationId: feedbackId },
+    { type: "apply_match", matchId },
+    { type: "apply_cv", versionId: feedbackId },
+    { type: "application_note", applicationId: feedbackId },
+    ...APPLICATION_STATUSES.map((status): CallbackAction => ({ type: "application_status", applicationId: feedbackId, status })),
   ])("round-trips %o within Telegram's 64-byte limit", (action) => {
     const data = encodeCallback(action);
     expect(Buffer.byteLength(data)).toBeLessThanOrEqual(64);
@@ -49,7 +57,7 @@ describe("callback data", () => {
     expect(decodeCallback(`cvf:${feedbackId}`)).toEqual({ type: "cv_document", versionId: feedbackId, format: "docx" });
   });
 
-  it.each(["", "job:not-a-uuid", `fb:x:${matchId}`, `unknown:${matchId}`, `job:extra:${matchId}`, "pe:x:abcdefgh", "pe:a:no spaces", "ob:other", `fr:z:${feedbackId}`, `pp:x:${feedbackId}`, "fr:r:not-a-uuid", `dl:fr:${feedbackId}`, `doc:z:${feedbackId}`, "doc:not-a-uuid", "doc:other", `cvf:x:${feedbackId}`, `cvl:fr:${feedbackId}`])(
+  it.each(["", "job:not-a-uuid", `fb:x:${matchId}`, `unknown:${matchId}`, `job:extra:${matchId}`, "pe:x:abcdefgh", "pe:a:no spaces", "ob:other", `fr:z:${feedbackId}`, `pp:x:${feedbackId}`, "fr:r:not-a-uuid", `dl:fr:${feedbackId}`, `doc:z:${feedbackId}`, "doc:not-a-uuid", "doc:other", `cvf:x:${feedbackId}`, `cvl:fr:${feedbackId}`, `ap:x:${feedbackId}`, `ap:s:z:${feedbackId}`, `ap:s:${feedbackId}`, "ap:not-a-uuid"])(
     "rejects %s",
     (data) => {
       expect(decodeCallback(data)).toBeNull();
