@@ -1,5 +1,7 @@
 import { and, count, eq } from "drizzle-orm";
-import { careerProfiles, conversationStates, masterCvs, profileSources } from "../../db/schema.js";
+import type { ConversationLanguage } from "../../domain/enums.js";
+import { parseLanguageChoice } from "../../domain/language.js";
+import { careerProfiles, conversationStates, masterCvs, profileSources, users } from "../../db/schema.js";
 import type { Db } from "../../db/types.js";
 import { classifySource, parseLinkedinUrl, readDocumentText } from "../documents.js";
 import type {
@@ -10,7 +12,7 @@ import type {
 } from "../services.js";
 import { applyChanges, clearDraftProfile, confirmDraftProfile, loadSnapshot, toProfileView } from "./profile.js";
 
-export type OnboardingStepKey = "linkedin" | "documents" | "analyzing" | "questions" | "review";
+export type OnboardingStepKey = "language" | "linkedin" | "documents" | "analyzing" | "questions" | "review";
 
 interface QuestionsContext {
   questions?: string[];
@@ -26,7 +28,12 @@ export class PgOnboardingService implements OnboardingService {
     private readonly assistant: ProfileAssistant,
   ) {}
 
-  async start(userId: string): Promise<ProfileReply> {
+  async start(userId: string): Promise<ProfileReply[]> {
+    const [user] = await this.db
+      .select({ language: users.preferredLanguage })
+      .from(users)
+      .where(eq(users.id, userId));
+    const firstStep = user?.language ? "linkedin" : "language";
     await this.db.transaction(async (tx) => {
       await clearDraftProfile(tx, userId);
       const reset = {
@@ -40,13 +47,36 @@ export class PgOnboardingService implements OnboardingService {
         confirmedAt: null,
       };
       await tx.insert(careerProfiles).values({ userId, ...reset }).onConflictDoUpdate({ target: careerProfiles.userId, set: reset });
-      await this.setStep(tx, userId, "linkedin", {});
+      await this.setStep(tx, userId, firstStep, {});
     });
-    return { kind: "ask_linkedin" };
+    return firstStep === "language" ? [{ kind: "ask_language" }] : [{ kind: "onboarding_welcome" }, { kind: "ask_linkedin" }];
+  }
+
+  async chooseLanguage(userId: string, language: ConversationLanguage): Promise<ProfileReply[]> {
+    return this.db.transaction(async (tx) => {
+      await tx.update(users).set({ preferredLanguage: language }).where(eq(users.id, userId));
+      const resumed = await tx
+        .update(conversationStates)
+        .set({ step: "linkedin", context: {} })
+        .where(
+          and(
+            eq(conversationStates.userId, userId),
+            eq(conversationStates.flow, "onboarding"),
+            eq(conversationStates.step, "language"),
+          ),
+        )
+        .returning({ userId: conversationStates.userId });
+      const saved = { kind: "language_saved", language } as const;
+      return resumed.length > 0 ? [saved, { kind: "onboarding_welcome" }, { kind: "ask_linkedin" }] : [saved];
+    });
   }
 
   async answer(userId: string, step: string, context: QuestionsContext, text: string): Promise<ProfileReply[]> {
     switch (step as OnboardingStepKey) {
+      case "language": {
+        const language = parseLanguageChoice(text);
+        return language ? this.chooseLanguage(userId, language) : [{ kind: "ask_language" }];
+      }
       case "linkedin": {
         const url = parseLinkedinUrl(text);
         if (url) await this.db.update(careerProfiles).set({ linkedinUrl: url }).where(eq(careerProfiles.userId, userId));
@@ -64,7 +94,7 @@ export class PgOnboardingService implements OnboardingService {
       case "review":
         return this.correctReview(userId, text);
       default:
-        return [await this.start(userId)];
+        return this.start(userId);
     }
   }
 

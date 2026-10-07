@@ -108,8 +108,13 @@ async function userIdOf(person: TelegramPerson) {
   return user!.id;
 }
 
-async function onboard(person: TelegramPerson = DANA) {
+async function start(person: TelegramPerson = DANA) {
   await send(textUpdate("/start", person));
+  await send(callbackUpdate(encodeCallback({ type: "set_language", language: "en" }), person));
+}
+
+async function onboard(person: TelegramPerson = DANA) {
+  await start(person);
   await send(textUpdate("linkedin.com/in/dana-levi", person));
   await send(documentUpdate({ fileName: "cv.txt", mimeType: "text/plain" }, person));
   await send(callbackUpdate(encodeCallback({ type: "onboarding_analyze" }), person));
@@ -122,7 +127,11 @@ async function onboard(person: TelegramPerson = DANA) {
 describe("career-profile onboarding", () => {
   it("imports LinkedIn and CV, asks follow-ups and saves facts only after review", async () => {
     await send(textUpdate("/start"));
-    expect(sent()).toEqual([messages.welcomeNew, messages.askLinkedin]);
+    expect(sent()).toEqual([messages.askLanguage]);
+    expect(lastKeyboardData()).toEqual(["lang:en", "lang:he"]);
+
+    await send(callbackUpdate(encodeCallback({ type: "set_language", language: "en" })));
+    expect(sent()).toEqual([messages.languageSaved.en, messages.welcomeNew, messages.askLinkedin]);
 
     await send(textUpdate("Sure: https://www.linkedin.com/in/dana-levi/"));
     expect(sent()[0]).toContain(messages.linkedinSaved);
@@ -207,7 +216,7 @@ describe("career-profile onboarding", () => {
 
   it("applies corrections during review before anything is confirmed", async () => {
     assistant.extraction = { changes: EXTRACTION, followUpQuestions: [] };
-    await send(textUpdate("/start"));
+    await start();
     await send(textUpdate("skip"));
     await send(textUpdate("I was HR manager at Acme since 2019 and I know Workday"));
     expect(sent()[0]).toContain("Got your notes");
@@ -234,7 +243,7 @@ describe("career-profile onboarding", () => {
   });
 
   it("needs at least one source before analyzing", async () => {
-    await send(textUpdate("/start"));
+    await start();
     await send(textUpdate("skip"));
     expect(sent()[0]).toContain(messages.linkedinSkipped);
     await send(callbackUpdate(encodeCallback({ type: "onboarding_analyze" })));
@@ -243,7 +252,7 @@ describe("career-profile onboarding", () => {
   });
 
   it("rejects unreadable and unexpected documents", async () => {
-    await send(textUpdate("/start"));
+    await start();
     await send(documentUpdate({ fileName: "photo.jpg", mimeType: "image/jpeg" }));
     expect(sent()).toEqual([messages.unreadableDocument]);
     await send(documentUpdate({ fileName: "huge.pdf", mimeType: "application/pdf", fileSize: 50_000_000 }));
@@ -255,7 +264,7 @@ describe("career-profile onboarding", () => {
   });
 
   it("restarts cleanly from /start before the profile is confirmed", async () => {
-    await send(textUpdate("/start"));
+    await start();
     await send(textUpdate("skip"));
     await send(documentUpdate({ fileName: "cv.txt", mimeType: "text/plain" }));
     await send(callbackUpdate(encodeCallback({ type: "onboarding_analyze" })));
@@ -293,7 +302,7 @@ describe("continuous profile editing", () => {
       ],
     });
     assistant.extraction = { changes: EXTRACTION, followUpQuestions: ["Which roles?", "Work mode?"] };
-    await send(textUpdate("/start"));
+    await start();
     await send(textUpdate("skip"));
     await send(documentUpdate({ fileName: "cv.txt", mimeType: "text/plain" }));
     await send(callbackUpdate(encodeCallback({ type: "onboarding_analyze" })));
@@ -467,5 +476,91 @@ describe("multi-user isolation", () => {
     const byUser = new Map(profiles.map((p) => [p.userId, p.headline]));
     expect(byUser.get(await userIdOf(DANA))).toBe("Edited 3");
     expect(byUser.get(await userIdOf(NOA))).toBe("HR Manager");
+  });
+});
+
+describe("conversation language", () => {
+  const languageOf = async (person: TelegramPerson = DANA) => {
+    const [user] = await db.select().from(users).where(eq(users.telegramUserId, person.id));
+    return user!.preferredLanguage;
+  };
+
+  it("lets a new user answer the language question in text and keeps asking until it is clear", async () => {
+    await send(textUpdate("/start"));
+    await send(textUpdate("French"));
+    expect(sent()).toEqual([messages.askLanguage]);
+    expect(await languageOf()).toBeNull();
+
+    await send(textUpdate("עברית"));
+    expect(sent()).toEqual([messages.languageSaved.he, messages.welcomeNew, messages.askLinkedin]);
+    expect(await languageOf()).toBe("he");
+  });
+
+  it("keeps the choice across restarts without asking again", async () => {
+    await start();
+    bot = createBot("test-token", createPgServices(db, assistant, new FakeCvTailorer()), { botInfo: BOT_INFO });
+    calls = captureApiCalls(bot);
+
+    await send(textUpdate("/start"));
+    expect(sent()).toEqual([messages.welcomeNew, messages.askLinkedin]);
+    await send(textUpdate("/language"));
+    expect(sent()[0]).toContain("<b>English</b>");
+    expect(lastKeyboardData()).toEqual(["lang:en", "lang:he"]);
+    expect(calls.at(-1)!.payload.reply_markup.inline_keyboard[0][0].text).toBe("✅ English");
+  });
+
+  it("switches language from settings or a request without touching the profile", async () => {
+    const userId = await onboard();
+    const factsBefore = await db.select().from(careerFacts).where(eq(careerFacts.userId, userId));
+    const [profileBefore] = await db.select().from(careerProfiles).where(eq(careerProfiles.userId, userId));
+
+    await send(textUpdate("Switch to Hebrew"));
+    expect(sent()).toEqual([messages.languageSaved.he]);
+    expect(assistant.interpretCalls).toHaveLength(0);
+    expect(await languageOf()).toBe("he");
+
+    await send(textUpdate("/language"));
+    expect(sent()[0]).toContain("<b>עברית</b>");
+    await send(callbackUpdate(encodeCallback({ type: "set_language", language: "en" })));
+    expect(sent()).toEqual([messages.languageSaved.en]);
+    expect(await languageOf()).toBe("en");
+
+    await send(textUpdate("תדבר איתי בעברית"));
+    expect(await languageOf()).toBe("he");
+
+    await send(textUpdate("change language"));
+    expect(sent()[0]).toContain("Tap a language");
+
+    const factsAfter = await db.select().from(careerFacts).where(eq(careerFacts.userId, userId));
+    const [profileAfter] = await db.select().from(careerProfiles).where(eq(careerProfiles.userId, userId));
+    expect(factsAfter).toEqual(factsBefore);
+    expect(profileAfter).toEqual(profileBefore);
+    const [state] = await db.select().from(conversationStates).where(eq(conversationStates.userId, userId));
+    expect(state!.flow).toBe("idle");
+  });
+
+  it("asks an existing user without a language once, after handling their message", async () => {
+    const [user] = await db.insert(users).values({ telegramUserId: DANA.id, telegramChatId: DANA.id }).returning();
+    await db.insert(careerProfiles).values({ userId: user!.id, status: "confirmed" });
+    expect(user!.preferredLanguage).toBeNull();
+
+    await send(textUpdate("/new"));
+    expect(sent()).toEqual([messages.noMatches, messages.askLanguage]);
+    await send(textUpdate("/new"));
+    expect(sent()).toEqual([messages.noMatches]);
+
+    await send(callbackUpdate(encodeCallback({ type: "set_language", language: "he" })));
+    expect(sent()).toEqual([messages.languageSaved.he]);
+    expect(await languageOf()).toBe("he");
+  });
+
+  it("does not ask an existing user who already chose a language", async () => {
+    const [user] = await db
+      .insert(users)
+      .values({ telegramUserId: DANA.id, telegramChatId: DANA.id, preferredLanguage: "en" })
+      .returning();
+    await db.insert(careerProfiles).values({ userId: user!.id, status: "confirmed" });
+    await send(textUpdate("/new"));
+    expect(sent()).toEqual([messages.noMatches]);
   });
 });

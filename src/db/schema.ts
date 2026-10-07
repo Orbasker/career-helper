@@ -22,6 +22,7 @@ import {
   CAREER_FACT_KINDS,
   CONFIDENCE_LEVELS,
   CONVERSATION_FLOWS,
+  CONVERSATION_LANGUAGES,
   CV_SECTIONS,
   CV_VERSION_STATUSES,
   DEDUP_METHODS,
@@ -68,6 +69,7 @@ export const feedbackVerdict = pgEnum("feedback_verdict", FEEDBACK_VERDICTS);
 export const cvVersionStatus = pgEnum("cv_version_status", CV_VERSION_STATUSES);
 export const cvSection = pgEnum("cv_section", CV_SECTIONS);
 export const conversationFlow = pgEnum("conversation_flow", CONVERSATION_FLOWS);
+export const conversationLanguage = pgEnum("conversation_language", CONVERSATION_LANGUAGES);
 
 const id = () => uuid("id").primaryKey().defaultRandom();
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
@@ -83,6 +85,9 @@ export const users = pgTable("users", {
   telegramChatId: bigint("telegram_chat_id", { mode: "number" }).notNull(),
   displayName: text("display_name"),
   locale: text("locale"),
+  /** Null until the user picks a language; the bot then uses English. */
+  preferredLanguage: conversationLanguage("preferred_language"),
+  languagePromptedAt: timestamp("language_prompted_at", { withTimezone: true }),
   timezone: text("timezone").notNull().default("Asia/Jerusalem"),
   notificationsEnabled: boolean("notifications_enabled").notNull().default(true),
   createdAt: createdAt(),

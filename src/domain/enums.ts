@@ -101,3 +101,6 @@ export type CvSection = (typeof CV_SECTIONS)[number];
 
 export const CONVERSATION_FLOWS = ["idle", "onboarding", "preference_update", "profile_edit", "cv_request"] as const;
 export type ConversationFlow = (typeof CONVERSATION_FLOWS)[number];
+
+export const CONVERSATION_LANGUAGES = ["en", "he"] as const;
+export type ConversationLanguage = (typeof CONVERSATION_LANGUAGES)[number];

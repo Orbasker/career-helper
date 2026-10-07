@@ -1,4 +1,4 @@
-import type { FeedbackVerdict } from "../domain/enums.js";
+import { CONVERSATION_LANGUAGES, type ConversationLanguage, type FeedbackVerdict } from "../domain/enums.js";
 import type { FeedbackReasonTag } from "../learning/infer.js";
 
 export type CallbackAction =
@@ -9,6 +9,7 @@ export type CallbackAction =
   | { type: "cv_document"; versionId: string }
   | { type: "site_remove"; siteId: string }
   | { type: "connections_delete" }
+  | { type: "set_language"; language: ConversationLanguage }
   | { type: "onboarding_analyze" }
   | { type: "onboarding_confirm" }
   | { type: "edit_apply"; token: string }
@@ -46,6 +47,8 @@ export function encodeCallback(action: CallbackAction): string {
       return `st:x:${action.siteId}`;
     case "connections_delete":
       return "cn:delete";
+    case "set_language":
+      return `lang:${action.language}`;
     case "onboarding_analyze":
       return "ob:analyze";
     case "onboarding_confirm":
@@ -68,6 +71,10 @@ export function decodeCallback(data: string): CallbackAction | null {
   if (data === "ob:analyze") return { type: "onboarding_analyze" };
   if (data === "ob:confirm") return { type: "onboarding_confirm" };
   if (data === "cn:delete") return { type: "connections_delete" };
+  if (parts.length === 2 && parts[0] === "lang") {
+    const language = CONVERSATION_LANGUAGES.find((l) => l === parts[1]);
+    if (language) return { type: "set_language", language };
+  }
   if (parts.length === 3 && parts[0] === "pe" && TOKEN.test(parts[2]!)) {
     if (parts[1] === "a") return { type: "edit_apply", token: parts[2]! };
     if (parts[1] === "c") return { type: "edit_cancel", token: parts[2]! };

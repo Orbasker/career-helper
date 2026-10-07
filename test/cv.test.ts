@@ -259,7 +259,7 @@ describe("CV tailoring flow", () => {
     service = new PgCvService(db, tailorer, () => clock);
 
     const verifiedAt = new Date();
-    const [user] = await db.insert(users).values({ telegramUserId: TELEGRAM_USER_ID, telegramChatId: TELEGRAM_USER_ID }).returning();
+    const [user] = await db.insert(users).values({ telegramUserId: TELEGRAM_USER_ID, telegramChatId: TELEGRAM_USER_ID, preferredLanguage: "en" }).returning();
     userId = user!.id;
     await db.insert(careerProfiles).values({ userId, status: "confirmed", revision: 4, headline: "HR Business Partner" });
     const [experience] = await db
