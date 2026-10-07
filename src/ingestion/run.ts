@@ -63,6 +63,7 @@ export function summarize(report: IngestReport) {
     invalid: report.invalid.length,
     failed: report.failed.length,
     errors: report.errors.length,
+    errorScopes: report.errors.map((e) => e.scope),
     durationMs: report.durationMs,
   };
 }

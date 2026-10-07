@@ -9,6 +9,8 @@ export type CallbackAction =
   | { type: "cv_document"; versionId: string }
   | { type: "site_remove"; siteId: string }
   | { type: "connections_delete" }
+  | { type: "sources_boards" }
+  | { type: "sources_sites" }
   | { type: "set_language"; language: ConversationLanguage }
   | { type: "onboarding_analyze" }
   | { type: "onboarding_confirm" }
@@ -48,6 +50,10 @@ export function encodeCallback(action: CallbackAction): string {
       return `st:x:${action.siteId}`;
     case "connections_delete":
       return "cn:delete";
+    case "sources_boards":
+      return "src:boards";
+    case "sources_sites":
+      return "src:sites";
     case "set_language":
       return `lang:${action.language}`;
     case "onboarding_analyze":
@@ -74,6 +80,8 @@ export function decodeCallback(data: string): CallbackAction | null {
   if (data === "ob:analyze") return { type: "onboarding_analyze" };
   if (data === "ob:confirm") return { type: "onboarding_confirm" };
   if (data === "cn:delete") return { type: "connections_delete" };
+  if (data === "src:boards") return { type: "sources_boards" };
+  if (data === "src:sites") return { type: "sources_sites" };
   if (parts.length === 2 && parts[0] === "lang") {
     const language = CONVERSATION_LANGUAGES.find((l) => l === parts[1]);
     if (language) return { type: "set_language", language };

@@ -38,7 +38,7 @@ No search or fetch starts more than 90s after the run began (`DEFAULT_DISCOVERY_
 - Setting `job_sources.is_enabled = false` for `web_search` turns discovery off without a deploy; `DISCOVERY_ENABLED=false` does the same.
 
 The report (logged as `pipeline.discovery` and returned by the cron) includes:
-- users, searches and candidates;
+- users, the users whose searches all completed (`searchedUsers`), searches and candidates;
 - boards added, pages fetched, postings and distinct companies;
 - skipped pages (already known, robots, not a posting, closed, over budget);
 - the ingest summary and errors.
@@ -52,6 +52,20 @@ The report (logged as `pipeline.discovery` and returned by the cron) includes:
 | `/sites` | Lists the sites with ✖️ buttons to remove them (`st:x:<siteId>`). |
 
 A link to a Greenhouse, Lever or Ashby board is added as a basic board for everyone instead of a user site, since its official API is cheaper and more complete than searching it.
+
+## Showing sources to users
+
+`/sources` (`PgSourceService`, `src/app/postgres/sources.ts`) is built only from stored data:
+
+| Shown | Comes from |
+| --- | --- |
+| Boards per source, enabled or not | `job_sources.config.boards`, `is_enabled` |
+| Last board collection | `job_sources.last_collected_at` |
+| Last web search for the user | the latest `pipeline_runs` row whose discovery `searchedUsers` contains them |
+| Jobs and new companies (no earlier job at that company) in the last 7 days | `jobs.created_at`, per origin |
+| Problems | the latest finished run: board sources with errors (`errorScopes` `board:<token>` → unreachable boards), a failed ingestion or discovery stage, a `user:<id>` discovery error, discovery skipped (turned off); plus disabled sources |
+
+A job's origin for a user (`jobOrigin`) is `board` for board sources, `user_site` for a `web_search` posting found on that user's own sites (`payload.foundBy`), `web_search` for other web postings (including those found on another user's sites, which are never revealed), and `user_link` for `manual` sources. Job details show the origin, when any copy of the job was first collected and up to 3 other URLs from its duplicate group.
 
 ## Settings
 

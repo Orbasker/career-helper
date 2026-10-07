@@ -9,6 +9,7 @@ import {
   MY_PROFILE_LABEL,
   WHATS_NEW_LABEL,
   addSiteReply,
+  boardsViews,
   connectionsImportReply,
   connectionsView,
   cvDraftViews,
@@ -22,6 +23,7 @@ import {
   profileReplyViews,
   proposalView,
   sitesView,
+  sourcesView,
   type View,
 } from "./views.js";
 
@@ -32,6 +34,10 @@ const FORGET_CONNECTIONS = /\b(delete|remove|forget|erase)\b.*\b(my )?(linkedin 
 
 /** "search on example.co.il", "also look at https://jobs.example.com" and similar requests to add a job site. */
 const SITE_REQUEST = /\b(?:search|look|check)\b[^.?!\n]*?\b(?:on|in|at)\s+((?:https?:\/\/)?(?:[\w-]+\.)+[a-z]{2,}(?:\/\S*)?)/i;
+
+/** "where are you searching?", "which sites do you check?", "איפה אתה מחפש?" and similar questions about job sources. */
+const SOURCES_REQUEST =
+  /\bwhere (?:are|do|did) you (?:search|look|find|get|check)|\b(?:which|what) (?:sites|sources|boards|job boards) (?:do|are|did) you\b|\b(?:your|job|search) sources\b|איפה (?:אתה |את )?(?:מחפש|מחפשת|חיפשת)|באילו (?:אתרים|מקורות)|מאיפה (?:אתה מביא|את מביאה|הגיעו|מגיעות)/i;
 
 export type BotContext = Context & {
   userId: string;
@@ -172,6 +178,11 @@ export function createBot(
     await ctx.reply(addSiteReply(await services.sites.add(ctx.userId, input)), { ...html, reply_markup: mainMenu });
   };
   bot.command("sites", showSites);
+  const showSources = async (ctx: BotContext) => {
+    const view = sourcesView(await services.sources.overview(ctx.userId));
+    await ctx.reply(view.text, { ...html, reply_markup: view.keyboard });
+  };
+  bot.command("sources", showSources);
   const showConnections = async (ctx: BotContext) => {
     const view = connectionsView(await services.connections.summary(ctx.userId));
     await ctx.reply(view.text, { ...html, reply_markup: view.keyboard ?? mainMenu });
@@ -327,6 +338,16 @@ export function createBot(
         await ctx.editMessageText(view.text, { ...html, reply_markup: view.keyboard }).catch(() => undefined);
         return;
       }
+      case "sources_boards": {
+        await ctx.answerCallbackQuery();
+        await sendViews(ctx, boardsViews(await services.sources.overview(ctx.userId)));
+        return;
+      }
+      case "sources_sites": {
+        await ctx.answerCallbackQuery();
+        await showSites(ctx);
+        return;
+      }
       case "cv_document": {
         await ctx.answerCallbackQuery();
         await sendCvDocument(ctx, action.versionId);
@@ -408,6 +429,10 @@ export function createBot(
       await addSite(ctx, siteRequest[1]!);
       return;
     }
+    if (SOURCES_REQUEST.test(ctx.message.text)) {
+      await showSources(ctx);
+      return;
+    }
     if (await services.feedback.takeReasonText(ctx.userId, ctx.message.text)) {
       await ctx.reply(messages.feedbackReasonTextSaved, { ...html, reply_markup: mainMenu });
       return;
@@ -427,6 +452,7 @@ export function createBot(
 export const BOT_COMMANDS = [
   { command: "new", description: "Latest job matches" },
   { command: "profile", description: "Your career profile" },
+  { command: "sources", description: "Where I search for jobs" },
   { command: "sites", description: "Job sites I search for you" },
   { command: "connections", description: "Who you know at matched companies" },
   { command: "language", description: "Choose English or Hebrew" },
