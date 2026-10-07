@@ -119,3 +119,6 @@ export type ConversationFlow = (typeof CONVERSATION_FLOWS)[number];
 
 export const CONVERSATION_LANGUAGES = ["en", "he"] as const;
 export type ConversationLanguage = (typeof CONVERSATION_LANGUAGES)[number];
+
+export const GOOGLE_ACCOUNT_STATUSES = ["active", "needs_reconnect"] as const;
+export type GoogleAccountStatus = (typeof GOOGLE_ACCOUNT_STATUSES)[number];

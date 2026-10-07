@@ -21,6 +21,7 @@ export const he: Strings = {
     sources: "איפה אני מחפש משרות",
     sites: "אתרי הדרושים שאני מחפש בהם",
     connections: "מי מוכר לך בחברות שהותאמו",
+    connect_gmail: "קריאת מיילים על מועמדויות (לא חובה)",
     language: "בחירת עברית או אנגלית",
     start: "הגדרת הפרופיל המקצועי",
     help: "מה אני יודע לעשות",
@@ -59,6 +60,9 @@ export const he: Strings = {
     remove: "🗑 הסרה",
     confirmRemove: "🗑 כן, להסיר",
     keep: "✖️ להשאיר",
+    connectGmail: "🔗 חיבור Gmail",
+    reconnectGmail: "🔗 חיבור Gmail מחדש",
+    disconnectGmail: "🔌 ניתוק ומחיקה",
   },
 
   messages: {
@@ -132,6 +136,7 @@ export const he: Strings = {
       `${RLM}• ‎/sites — אתרי הדרושים שאני מחפש בהם (הוספת אתר: ‎/addsite example.co.il)`,
       `${RLM}• ‎/connections — ייבוא אנשי הקשר מלינקדאין כדי לראות מי מוכר לך בכל חברה`,
       "• שלחו לי קישור למודעת דרושים ואגיד לכם עד כמה היא מתאימה לכם.",
+      `${RLM}• ‎/connect_gmail — אפשר לתת לי לקרוא מיילים על מועמדויות (קריאה בלבד); ‎/disconnect_gmail כדי להפסיק`,
       `${RLM}• ‎/language — בחירת עברית או אנגלית`,
       `${RLM}• ‎/start — הגדרת הפרופיל`,
       "• כתבו לי כל דבר כדי לעדכן את הפרופיל (למשל \"עד 40 דקות נסיעה\", \"תוסיף שניהלתי את X\").",
@@ -234,6 +239,43 @@ export const he: Strings = {
       }\nאראה לך את מי מוכר לך כשאתאים לך משרה באחת החברות שלהם.`,
     summary: (contacts, companies, date) =>
       `<b>אנשי הקשר שלך</b>\n${count(contacts, "איש קשר אחד", "אנשי קשר")} ב${count(companies, "חברה אחת", "חברות")}, יובאו ב-${date}.\n\nאפשר לשלוח בכל רגע Connections.csv חדש יותר כדי להחליף אותם.`,
+  },
+
+  gmail: {
+    explain: [
+      `${RLM}<b>חיבור Gmail (לא חובה)</b>`,
+      "אקרא מיילים על המועמדויות שלך, כמו אישורי הגשה, הזמנות לראיון ודחיות, כדי לעקוב אחריהן בשבילך. כל השאר עובד גם בלי זה.",
+      "",
+      `${RLM}• <b>מה אני קורא:</b> גישת קריאה בלבד ל-Gmail שלך. אני לא יכול לשלוח, למחוק או לשנות שום דבר.`,
+      `${RLM}• <b>מה אני שומר:</b> את כתובת ה-Gmail ומפתח גישה מוצפן, וגם פרטים ממיילים על המועמדויות שלך. מיילים אחרים אני לא שומר.`,
+      `${RLM}• <b>איך מפסיקים:</b> שלחו ‎/disconnect_gmail בכל רגע. אבטל את הגישה שלי אצל Google ואמחק את מה ששמרתי.`,
+      "",
+      "לחצו למטה כדי להתחבר עם Google. הקישור עובד פעם אחת, תוך 10 דקות.",
+    ].join("\n"),
+    reconnect: (email) =>
+      `⚠️ אני כבר לא יכול לקרוא את <b>${email}</b>: הגישה מ-Google פגה או בוטלה. לחצו למטה כדי להתחבר מחדש, או שלחו ‎/disconnect_gmail כדי להפסיק.`,
+    connected: (email) =>
+      `ה-Gmail מחובר ✅ <b>${email}</b>\nיש לי גישת קריאה בלבד. אפשר לנתק בכל רגע עם ‎/disconnect_gmail.`,
+    alreadyConnected: (email, since) =>
+      `ה-Gmail מחובר: <b>${email}</b>, מאז ${since}.\nיש לי גישת קריאה בלבד. לניתוק שלחו ‎/disconnect_gmail.`,
+    denied: "בסדר, ה-Gmail לא חובר. כל השאר עובד כרגיל. אם תתחרטו, שלחו ‎/connect_gmail.",
+    missingScope:
+      "ה-Gmail לא חובר: Google לא נתן לי הרשאה לקרוא את המיילים. שלחו שוב ‎/connect_gmail וסמנו את התיבה שמאפשרת לי לקרוא את המיילים.",
+    failed: "משהו השתבש בחיבור ה-Gmail. שלחו ‎/connect_gmail כדי לנסות שוב.",
+    unavailable: "חיבור Gmail לא זמין כרגע.",
+    notConnected: "ה-Gmail לא מחובר. שלחו ‎/connect_gmail כדי לחבר אותו.",
+    disconnectConfirm: (email) =>
+      `לנתק את <b>${email}</b>? אבטל את הגישה שלי אצל Google ואמחק את מפתח הגישה השמור וכל מה שלקחתי מהמיילים.`,
+    disconnected: (email) => `ניתקתי את <b>${email}</b> ✅ ביטלתי את הגישה שלי אצל Google ומחקתי את מה ששמרתי.`,
+    disconnectedNotRevoked: (email) =>
+      `ניתקתי את <b>${email}</b> ומחקתי את מה ששמרתי, אבל Google לא אישר שהגישה שלי בוטלה. ליתר ביטחון, הסירו אותה ב-myaccount.google.com/permissions.`,
+    page: {
+      connected: "ה-Gmail חובר",
+      denied: "ה-Gmail לא חובר",
+      failed: "לא הצלחתי לחבר את ה-Gmail",
+      expired: "הקישור פג או שכבר השתמשו בו. שלחו ‎/connect_gmail בטלגרם כדי לקבל קישור חדש.",
+      backToTelegram: "אפשר לסגור את הדף ולחזור לטלגרם.",
+    },
   },
 
   jobLinks: {

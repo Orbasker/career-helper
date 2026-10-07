@@ -34,6 +34,7 @@ import {
   EMPLOYMENT_TYPES,
   FACT_ORIGINS,
   FEEDBACK_VERDICTS,
+  GOOGLE_ACCOUNT_STATUSES,
   JOB_SOURCE_KINDS,
   MATCH_RECOMMENDATIONS,
   MATCH_STAGES,
@@ -80,6 +81,7 @@ export const cvLanguageSource = pgEnum("cv_language_source", CV_LANGUAGE_SOURCES
 export const cvFileFormat = pgEnum("cv_file_format", CV_FILE_FORMATS);
 export const conversationFlow = pgEnum("conversation_flow", CONVERSATION_FLOWS);
 export const conversationLanguage = pgEnum("conversation_language", CONVERSATION_LANGUAGES);
+export const googleAccountStatus = pgEnum("google_account_status", GOOGLE_ACCOUNT_STATUSES);
 
 const id = () => uuid("id").primaryKey().defaultRandom();
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
@@ -317,6 +319,38 @@ export const connections = pgTable(
     importedAt: timestamp("imported_at", { withTimezone: true }).notNull(),
   },
   (t) => [index("connections_user_company_idx").on(t.userId, t.normalizedCompany)],
+);
+
+export const googleAccounts = pgTable("google_accounts", {
+  id: id(),
+  userId: uuid("user_id")
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: "cascade" }),
+  email: text("email").notNull(),
+  scopes: text("scopes").array().notNull(),
+  /** AES-256-GCM ciphertext of the refresh token; null once Google rejected it. */
+  refreshTokenEncrypted: text("refresh_token_encrypted"),
+  status: googleAccountStatus("status").notNull().default("active"),
+  connectedAt: timestamp("connected_at", { withTimezone: true }).notNull(),
+  lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+/** Single-use OAuth `state` values, stored as hashes and bound to the user who asked to connect. */
+export const oauthStates = pgTable(
+  "oauth_states",
+  {
+    stateHash: text("state_hash").primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    codeVerifier: text("code_verifier").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("oauth_states_user_idx").on(t.userId)],
 );
 
 export const rawJobRecords = pgTable(

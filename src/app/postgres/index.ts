@@ -10,6 +10,7 @@ import { PgConversationService } from "./conversation.js";
 import { PgCvService } from "./cv.js";
 import { PgDocumentService } from "./documents.js";
 import { PgFeedbackService } from "./feedback.js";
+import { PgGmailService, type GmailDeps } from "./gmail.js";
 import { PgJobLinkService, type JobLinkDeps } from "./job-links.js";
 import { PgMatchService } from "./matches.js";
 import { PgOnboardingService } from "./onboarding.js";
@@ -21,7 +22,7 @@ export function createPgServices(
   db: Db,
   assistant: ProfileAssistant,
   tailorer: CvTailorer,
-  options: { spend?: SpendLookup; jobLinks?: JobLinkDeps } = {},
+  options: { spend?: SpendLookup; jobLinks?: JobLinkDeps; gmail?: GmailDeps | null } = {},
 ): AppServices {
   const onboarding = new PgOnboardingService(db, assistant);
   const sites = new PgSiteService(db, SOURCE_ADAPTERS);
@@ -34,6 +35,7 @@ export function createPgServices(
     cv: new PgCvService(db, tailorer),
     conversation: new PgConversationService(db, onboarding, assistant, documents),
     documents,
+    gmail: new PgGmailService(db, options.gmail ?? null),
     sites,
     sources: new PgSourceService(db, sites),
     connections: new PgConnectionService(db),

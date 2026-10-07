@@ -32,6 +32,7 @@ export const en = {
     sources: "Where I search for jobs",
     sites: "Job sites I search for you",
     connections: "Who you know at matched companies",
+    connect_gmail: "Let me read job application emails (optional)",
     language: "Choose English or Hebrew",
     start: "Set up your career profile",
     help: "What I can do",
@@ -70,6 +71,9 @@ export const en = {
     remove: "🗑 Remove",
     confirmRemove: "🗑 Yes, remove it",
     keep: "✖️ Keep it",
+    connectGmail: "🔗 Connect Gmail",
+    reconnectGmail: "🔗 Reconnect Gmail",
+    disconnectGmail: "🔌 Disconnect and delete",
   },
 
   messages: {
@@ -149,6 +153,7 @@ export const en = {
       "• /sites — job sites I search for you (add one with /addsite example.co.il)",
       "• /connections — import your LinkedIn connections to see who you know at each company",
       "• Send me a link to a job posting and I'll tell you how well it fits you.",
+      "• /connect_gmail — optionally let me read job application emails (read-only); /disconnect_gmail to stop",
       "• /language — choose English or Hebrew",
       "• /start — set up your profile",
       "• Tell me anything to update your profile (e.g. \"no more than 40 minutes commute\", \"add that I managed X\").",
@@ -253,6 +258,43 @@ export const en = {
       }\nI'll show who you know when I match you with one of their companies.`,
     summary: (contacts: number, companies: number, date: string) =>
       `<b>Your connections</b>\n${plural(contacts, "contact", "contacts")} at ${plural(companies, "company", "companies")}, imported ${date}.\n\nSend a newer Connections.csv any time to replace them.`,
+  },
+
+  gmail: {
+    explain: [
+      "<b>Connect Gmail (optional)</b>",
+      "I'll read emails about your job applications, like confirmations, interview invites and rejections, so I can keep track of them for you. Everything else works without it.",
+      "",
+      "• <b>What I read:</b> I get read-only access to your Gmail. I can't send, delete or change anything.",
+      "• <b>What I store:</b> your Gmail address and an encrypted access key, plus details I take from emails about your applications. I don't keep your other emails.",
+      "• <b>How to stop:</b> send /disconnect_gmail any time. I'll revoke my access at Google and delete what I stored.",
+      "",
+      "Tap below to sign in with Google. The link works once, within 10 minutes.",
+    ].join("\n"),
+    reconnect: (email: string) =>
+      `⚠️ I can't read <b>${email}</b> anymore: Google's access expired or was revoked. Tap below to reconnect, or send /disconnect_gmail to stop.`,
+    connected: (email: string) =>
+      `Gmail connected ✅ <b>${email}</b>\nI have read-only access. Send /disconnect_gmail to disconnect any time.`,
+    alreadyConnected: (email: string, since: string) =>
+      `Gmail is connected: <b>${email}</b>, since ${since}.\nI have read-only access. Send /disconnect_gmail to disconnect.`,
+    denied: "OK, Gmail isn't connected. Everything else works as before; send /connect_gmail if you change your mind.",
+    missingScope:
+      "Gmail isn't connected: Google didn't give me permission to read your email. Send /connect_gmail again and tick the box that lets me read your email.",
+    failed: "Something went wrong while connecting Gmail. Send /connect_gmail to try again.",
+    unavailable: "Connecting Gmail isn't available right now.",
+    notConnected: "Gmail isn't connected. Send /connect_gmail to connect it.",
+    disconnectConfirm: (email: string) =>
+      `Disconnect <b>${email}</b>? I'll revoke my access at Google and delete the stored access key and everything I took from your emails.`,
+    disconnected: (email: string) => `Disconnected <b>${email}</b> ✅ I revoked my access at Google and deleted what I stored.`,
+    disconnectedNotRevoked: (email: string) =>
+      `Disconnected <b>${email}</b> and deleted what I stored, but Google didn't confirm that my access is revoked. To be sure, remove it at myaccount.google.com/permissions.`,
+    page: {
+      connected: "Gmail connected",
+      denied: "Gmail wasn't connected",
+      failed: "Gmail couldn't be connected",
+      expired: "This link has expired or was already used. Send /connect_gmail in Telegram for a new one.",
+      backToTelegram: "You can close this page and go back to Telegram.",
+    },
   },
 
   jobLinks: {

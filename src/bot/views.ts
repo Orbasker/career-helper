@@ -47,7 +47,7 @@ export const mainMenu = (t: Strings) => new Keyboard().text(t.menu.whatsNew).tex
 export const ASK_LANGUAGE = "👋 Hi! Which language should I use with you?\nשלום! באיזו שפה נדבר?";
 
 export function botCommands(t: Strings) {
-  return (["new", "profile", "cvs", "sources", "sites", "connections", "language", "start", "help"] as const).map((command) => ({
+  return (["new", "profile", "cvs", "sources", "sites", "connections", "connect_gmail", "language", "start", "help"] as const).map((command) => ({
     command,
     description: t.commands[command],
   }));
@@ -494,6 +494,21 @@ export function connectionsView(t: Strings, summary: ConnectionSummary | null): 
   return {
     text: t.connections.summary(summary.contacts, summary.companies, summary.importedAt.toISOString().slice(0, 10)),
     keyboard: new InlineKeyboard().text(t.buttons.deleteConnections, encodeCallback({ type: "connections_delete" })),
+  };
+}
+
+/** What connecting Gmail means, with a single-use sign-in button; for a lost grant, a reconnect prompt instead. */
+export function gmailConnectView(t: Strings, url: string, reconnectEmail: string | null = null): View {
+  return {
+    text: reconnectEmail ? t.gmail.reconnect(escapeHtml(reconnectEmail)) : t.gmail.explain,
+    keyboard: new InlineKeyboard().url(reconnectEmail ? t.buttons.reconnectGmail : t.buttons.connectGmail, url),
+  };
+}
+
+export function gmailDisconnectView(t: Strings, email: string): View {
+  return {
+    text: t.gmail.disconnectConfirm(escapeHtml(email)),
+    keyboard: new InlineKeyboard().text(t.buttons.disconnectGmail, encodeCallback({ type: "gmail_disconnect" })),
   };
 }
 
