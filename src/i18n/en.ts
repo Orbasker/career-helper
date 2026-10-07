@@ -1,6 +1,7 @@
 import type {
   CareerFactKind,
   ConversationLanguage,
+  DocumentKind,
   MatchRecommendation,
   PreferenceKind,
   ProfileSourceKind,
@@ -26,6 +27,7 @@ export const en = {
   commands: {
     new: "Latest job matches",
     profile: "Your career profile",
+    cvs: "Your CVs and the default for each language",
     sources: "Where I search for jobs",
     sites: "Job sites I search for you",
     connections: "Who you know at matched companies",
@@ -56,6 +58,14 @@ export const en = {
     confirmProfile: "✅ Confirm profile",
     apply: "✅ Apply",
     cancel: "✖️ Cancel",
+    myCvs: "📄 My CVs",
+    addCv: "➕ Add a CV",
+    makeDefault: (language: string) => `⭐ Make default for ${language}`,
+    rename: "✏️ Rename",
+    replace: "🔁 Replace",
+    remove: "🗑 Remove",
+    confirmRemove: "🗑 Yes, remove it",
+    keep: "✖️ Keep it",
   },
 
   messages: {
@@ -128,6 +138,7 @@ export const en = {
       "• /new — your latest matches",
       "• /profile — your career profile",
       "• Send an updated CV (PDF, DOCX or TXT) anytime — I'll show what it adds to your profile before saving anything.",
+      "• /cvs — your CVs: rename, replace or remove them, and choose the default for each language",
       "• /sources — where I search for jobs and what I found there",
       "• /sites — job sites I search for you (add one with /addsite example.co.il)",
       "• /connections — import your LinkedIn connections to see who you know at each company",
@@ -263,6 +274,8 @@ export const en = {
       `Saved ${source}${fileName ? ` (${fileName})` : ""}${language ? ` · ${language}` : ""}${
         version > 1 ? ` · version ${version}` : ""
       } ✅ Your earlier documents are kept too.`,
+    replaced: (source: string, fileName: string | null, language: string | null, replaced: string) =>
+      `Saved ${source}${fileName ? ` (${fileName})` : ""}${language ? ` · ${language}` : ""} ✅ It replaces <b>${replaced}</b>, which I've removed from your CVs. Facts already in your profile stay.`,
   },
 
   jobSources: {
@@ -320,6 +333,54 @@ export const en = {
       `Got ${source}${fileName ? ` (${fileName})` : ""}${language ? ` · ${language}` : ""} ✅ Send more, or tap <b>Analyze</b> when you're done.`,
     question: (position: number, total: number, text: string) =>
       `<i>Question ${position} of ${total}</i>\n${text}\n\n<i>Reply "skip" to skip.</i>`,
+  },
+
+  cvs: {
+    title: "<b>📄 Your CVs</b>",
+    empty: "You haven't sent me a CV yet. Send one here (PDF, DOCX or TXT) and I'll add it.",
+    outro:
+      "Tap a CV to rename, replace or remove it, or to make it the default for its language. To add another, just send the file here.",
+    item: (position: number, name: string) => `${position}. <b>${name}</b>`,
+    cardTitle: (name: string) => `📄 <b>${name}</b>`,
+    kinds: { cv: "CV", linkedin_export: "LinkedIn export" } satisfies Record<DocumentKind, string>,
+    unnamed: "Document",
+    otherFormat: "other file type",
+    languageUnknown: "language unknown",
+    detected: "detected",
+    version: (n: number) => `version ${n}`,
+    added: (day: string) => `added ${day}`,
+    defaultFor: (language: string) => `⭐ Default for ${language}`,
+    defaultExplained: (language: string) => `I use it when I tailor your CV for jobs in ${language}.`,
+    failures: {
+      legacy: "⚠️ I couldn't read it: it's an old Word .doc file. Replace it with a DOCX or PDF.",
+      unsupported: "⚠️ I couldn't read it: I can only read PDF, DOCX and TXT files.",
+      failed: "⚠️ I couldn't find any text in it (is it a scanned image?). Replace it with a PDF, DOCX or TXT that has text.",
+    },
+    facts: (n: number) =>
+      n === 0
+        ? "None of the confirmed facts in your profile came from it."
+        : `${plural(n, "confirmed fact", "confirmed facts")} in your profile came from it.`,
+    defaultSet: (name: string, language: string) =>
+      `⭐ <b>${name}</b> is now your default ${language} CV. I'll use it when I tailor your CV for jobs in ${language}.`,
+    notEligible: "Only a readable CV with a known language can be a default.",
+    chooseDefault: (language: string | null) =>
+      language ? `You have several ${language} CVs. Which one should be the default?` : "Which CV should be the default for its language?",
+    noCvs: (language: string | null) =>
+      language
+        ? `You don't have a ${language} CV yet. Send me one here and I'll add it.`
+        : "You don't have a readable CV yet. Send me one here and I'll add it.",
+    labelPrompt: (name: string) => `What should I call <b>${name}</b>? Send the new name, e.g. <i>Product manager CV</i>.`,
+    labelSaved: (name: string) => `Renamed to <b>${name}</b> ✅`,
+    replacePrompt: (name: string) =>
+      `Send me the file to replace <b>${name}</b>. Facts already in your profile stay as they are, and I'll show you what the new file adds before changing anything.`,
+    removeConfirm: (name: string, facts: number) =>
+      `Remove <b>${name}</b>?${
+        facts ? ` The ${plural(facts, "fact", "facts")} it added to your profile will stay — tell me if any of them should go.` : ""
+      } Your other CVs and the rest of your profile won't change.`,
+    removed: (name: string) => `Removed <b>${name}</b> from your CVs. Your profile hasn't changed.`,
+    uploadHowTo:
+      "Send me the CV here as a PDF, DOCX or TXT file. Add a caption to name it, e.g. <i>Product manager CV</i>. I'll detect its language and show you what it adds to your profile.",
+    askLanguage: "I'm not sure which language this CV is in. Which is it?",
   },
 
   sources: {

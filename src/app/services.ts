@@ -2,7 +2,9 @@ import type {
   CareerFactKind,
   ConfidenceLevel,
   ConversationLanguage,
+  DocumentFormat,
   DocumentKind,
+  DocumentParseStatus,
   EmploymentType,
   FeedbackVerdict,
   MatchRecommendation,
@@ -116,6 +118,7 @@ export type ProfileReply =
       fileName: string | null;
       documentId: string | null;
       language: ConversationLanguage | null;
+      languageCertain: boolean;
     }
   | {
       kind: "document_saved";
@@ -123,7 +126,10 @@ export type ProfileReply =
       fileName: string | null;
       documentId: string;
       language: ConversationLanguage | null;
+      languageCertain: boolean;
       version: number;
+      /** The document this upload replaced, when the user asked to replace one. */
+      replaced: DocumentName | null;
     }
   | { kind: "document_nothing_new" }
   | { kind: "document_merge_failed" }
@@ -271,6 +277,55 @@ export interface ProfileAssistant {
   mergeDocument(input: { snapshot: ProfileSnapshot; document: ProfileSourceText }): Promise<ProfileInterpretation>;
 }
 
+export interface DocumentName {
+  kind: DocumentKind | null;
+  fileName: string | null;
+  label: string | null;
+}
+
+export interface SourceDocumentView extends DocumentName {
+  id: string;
+  format: DocumentFormat;
+  language: ConversationLanguage | null;
+  languageConfirmed: boolean;
+  version: number | null;
+  parseStatus: DocumentParseStatus;
+  /** The CV used for its language: the one the user chose, otherwise the newest readable CV in that language. */
+  isDefault: boolean;
+  /** Confirmed experiences and facts in the profile that came from this document. */
+  factCount: number;
+  createdAt: Date;
+}
+
+export type SetDefaultOutcome =
+  | { kind: "set"; document: SourceDocumentView }
+  | { kind: "not_eligible" }
+  | { kind: "not_found" };
+
+export type DefaultRequestOutcome =
+  | { kind: "set"; document: SourceDocumentView }
+  | { kind: "choose"; language: ConversationLanguage | null; documents: SourceDocumentView[] }
+  | { kind: "none"; language: ConversationLanguage | null }
+  | { kind: "not_onboarded" };
+
+export interface DocumentService {
+  /** The user's documents, newest first, without removed ones; null before the profile is confirmed. */
+  list(userId: string): Promise<SourceDocumentView[] | null>;
+  get(userId: string, documentId: string): Promise<SourceDocumentView | null>;
+  /** Makes a readable CV the default for its language, replacing the previous default. */
+  setDefault(userId: string, documentId: string): Promise<SetDefaultOutcome>;
+  /** Sets the only CV in `language` (any language when null) as default, or returns the CVs to choose from. */
+  requestDefault(userId: string, language: ConversationLanguage | null): Promise<DefaultRequestOutcome>;
+  /** Makes the user's next text message the document's new label, for a short while. */
+  awaitLabel(userId: string, documentId: string): Promise<SourceDocumentView | null>;
+  /** Saves `text` as the awaited label; null when no label is awaited, so the text is handled normally. */
+  takeLabel(userId: string, text: string): Promise<SourceDocumentView | null>;
+  /** Makes the user's next uploaded file replace the document, for a short while. */
+  awaitReplacement(userId: string, documentId: string): Promise<SourceDocumentView | null>;
+  /** Hides the document from the user; facts that came from it, and every other fact, stay in the profile. */
+  remove(userId: string, documentId: string): Promise<SourceDocumentView | null>;
+}
+
 export interface JobSiteView {
   id: string;
   domain: string;
@@ -381,4 +436,5 @@ export interface AppServices {
   stats: StatsService;
   connections: ConnectionService;
   jobLinks: JobLinkService;
+  documents: DocumentService;
 }

@@ -5,7 +5,8 @@ import type { ProfileChange, ProfileSnapshot } from "../../domain/profile.js";
 import { careerProfiles, conversationStates } from "../../db/schema.js";
 import type { Db } from "../../db/types.js";
 import { strings } from "../../i18n/index.js";
-import type { ConversationService, IncomingDocument, ProfileAssistant, ProfileReply } from "../services.js";
+import type { ConversationService, DocumentName, IncomingDocument, ProfileAssistant, ProfileReply } from "../services.js";
+import type { PgDocumentService } from "./documents.js";
 import type { PgOnboardingService } from "./onboarding.js";
 import { applyChanges, bumpRevision, describeChanges, loadSnapshot, toProfileView } from "./profile.js";
 
@@ -19,6 +20,7 @@ export class PgConversationService implements ConversationService {
     private readonly db: Db,
     private readonly onboarding: PgOnboardingService,
     private readonly assistant: ProfileAssistant,
+    private readonly documents: PgDocumentService,
   ) {}
 
   async handleText(userId: string, text: string, language: ConversationLanguage): Promise<ProfileReply[]> {
@@ -47,7 +49,11 @@ export class PgConversationService implements ConversationService {
       return [await this.onboarding.addDocument(userId, document)];
     }
 
-    const stored = await this.onboarding.storeDocument(userId, document);
+    const replacing = await this.documents.pendingReplacement(userId);
+    const replacement: { replaced: DocumentName | null } = { replaced: null };
+    const stored = await this.onboarding.storeDocument(userId, document, async (tx, documentId) => {
+      if (replacing) replacement.replaced = await this.documents.replace(tx, userId, replacing, documentId);
+    });
     if (!stored.stored) return [stored.reply];
     const saved: ProfileReply = {
       kind: "document_saved",
@@ -55,7 +61,9 @@ export class PgConversationService implements ConversationService {
       fileName: document.fileName,
       documentId: stored.documentId,
       language: stored.language,
+      languageCertain: stored.languageCertain,
       version: stored.version,
+      replaced: replacement.replaced,
     };
 
     const snapshot = await loadSnapshot(this.db, userId, { verifiedOnly: true });

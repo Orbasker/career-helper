@@ -28,13 +28,21 @@ describe("callback data", () => {
     { type: "sources_boards" },
     { type: "sources_sites" },
     { type: "proposal_decision", preferenceId: feedbackId, accept: false },
+    { type: "documents" },
+    { type: "document_upload" },
+    { type: "document", documentId: feedbackId },
+    { type: "document_action", documentId: feedbackId, action: "default" },
+    { type: "document_action", documentId: feedbackId, action: "label" },
+    { type: "document_action", documentId: feedbackId, action: "replace" },
+    { type: "document_action", documentId: feedbackId, action: "remove" },
+    { type: "document_action", documentId: feedbackId, action: "confirm_remove" },
   ])("round-trips %o within Telegram's 64-byte limit", (action) => {
     const data = encodeCallback(action);
     expect(Buffer.byteLength(data)).toBeLessThanOrEqual(64);
     expect(decodeCallback(data)).toEqual(action);
   });
 
-  it.each(["", "job:not-a-uuid", `fb:x:${matchId}`, `unknown:${matchId}`, `job:extra:${matchId}`, "pe:x:abcdefgh", "pe:a:no spaces", "ob:other", `fr:z:${feedbackId}`, `pp:x:${feedbackId}`, "fr:r:not-a-uuid", `dl:fr:${feedbackId}`])(
+  it.each(["", "job:not-a-uuid", `fb:x:${matchId}`, `unknown:${matchId}`, `job:extra:${matchId}`, "pe:x:abcdefgh", "pe:a:no spaces", "ob:other", `fr:z:${feedbackId}`, `pp:x:${feedbackId}`, "fr:r:not-a-uuid", `dl:fr:${feedbackId}`, `doc:z:${feedbackId}`, "doc:not-a-uuid", "doc:other"])(
     "rejects %s",
     (data) => {
       expect(decodeCallback(data)).toBeNull();

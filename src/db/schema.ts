@@ -139,11 +139,20 @@ export const sourceDocuments = pgTable(
     parseError: text("parse_error"),
     label: text("label"),
     version: integer("version"),
+    /** The user's chosen default CV for its language; without one the newest CV in that language is used. */
+    isDefault: boolean("is_default").notNull().default(false),
+    /** Removed documents are hidden from the user but kept, so facts and CVs can still cite them. */
+    removedAt: timestamp("removed_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
     index("source_documents_user_idx").on(t.userId, t.createdAt),
+    uniqueIndex("source_documents_default_uq").on(t.userId, t.language).where(sql`${t.isDefault}`),
+    check(
+      "source_documents_default_chk",
+      sql`not ${t.isDefault} or (${t.kind} = 'cv' and ${t.language} is not null and ${t.removedAt} is null)`,
+    ),
     check(
       "source_documents_parsed_chk",
       sql`(${t.parseStatus} = 'parsed') = (${t.extractedText} is not null and ${t.kind} is not null)`,

@@ -1,8 +1,9 @@
-import { and, asc, desc, eq, inArray, lt } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 import type { CvTailorer } from "../../cv/tailoring.js";
 import { cvFileName, renderCvDocx } from "../../cv/render-docx.js";
 import { careerFacts, careerProfiles, cvVersionItems, cvVersions, jobs, matches, sourceDocuments, users } from "../../db/schema.js";
 import type { Db } from "../../db/types.js";
+import { detectLanguage } from "../documents.js";
 import { errorMessage } from "../../ingestion/ingest.js";
 import type { CvDecision, CvDocumentFile, CvDraftView, CvRequestOutcome, CvService, CvTailorOutcome } from "../services.js";
 import { loadSnapshot } from "./profile.js";
@@ -18,8 +19,10 @@ export class PgCvService implements CvService {
 
   async requestTailored(userId: string, matchId: string): Promise<CvRequestOutcome> {
     const [match] = await this.db
-      .select({ jobId: matches.jobId })
+      .select({ jobId: matches.jobId, description: jobs.description, preferredLanguage: users.preferredLanguage })
       .from(matches)
+      .innerJoin(jobs, eq(jobs.id, matches.jobId))
+      .innerJoin(users, eq(users.id, matches.userId))
       .where(and(eq(matches.id, matchId), eq(matches.userId, userId)));
     if (!match) return { kind: "not_found" };
 
@@ -35,11 +38,23 @@ export class PgCvService implements CvService {
         ),
       );
 
+    const language = detectLanguage(match.description) ?? match.preferredLanguage;
     const [baseCv] = await this.db
       .select({ id: sourceDocuments.id })
       .from(sourceDocuments)
-      .where(and(eq(sourceDocuments.userId, userId), eq(sourceDocuments.kind, "cv"), eq(sourceDocuments.parseStatus, "parsed")))
-      .orderBy(desc(sourceDocuments.createdAt))
+      .where(
+        and(
+          eq(sourceDocuments.userId, userId),
+          eq(sourceDocuments.kind, "cv"),
+          eq(sourceDocuments.parseStatus, "parsed"),
+          isNull(sourceDocuments.removedAt),
+        ),
+      )
+      .orderBy(
+        desc(language ? sql`coalesce(${sourceDocuments.language} = ${language}, false)` : sql`true`),
+        desc(sourceDocuments.isDefault),
+        desc(sourceDocuments.createdAt),
+      )
       .limit(1);
     const [inserted] = await this.db
       .insert(cvVersions)

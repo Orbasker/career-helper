@@ -18,6 +18,7 @@ export type StoredDocument =
       documentId: string;
       kind: DocumentKind;
       language: ConversationLanguage | null;
+      languageCertain: boolean;
       version: number;
       text: string;
     }
@@ -103,7 +104,9 @@ export class PgOnboardingService implements OnboardingService {
       case "documents":
         if (DONE.test(text)) return [await this.analyze(userId, language)];
         await this.db.insert(profileSources).values({ userId, kind: "pasted_text", content: text });
-        return [{ kind: "source_received", source: "pasted_text", fileName: null, documentId: null, language: null }];
+        return [
+          { kind: "source_received", source: "pasted_text", fileName: null, documentId: null, language: null, languageCertain: true },
+        ];
       case "analyzing":
         return [{ kind: "busy" }];
       case "questions":
@@ -135,6 +138,7 @@ export class PgOnboardingService implements OnboardingService {
       fileName: document.fileName,
       documentId: stored.documentId,
       language: stored.language,
+      languageCertain: stored.languageCertain,
     };
   }
 
@@ -168,7 +172,15 @@ export class PgOnboardingService implements OnboardingService {
         .values({ ...file, kind, language: parsed.language, version, extractedText: parsed.text, parseStatus: "parsed" })
         .returning({ id: sourceDocuments.id });
       await onStored?.(tx, row!.id, kind);
-      return { stored: true, documentId: row!.id, kind, language: parsed.language, version, text: parsed.text } as const;
+      return {
+        stored: true,
+        documentId: row!.id,
+        kind,
+        language: parsed.language,
+        languageCertain: parsed.languageCertain,
+        version,
+        text: parsed.text,
+      } as const;
     });
   }
 
@@ -177,14 +189,18 @@ export class PgOnboardingService implements OnboardingService {
       const [document] = await tx
         .select({ kind: sourceDocuments.kind, language: sourceDocuments.language, version: sourceDocuments.version })
         .from(sourceDocuments)
-        .where(and(eq(sourceDocuments.id, documentId), eq(sourceDocuments.userId, userId)))
+        .where(and(eq(sourceDocuments.id, documentId), eq(sourceDocuments.userId, userId), isNull(sourceDocuments.removedAt)))
         .for("update");
       if (!document) return false;
       const version =
         document.kind && document.language !== language
           ? await nextVersion(tx, userId, document.kind, language)
           : document.version;
-      await tx.update(sourceDocuments).set({ language, languageConfirmed: true, version }).where(eq(sourceDocuments.id, documentId));
+      const moved = document.language !== language;
+      await tx
+        .update(sourceDocuments)
+        .set({ language, languageConfirmed: true, version, ...(moved ? { isDefault: false } : {}) })
+        .where(eq(sourceDocuments.id, documentId));
       return true;
     });
   }

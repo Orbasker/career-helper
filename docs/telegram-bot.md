@@ -22,7 +22,9 @@
 | A link to a job posting (confirmed profile) | `jobLinks.analyze`, `matches.details` | Reads the posting, matches it right away and replies with the match details and next actions (see `docs/job-links.md`). |
 | `/connections`, a `.csv`/`.zip` document, "delete my connections" | `connections.summary` / `connections.import` / `connections.forget` | LinkedIn connections shown on matches (see `docs/connections.md`). |
 | Document | `conversation.addDocument` | Stores the file as a new `source_document` (the caption becomes its label); earlier documents are kept. During onboarding it joins the run's `profile_sources`. Once the profile is confirmed, `ProfileAssistant.mergeDocument` compares it with the profile and its additions are proposed as an edit with **Apply** / **Cancel**, attributed to the document. Legacy `.doc` files are rejected with instructions to save as DOCX or PDF. |
-| Language button on an upload | `onboarding.setDocumentLanguage` | Corrects or confirms the detected language of a document (`dl:<he\|en>:<documentId>`). |
+| Language button on an upload | `onboarding.setDocumentLanguage` | Corrects or confirms the detected language of a document (`dl:<he\|en>:<documentId>`). When the language is unclear (mixed Hebrew and English text) the reply asks which one it is and offers both. |
+| `/cvs`, "show my CVs", "קורות החיים שלי" | `documents.list` | CV management (below). |
+| "use my English CV by default", "השתמש בקורות החיים באנגלית כברירת מחדל" | `documents.requestDefault` | Makes the only CV in that language the default, or lists that language's CVs to pick one (`doc:d:<documentId>`). |
 | Any other text | `conversation.handleText` | Onboarding answer, review correction, or a natural-language profile edit. |
 
 ### Onboarding
@@ -49,6 +51,18 @@ All user-facing copy lives in `src/i18n/`: `en.ts` defines the catalog and its `
 - **Models** get the language too: `ProfileAssistant` writes follow-up questions and replies in it (profile text itself stays in English), the deep matcher writes explanations and evidence in it, and feedback learning words proposals in it. Job postings, company names and tailored CVs (which follow the language of the user's facts) are not translated. Explanations are written when a match is evaluated, so switching language does not rewrite existing ones.
 - `/stats` is an operator report and stays in English.
 
+### CV management
+
+Once the profile is confirmed, `/cvs` lists every uploaded document, newest first: its name (the label, otherwise the file name), kind, language (marked *detected* until the user confirms it), file type, version and upload date. The CV used for each language is marked ⭐: the one the user chose, otherwise the newest readable CV in that language. Files that could not be read stay in the list with the reason (old `.doc`, unsupported type, no text). Tapping a document (`doc:<documentId>`) shows its details, how many confirmed profile facts came from it, and these actions:
+
+- **Make default for <language>** (`doc:d:`) — sets `source_documents.is_default`, at most one per user and language. Tailoring uses the default CV in the job's language (see `docs/cv-tailoring.md`).
+- **🌐 It's <language>** — corrects the language (`dl:`); a document moved to another language stops being that language's chosen default.
+- **Rename** (`doc:l:`) — the next text message within 10 minutes becomes the label (`conversation_states.flow = cv_library`, `step = label`).
+- **Replace** (`doc:r:`) — the next uploaded file within 10 minutes replaces the document (`step = replace`). The new file is stored as usual, inherits the old label and, in the same language, its default status; the old one is removed. Its additions are proposed as an edit like any other upload.
+- **Remove** (`doc:x:`, confirmed with `doc:y:`) — sets `removed_at`: the document leaves the list and is never used for tailoring, but is kept so facts can still cite it.
+
+Removing or replacing a document never changes the profile: confirmed experiences and facts, from that document or any other source, stay until the user removes them in their own words. **Add a CV** (`doc:add`) explains how to upload; any file sent after onboarding is added to the list.
+
 ### Continuous editing
 
 Once confirmed, any free text is interpreted against the current profile (`ProfileAssistant.interpret`). Proposed changes are shown as a diff with **Apply** / **Cancel** (`pe:a:<token>` / `pe:c:<token>`) and stored in `conversation_states` (`flow = profile_edit`) until the user decides; nothing becomes durable before **Apply**. Applying bumps `career_profiles.revision`. Corrected facts are rejected and replaced (never edited in place), removed preferences become `retired`, and replacements are linked through `supersedes_id`.
@@ -59,7 +73,7 @@ The LLM only sees per-request aliases (`e1`, `f2`, `p3`) for the user's own item
 
 `src/ai/profile-assistant.ts` calls `anthropic/claude-sonnet-5.5` through Vercel AI Gateway (AI SDK structured output). On Vercel it authenticates with OIDC automatically; locally run `vercel env pull` (for `VERCEL_OIDC_TOKEN`) or set `AI_GATEWAY_API_KEY`. Tests use a fake assistant.
 
-Callback data is `job:<matchId>`, `fb:<i|n>:<matchId>`, `cv:<matchId>`, `ob:analyze`, `ob:confirm`, `pe:<a|c>:<token>`, `fr:<r|s|l|w|c|p|o>:<feedbackId>`, `pp:<a|r>:<preferenceId>`, `cvd:<a|x>:<versionId>`, `cvf:<versionId>`, `lang:<en|he>`, `st:x:<siteId>`, `src:<boards|sites>`, `cn:delete` (≤ 64 bytes). Only private chats are handled.
+Callback data is `job:<matchId>`, `fb:<i|n>:<matchId>`, `cv:<matchId>`, `ob:analyze`, `ob:confirm`, `pe:<a|c>:<token>`, `fr:<r|s|l|w|c|p|o>:<feedbackId>`, `pp:<a|r>:<preferenceId>`, `cvd:<a|x>:<versionId>`, `cvf:<versionId>`, `lang:<en|he>`, `st:x:<siteId>`, `src:<boards|sites>`, `cn:delete`, `doc:<list|add>`, `doc:<documentId>`, `doc:<d|l|r|x|y>:<documentId>` (≤ 64 bytes). Only private chats are handled.
 
 ## Running locally
 

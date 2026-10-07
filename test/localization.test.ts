@@ -82,6 +82,15 @@ const hebrewWithLatinContent = (t: Strings) => [
   t.provenance.alsoPostedOn("linkedin.com"),
   t.jobLinks.readingOneOf("acme.com"),
   t.jobLinks.connectionsTip("Acme"),
+  t.cvs.item(1, "Product CV"),
+  t.cvs.cardTitle("Product CV"),
+  t.cvs.defaultSet("Product CV", t.documentLanguages.en),
+  t.cvs.labelPrompt("cv-en.pdf"),
+  t.cvs.labelSaved("Product CV"),
+  t.cvs.replacePrompt("cv-en.pdf"),
+  t.cvs.removeConfirm("cv-en.pdf", 3),
+  t.cvs.removed("cv-en.pdf"),
+  t.documents.replaced(t.sources.cv, "cv-2026.pdf", t.documentLanguages.en, "cv-2025.pdf"),
 ];
 
 describe("hebrew copy", () => {
@@ -95,7 +104,7 @@ describe("hebrew copy", () => {
   });
 
   it("keeps commands left-to-right inside Hebrew sentences", () => {
-    const unmarked = copy.filter(([, text]) => /(?:^|[^‎])\/(?:new|profile|sites|connections|language|start|addsite)\b/.test(text));
+    const unmarked = copy.filter(([, text]) => /(?:^|[^‎])\/(?:new|profile|cvs|sites|connections|language|start|addsite)\b/.test(text));
     expect(unmarked.map(([path]) => path)).toEqual([]);
   });
 

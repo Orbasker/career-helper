@@ -1,6 +1,6 @@
 import { InlineKeyboard, Keyboard } from "grammy";
 import { formatMonth } from "../domain/dates.js";
-import { CONVERSATION_LANGUAGES, type ConversationLanguage, type PreferenceKind } from "../domain/enums.js";
+import { CONVERSATION_LANGUAGES, type ConversationLanguage, type DocumentFormat, type PreferenceKind } from "../domain/enums.js";
 import { DEFAULT_LANGUAGE, LANGUAGE_NAMES } from "../domain/language.js";
 import type { Strings } from "../i18n/index.js";
 import type {
@@ -9,6 +9,7 @@ import type {
   JobLinkOutcome,
   ConnectionSummary,
   CvDraftView,
+  DocumentName,
   JobProvenance,
   JobSiteView,
   MatchDetails,
@@ -17,6 +18,7 @@ import type {
   ProfileReply,
   ProfileView,
   SourceCoverage,
+  SourceDocumentView,
   SourceIssue,
   SourcesOverview,
 } from "../app/services.js";
@@ -30,13 +32,15 @@ export function escapeHtml(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+const DOCUMENT_BUTTON_NAME_LENGTH = 40;
+
 export const mainMenu = (t: Strings) => new Keyboard().text(t.menu.whatsNew).text(t.menu.myProfile).resized().persistent();
 
 /** Asked before a language is known, so it speaks every supported language. */
 export const ASK_LANGUAGE = "👋 Hi! Which language should I use with you?\nשלום! באיזו שפה נדבר?";
 
 export function botCommands(t: Strings) {
-  return (["new", "profile", "sources", "sites", "connections", "language", "start", "help"] as const).map((command) => ({
+  return (["new", "profile", "cvs", "sources", "sites", "connections", "language", "start", "help"] as const).map((command) => ({
     command,
     description: t.commands[command],
   }));
@@ -349,6 +353,103 @@ export function sitesView(t: Strings, sites: JobSiteView[]): { text: string; key
   return { text: `${t.messages.sitesIntro}\n\n${list}\n\n${t.messages.sitesOutro}`, keyboard };
 }
 
+const documentLabel = (t: Strings, d: DocumentName) => d.label ?? d.fileName ?? (d.kind ? t.cvs.kinds[d.kind] : t.cvs.unnamed);
+
+export const documentName = (t: Strings, d: DocumentName) => escapeHtml(documentLabel(t, d));
+
+const formatName = (t: Strings, format: DocumentFormat) => (format === "other" ? t.cvs.otherFormat : format.toUpperCase());
+
+const canBeDefault = (d: SourceDocumentView) => d.kind === "cv" && d.parseStatus === "parsed" && d.language !== null;
+
+function documentFailure(t: Strings, d: SourceDocumentView): string | null {
+  if (d.parseStatus === "parsed") return null;
+  if (d.format === "doc") return t.cvs.failures.legacy;
+  return d.parseStatus === "unsupported" ? t.cvs.failures.unsupported : t.cvs.failures.failed;
+}
+
+function documentSummary(t: Strings, d: SourceDocumentView): string[] {
+  const meta = [d.kind ? t.cvs.kinds[d.kind] : t.cvs.unnamed];
+  if (d.parseStatus === "parsed") {
+    meta.push(
+      d.language ? `${t.documentLanguages[d.language]}${d.languageConfirmed ? "" : ` (${t.cvs.detected})`}` : t.cvs.languageUnknown,
+    );
+  }
+  meta.push(formatName(t, d.format));
+  if (d.version && d.version > 1) meta.push(t.cvs.version(d.version));
+  if (d.label && d.fileName) meta.push(escapeHtml(d.fileName));
+  meta.push(t.cvs.added(isoDay(d.createdAt)));
+  const lines = [meta.join(" · ")];
+  if (d.isDefault && d.language) lines.push(t.cvs.defaultFor(t.documentLanguages[d.language]));
+  const failure = documentFailure(t, d);
+  if (failure) lines.push(failure);
+  return lines;
+}
+
+const documentButton = (t: Strings, d: SourceDocumentView, prefix: string) =>
+  `${prefix}${clip(documentLabel(t, d), DOCUMENT_BUTTON_NAME_LENGTH)}`;
+
+export function cvLibraryViews(t: Strings, documents: SourceDocumentView[]): View[] {
+  if (documents.length === 0) {
+    return [{ text: t.cvs.empty, keyboard: new InlineKeyboard().text(t.buttons.addCv, encodeCallback({ type: "document_upload" })) }];
+  }
+  const items = documents.map((d, i) => [t.cvs.item(i + 1, documentName(t, d)), ...documentSummary(t, d)].join("\n"));
+  const keyboard = new InlineKeyboard();
+  documents.forEach((d, i) => {
+    keyboard.text(documentButton(t, d, `${i + 1}. `), encodeCallback({ type: "document", documentId: d.id })).row();
+  });
+  keyboard.text(t.buttons.addCv, encodeCallback({ type: "document_upload" }));
+  return withFinalKeyboard([t.cvs.title, ...items], t.cvs.outro, keyboard);
+}
+
+export function documentCardView(t: Strings, d: SourceDocumentView): View {
+  const lines = [t.cvs.cardTitle(documentName(t, d)), ...documentSummary(t, d)];
+  if (d.isDefault && d.language) lines.push(t.cvs.defaultExplained(t.documentLanguages[d.language]));
+  if (d.parseStatus === "parsed") lines.push(t.cvs.facts(d.factCount));
+
+  const documentId = d.id;
+  const keyboard = new InlineKeyboard();
+  if (canBeDefault(d) && !d.isDefault) {
+    keyboard.text(t.buttons.makeDefault(t.documentLanguages[d.language!]), encodeCallback({ type: "document_action", documentId, action: "default" })).row();
+  }
+  if (d.parseStatus === "parsed") {
+    for (const language of CONVERSATION_LANGUAGES.filter((l) => l !== d.language)) {
+      keyboard.text(
+        t.documents.languageButton(t.documentLanguages[language], d.language !== null),
+        encodeCallback({ type: "document_language", documentId, language }),
+      );
+    }
+    keyboard.row();
+  }
+  return {
+    text: lines.join("\n"),
+    keyboard: keyboard
+      .text(t.buttons.rename, encodeCallback({ type: "document_action", documentId, action: "label" }))
+      .text(t.buttons.replace, encodeCallback({ type: "document_action", documentId, action: "replace" }))
+      .text(t.buttons.remove, encodeCallback({ type: "document_action", documentId, action: "remove" }))
+      .row()
+      .text(t.buttons.myCvs, encodeCallback({ type: "documents" })),
+  };
+}
+
+export function removeDocumentView(t: Strings, d: SourceDocumentView): View {
+  const documentId = d.id;
+  return {
+    text: t.cvs.removeConfirm(documentName(t, d), d.factCount),
+    keyboard: new InlineKeyboard()
+      .text(t.buttons.confirmRemove, encodeCallback({ type: "document_action", documentId, action: "confirm_remove" }))
+      .text(t.buttons.keep, encodeCallback({ type: "document", documentId })),
+  };
+}
+
+export function chooseDefaultView(t: Strings, language: ConversationLanguage | null, documents: SourceDocumentView[]): View {
+  const keyboard = new InlineKeyboard();
+  for (const d of documents) {
+    const suffix = language ? "" : ` · ${t.documentLanguages[d.language!]}`;
+    keyboard.text(`${documentButton(t, d, d.isDefault ? "⭐ " : "")}${suffix}`, encodeCallback({ type: "document_action", documentId: d.id, action: "default" })).row();
+  }
+  return { text: t.cvs.chooseDefault(language ? t.documentLanguages[language] : null), keyboard };
+}
+
 export function connectionsImportReply(t: Strings, outcome: ConnectionImport): string {
   switch (outcome.kind) {
     case "imported":
@@ -495,11 +596,12 @@ export function profileReplyViews(t: Strings, reply: ProfileReply): View[] {
     case "source_received": {
       const fileName = reply.fileName ? escapeHtml(reply.fileName) : null;
       const language = reply.language ? t.documentLanguages[reply.language] : null;
+      const text = t.onboarding.sourceReceived(t.sources[reply.source], fileName, language);
       return [
         {
-          text: t.onboarding.sourceReceived(t.sources[reply.source], fileName, language),
+          text: reply.languageCertain ? text : `${text}\n\n${t.cvs.askLanguage}`,
           keyboard: reply.documentId
-            ? documentLanguageKeyboard(t, reply.documentId, reply.language)
+            ? documentLanguageKeyboard(t, reply.documentId, reply.languageCertain ? reply.language : null)
                 .row()
                 .text(t.buttons.analyze, encodeCallback({ type: "onboarding_analyze" }))
             : analyzeKeyboard(t),
@@ -509,10 +611,16 @@ export function profileReplyViews(t: Strings, reply: ProfileReply): View[] {
     case "document_saved": {
       const fileName = reply.fileName ? escapeHtml(reply.fileName) : null;
       const language = reply.language ? t.documentLanguages[reply.language] : null;
+      const source = t.sources[reply.source];
+      const text = reply.replaced
+        ? t.documents.replaced(source, fileName, language, documentName(t, reply.replaced))
+        : t.documents.saved(source, fileName, language, reply.version);
       return [
         {
-          text: t.documents.saved(t.sources[reply.source], fileName, language, reply.version),
-          keyboard: documentLanguageKeyboard(t, reply.documentId, reply.language),
+          text: reply.languageCertain ? text : `${text}\n\n${t.cvs.askLanguage}`,
+          keyboard: documentLanguageKeyboard(t, reply.documentId, reply.languageCertain ? reply.language : null)
+            .row()
+            .text(t.buttons.myCvs, encodeCallback({ type: "documents" })),
         },
       ];
     }
