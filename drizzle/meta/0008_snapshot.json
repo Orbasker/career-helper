@@ -2338,7 +2338,7 @@
         },
         "version": {
           "name": "version",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false
         },

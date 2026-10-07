@@ -78,7 +78,7 @@ describe("multi-document CV migration", () => {
     await migrate(drizzle(client), { migrationsFolder: "drizzle" });
 
     const documents = await rows<Record<string, unknown>>(
-      `select id, user_id, kind, file_name, format, file_ref, language, language_confirmed, extracted_text, parse_status, parse_error
+      `select id, user_id, kind, file_name, format, file_ref, language, language_confirmed, extracted_text, parse_status, parse_error, version
        from source_documents order by user_id, file_ref`,
     );
     expect(documents).toEqual([
@@ -93,6 +93,7 @@ describe("multi-document CV migration", () => {
         extracted_text: HEBREW_CV,
         parse_status: "parsed",
         parse_error: null,
+        version: 1,
       }),
       expect.objectContaining({ id: "10000000-0000-4000-8000-000000000002", kind: "linkedin_export", format: "pdf", language: "en" }),
       expect.objectContaining({
@@ -105,8 +106,8 @@ describe("multi-document CV migration", () => {
         language: "en",
         extracted_text: ENGLISH_CV,
       }),
-      expect.objectContaining({ id: "10000000-0000-4000-8000-000000000004", format: "docx" }),
-      expect.objectContaining({ id: "10000000-0000-4000-8000-000000000005", format: "docx" }),
+      expect.objectContaining({ id: "10000000-0000-4000-8000-000000000004", format: "docx", language: "en", version: 1 }),
+      expect.objectContaining({ id: "10000000-0000-4000-8000-000000000005", format: "docx", language: "en", version: 2 }),
     ]);
 
     expect(await rows(`select id, kind, document_id, content from profile_sources order by id`)).toEqual([

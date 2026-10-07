@@ -303,6 +303,28 @@ describe("career-profile onboarding", () => {
     expect(await db.select().from(sourceDocuments).where(eq(sourceDocuments.userId, userId))).toHaveLength(1);
   });
 
+  it("numbers each new CV in the same language as the next version", async () => {
+    await start();
+    await send(textUpdate("skip"));
+    await send(documentUpdate({ fileName: "cv-2025.txt", mimeType: "text/plain" }));
+    await send(documentUpdate({ fileName: "cv.doc", mimeType: "application/msword" }));
+    await send(documentUpdate({ fileName: "cv-2026.txt", mimeType: "text/plain" }));
+    fileContent = HEBREW_CV_TEXT;
+    await send(documentUpdate({ fileName: "cv-he.txt", mimeType: "text/plain" }));
+
+    const documents = await db
+      .select()
+      .from(sourceDocuments)
+      .where(eq(sourceDocuments.userId, await userIdOf(DANA)))
+      .orderBy(sourceDocuments.createdAt);
+    expect(documents.map((d) => [d.fileName, d.language, d.version])).toEqual([
+      ["cv-2025.txt", "en", 1],
+      ["cv.doc", null, null],
+      ["cv-2026.txt", "en", 2],
+      ["cv-he.txt", "he", 1],
+    ]);
+  });
+
   it("keeps Hebrew and English CVs side by side and traces facts back to each", async () => {
     await start();
     await send(textUpdate("skip"));
@@ -332,17 +354,21 @@ describe("career-profile onboarding", () => {
       parseStatus: "parsed",
       parseError: null,
       label: "Hebrew 2026",
+      version: 1,
     });
-    expect(english).toMatchObject({ kind: "cv", fileName: "cv-en.txt", language: "en", extractedText: CV_TEXT, label: null });
+    expect(english).toMatchObject({ kind: "cv", fileName: "cv-en.txt", language: "en", extractedText: CV_TEXT, label: null, version: 1 });
 
     await send(callbackUpdate(encodeCallback({ type: "document_language", documentId: hebrew!.id, language: "en" }), NOA));
     expect(calls.find((c) => c.method === "answerCallbackQuery")!.payload.text).toBe(messages.expired);
     await send(callbackUpdate(encodeCallback({ type: "document_language", documentId: english!.id, language: "he" })));
     expect(calls.find((c) => c.method === "answerCallbackQuery")!.payload.text).toBe("Marked as Hebrew ✅");
     expect(calls.some((c) => c.method === "editMessageReplyMarkup")).toBe(true);
+    const documentById = async (id: string) => (await db.select().from(sourceDocuments).where(eq(sourceDocuments.id, id)))[0];
+    expect(await documentById(english!.id)).toMatchObject({ language: "he", languageConfirmed: true, version: 2 });
     await send(callbackUpdate(encodeCallback({ type: "document_language", documentId: english!.id, language: "en" })));
-    const [confirmed] = await db.select().from(sourceDocuments).where(eq(sourceDocuments.id, english!.id));
-    expect(confirmed).toMatchObject({ language: "en", languageConfirmed: true });
+    expect(await documentById(english!.id)).toMatchObject({ language: "en", languageConfirmed: true, version: 1 });
+    await send(callbackUpdate(encodeCallback({ type: "document_language", documentId: english!.id, language: "en" })));
+    expect(await documentById(english!.id)).toMatchObject({ language: "en", version: 1 });
 
     const fromDocument = (change: ProfileChange, documentId: string): ProfileChange =>
       change.op === "add_experience" || change.op === "add_fact" ? { ...change, sourceDocumentId: documentId } : change;

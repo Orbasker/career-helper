@@ -1,5 +1,5 @@
-import { and, count, eq, sql } from "drizzle-orm";
-import type { ConversationLanguage } from "../../domain/enums.js";
+import { and, count, eq, isNull, max, sql } from "drizzle-orm";
+import type { ConversationLanguage, DocumentKind } from "../../domain/enums.js";
 import { parseLanguageChoice } from "../../domain/language.js";
 import { careerProfiles, conversationStates, profileSources, sourceDocuments, users } from "../../db/schema.js";
 import type { Db } from "../../db/types.js";
@@ -125,9 +125,10 @@ export class PgOnboardingService implements OnboardingService {
 
     const kind = classifySource(parsed.text);
     const documentId = await this.db.transaction(async (tx) => {
+      const version = await nextVersion(tx, userId, kind, parsed.language);
       const [row] = await tx
         .insert(sourceDocuments)
-        .values({ ...file, kind, language: parsed.language, extractedText: parsed.text, parseStatus: "parsed" })
+        .values({ ...file, kind, language: parsed.language, version, extractedText: parsed.text, parseStatus: "parsed" })
         .returning({ id: sourceDocuments.id });
       await tx.insert(profileSources).values({ userId, kind, documentId: row!.id });
       if (state.step === "linkedin") await this.setStep(tx, userId, "documents", {});
@@ -136,13 +137,21 @@ export class PgOnboardingService implements OnboardingService {
     return { kind: "source_received", source: kind, fileName: document.fileName, documentId, language: parsed.language };
   }
 
-  async setConversationLanguage(userId: string, documentId: string, language: ConversationLanguage): Promise<boolean> {
-    const updated = await this.db
-      .update(sourceDocuments)
-      .set({ language, languageConfirmed: true })
-      .where(and(eq(sourceDocuments.id, documentId), eq(sourceDocuments.userId, userId)))
-      .returning({ id: sourceDocuments.id });
-    return updated.length > 0;
+  async setDocumentLanguage(userId: string, documentId: string, language: ConversationLanguage): Promise<boolean> {
+    return this.db.transaction(async (tx) => {
+      const [document] = await tx
+        .select({ kind: sourceDocuments.kind, language: sourceDocuments.language, version: sourceDocuments.version })
+        .from(sourceDocuments)
+        .where(and(eq(sourceDocuments.id, documentId), eq(sourceDocuments.userId, userId)))
+        .for("update");
+      if (!document) return false;
+      const version =
+        document.kind && document.language !== language
+          ? await nextVersion(tx, userId, document.kind, language)
+          : document.version;
+      await tx.update(sourceDocuments).set({ language, languageConfirmed: true, version }).where(eq(sourceDocuments.id, documentId));
+      return true;
+    });
   }
 
   async analyze(userId: string): Promise<ProfileReply> {
@@ -266,4 +275,18 @@ export class PgOnboardingService implements OnboardingService {
         set: { flow: "onboarding", step, context: { ...context } },
       });
   }
+}
+
+async function nextVersion(db: Db, userId: string, kind: DocumentKind, language: string | null): Promise<number> {
+  const [row] = await db
+    .select({ latest: max(sourceDocuments.version) })
+    .from(sourceDocuments)
+    .where(
+      and(
+        eq(sourceDocuments.userId, userId),
+        eq(sourceDocuments.kind, kind),
+        language === null ? isNull(sourceDocuments.language) : eq(sourceDocuments.language, language),
+      ),
+    );
+  return (row?.latest ?? 0) + 1;
 }

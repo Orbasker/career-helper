@@ -351,7 +351,7 @@ export function createBot(
         return;
       }
       case "document_language": {
-        const saved = await services.onboarding.setConversationLanguage(ctx.userId, action.documentId, action.language);
+        const saved = await services.onboarding.setDocumentLanguage(ctx.userId, action.documentId, action.language);
         await ctx.answerCallbackQuery({
           text: saved ? `Marked as ${DOCUMENT_LANGUAGE_NAMES[action.language]} ✅` : messages.expired,
         });

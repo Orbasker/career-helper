@@ -138,7 +138,7 @@ export const sourceDocuments = pgTable(
     parseStatus: documentParseStatus("parse_status").notNull(),
     parseError: text("parse_error"),
     label: text("label"),
-    version: text("version"),
+    version: integer("version"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

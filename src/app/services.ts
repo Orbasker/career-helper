@@ -157,7 +157,7 @@ export interface OnboardingService {
   /** Stores every uploaded file as its own source document; a later upload never replaces an earlier one. */
   addDocument(userId: string, document: IncomingDocument): Promise<ProfileReply>;
   /** Records the user's confirmation of a document's language; false when the document is not theirs. */
-  setConversationLanguage(userId: string, documentId: string, language: ConversationLanguage): Promise<boolean>;
+  setDocumentLanguage(userId: string, documentId: string, language: ConversationLanguage): Promise<boolean>;
   analyze(userId: string): Promise<ProfileReply>;
   confirm(userId: string): Promise<ProfileReply>;
 }

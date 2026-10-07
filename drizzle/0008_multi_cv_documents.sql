@@ -16,7 +16,7 @@ CREATE TABLE "source_documents" (
 	"parse_status" "document_parse_status" NOT NULL,
 	"parse_error" text,
 	"label" text,
-	"version" text,
+	"version" integer,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "source_documents_parsed_chk" CHECK (("source_documents"."parse_status" = 'parsed') = ("source_documents"."extracted_text" is not null and "source_documents"."kind" is not null)),
@@ -79,6 +79,13 @@ UPDATE "cv_versions" v SET "source_document_id" = (
 )
 FROM "master_cvs" mc
 WHERE v."master_cv_id" = mc."id";--> statement-breakpoint
+UPDATE "source_documents" d SET "version" = numbered."version"
+FROM (
+	SELECT "id", row_number() OVER (PARTITION BY "user_id", "kind", "language" ORDER BY "created_at", "id") AS "version"
+	FROM "source_documents"
+	WHERE "parse_status" = 'parsed'
+) numbered
+WHERE d."id" = numbered."id";--> statement-breakpoint
 CREATE TEMPORARY TABLE "only_documents" AS
 SELECT "user_id", "kind", (array_agg("id"))[1] AS "id"
 FROM "source_documents"
