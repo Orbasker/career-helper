@@ -1,7 +1,7 @@
 import { parseEnv } from "@neon/env";
 import { Api } from "grammy";
 import config from "../neon.js";
-import { BOT_COMMANDS } from "../src/bot/bot.js";
+import { registerCommands } from "../src/bot/bot.js";
 import { ALLOWED_UPDATES, WEBHOOK_PATH, telegramBotToken, webhookSecret } from "../src/bot/telegram-env.js";
 import { runMigrations } from "../src/db/migrations.js";
 
@@ -21,5 +21,5 @@ const token = telegramBotToken();
 const api = new Api(token);
 const url = `https://${host}${WEBHOOK_PATH}`;
 await api.setWebhook(url, { secret_token: webhookSecret(token), allowed_updates: [...ALLOWED_UPDATES] });
-await api.setMyCommands(BOT_COMMANDS);
+await registerCommands(api);
 console.log(`Telegram webhook set to ${url}`);

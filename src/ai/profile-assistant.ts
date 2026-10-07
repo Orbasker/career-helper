@@ -1,7 +1,9 @@
 import { generateText, Output, type LanguageModel } from "ai";
 import { noopRecorder, tracked, type ModelCallRecorder } from "./tracking.js";
 import type { ProfileAssistant, ProfileExtraction, ProfileInterpretation, ProfileSourceText } from "../app/services.js";
+import type { ConversationLanguage } from "../domain/enums.js";
 import type { ProfileSnapshot } from "../domain/profile.js";
+import { replyLanguageRule } from "./language.js";
 import { aliasSnapshot, extractionToChanges, interpretationToChanges } from "./mapping.js";
 import { extractionSchema, interpretationSchema } from "./schemas.js";
 
@@ -51,7 +53,11 @@ export class AiProfileAssistant implements ProfileAssistant {
     return typeof this.model === "string" ? this.model : this.model.modelId;
   }
 
-  async extract(input: { linkedinUrl: string | null; sources: ProfileSourceText[] }): Promise<ProfileExtraction> {
+  async extract(input: {
+    linkedinUrl: string | null;
+    sources: ProfileSourceText[];
+    language: ConversationLanguage;
+  }): Promise<ProfileExtraction> {
     const documents = input.sources
       .map((s, i) => `<document index="${i + 1}" kind="${s.kind}">\n${s.content.slice(0, MAX_SOURCE_CHARS)}\n</document>`)
       .join("\n\n");
@@ -59,7 +65,7 @@ export class AiProfileAssistant implements ProfileAssistant {
       generateText({
         providerOptions,
         model: this.model,
-        instructions: EXTRACTION_INSTRUCTIONS,
+        instructions: `${EXTRACTION_INSTRUCTIONS}\n\n${replyLanguageRule(input.language, "followUpQuestions")} Record facts in the language of the sources.`,
         prompt: `LinkedIn profile URL: ${input.linkedinUrl ?? "not provided"}\n\n${documents}`,
         output: Output.object({ schema: extractionSchema }),
       }),
@@ -67,7 +73,12 @@ export class AiProfileAssistant implements ProfileAssistant {
     return { changes: extractionToChanges(output), followUpQuestions: output.followUpQuestions };
   }
 
-  async interpret(input: { snapshot: ProfileSnapshot; message: string; question: string | null }): Promise<ProfileInterpretation> {
+  async interpret(input: {
+    snapshot: ProfileSnapshot;
+    message: string;
+    question: string | null;
+    language: ConversationLanguage;
+  }): Promise<ProfileInterpretation> {
     const { aliases, view } = aliasSnapshot(input.snapshot);
     const prompt = [
       `Current profile:\n${JSON.stringify(view, null, 1)}`,
@@ -80,7 +91,7 @@ export class AiProfileAssistant implements ProfileAssistant {
       generateText({
         providerOptions,
         model: this.model,
-        instructions: INTERPRETATION_INSTRUCTIONS,
+        instructions: `${INTERPRETATION_INSTRUCTIONS}\n\n${replyLanguageRule(input.language, "reply")} Write new facts and preference labels in the language the user wrote them in.`,
         prompt,
         output: Output.object({ schema: interpretationSchema }),
       }),

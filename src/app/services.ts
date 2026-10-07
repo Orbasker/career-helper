@@ -146,7 +146,8 @@ export interface UserService {
 export interface OnboardingService {
   start(userId: string): Promise<ProfileReply[]>;
   addDocument(userId: string, document: IncomingDocument): Promise<ProfileReply>;
-  analyze(userId: string): Promise<ProfileReply>;
+  /** `language` is the language follow-up questions are asked in. */
+  analyze(userId: string, language: ConversationLanguage): Promise<ProfileReply>;
   confirm(userId: string): Promise<ProfileReply>;
 }
 
@@ -174,7 +175,7 @@ export interface FeedbackService {
   /** Stores `text` as the awaited reason; false when no reason is awaited, so the text is handled normally. */
   takeReasonText(userId: string, text: string): Promise<boolean>;
   /** Turns repeated feedback into new proposed preferences for the user to confirm. */
-  learn(userId: string): Promise<PreferenceProposalView[]>;
+  learn(userId: string, language: ConversationLanguage): Promise<PreferenceProposalView[]>;
   decideProposal(userId: string, preferenceId: string, accept: boolean): Promise<ProposalDecision>;
 }
 
@@ -192,7 +193,8 @@ export interface CvService {
 }
 
 export interface ConversationService {
-  handleText(userId: string, text: string): Promise<ProfileReply[]>;
+  /** `language` is the language the assistant replies in and proposed changes are described in. */
+  handleText(userId: string, text: string, language: ConversationLanguage): Promise<ProfileReply[]>;
   applyEdit(userId: string, token: string): Promise<ProfileReply>;
   cancelEdit(userId: string, token: string): Promise<ProfileReply>;
   showProfile(userId: string): Promise<ProfileReply>;
@@ -216,8 +218,13 @@ export interface ProfileInterpretation {
 }
 
 export interface ProfileAssistant {
-  extract(input: { linkedinUrl: string | null; sources: ProfileSourceText[] }): Promise<ProfileExtraction>;
-  interpret(input: { snapshot: ProfileSnapshot; message: string; question: string | null }): Promise<ProfileInterpretation>;
+  extract(input: { linkedinUrl: string | null; sources: ProfileSourceText[]; language: ConversationLanguage }): Promise<ProfileExtraction>;
+  interpret(input: {
+    snapshot: ProfileSnapshot;
+    message: string;
+    question: string | null;
+    language: ConversationLanguage;
+  }): Promise<ProfileInterpretation>;
 }
 
 export interface JobSiteView {

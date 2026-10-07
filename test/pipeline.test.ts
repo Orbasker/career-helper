@@ -308,7 +308,7 @@ describe("TelegramNotifier", () => {
 
   it("sends one HTML digest with a details button per match", async () => {
     const { api, calls } = apiReturning([]);
-    await new TelegramNotifier(api).sendDigest(10, digest, 3);
+    await new TelegramNotifier(api).sendDigest(10, digest, 3, null);
 
     expect(calls).toHaveLength(1);
     expect(calls[0]!.chat_id).toBe(10);
@@ -323,7 +323,7 @@ describe("TelegramNotifier", () => {
       { ok: false, error_code: 429, description: "Too Many Requests", parameters: { retry_after: 2 } },
       { ok: false, error_code: 502, description: "Bad Gateway" },
     ]);
-    await new TelegramNotifier(api, { sleep: async (ms) => void delays.push(ms) }).sendDigest(10, digest, 0);
+    await new TelegramNotifier(api, { sleep: async (ms) => void delays.push(ms) }).sendDigest(10, digest, 0, null);
 
     expect(calls).toHaveLength(3);
     expect(delays).toEqual([2000, 2000]);
@@ -332,17 +332,17 @@ describe("TelegramNotifier", () => {
   it("gives up after the last attempt and does not retry client errors", async () => {
     const sleep = async () => undefined;
     const busy = apiReturning(Array(3).fill({ ok: false, error_code: 500, description: "Internal" }));
-    await expect(new TelegramNotifier(busy.api, { sleep }).sendDigest(10, digest, 0)).rejects.toThrow(/Internal/);
+    await expect(new TelegramNotifier(busy.api, { sleep }).sendDigest(10, digest, 0, null)).rejects.toThrow(/Internal/);
     expect(busy.calls).toHaveLength(3);
 
     const bad = apiReturning([{ ok: false, error_code: 400, description: "Bad Request: can't parse entities" }]);
-    await expect(new TelegramNotifier(bad.api, { sleep }).sendDigest(10, digest, 0)).rejects.toThrow(/parse entities/);
+    await expect(new TelegramNotifier(bad.api, { sleep }).sendDigest(10, digest, 0, null)).rejects.toThrow(/parse entities/);
     expect(bad.calls).toHaveLength(1);
   });
 
   it("reports chats that can no longer receive messages", async () => {
     const { api } = apiReturning([{ ok: false, error_code: 403, description: "Forbidden: bot was blocked by the user" }]);
-    await expect(new TelegramNotifier(api).sendDigest(10, digest, 0)).rejects.toBeInstanceOf(RecipientUnavailableError);
+    await expect(new TelegramNotifier(api).sendDigest(10, digest, 0, null)).rejects.toBeInstanceOf(RecipientUnavailableError);
   });
 });
 

@@ -6,7 +6,8 @@ import { createPgServices } from "../src/app/postgres/index.js";
 import { PgMatchService } from "../src/app/postgres/matches.js";
 import type { MatchSummary } from "../src/app/services.js";
 import { createBot } from "../src/bot/bot.js";
-import { digestView, matchDetailsView, matchListItem, messages } from "../src/bot/views.js";
+import { digestView, matchDetailsView, matchListItem } from "../src/bot/views.js";
+import { strings } from "../src/i18n/index.js";
 import { contactsAtCompanies, rankContacts, type Contact } from "../src/connections/lookup.js";
 import { parseConnectedOn, parseConnectionsCsv, readConnectionsFile } from "../src/connections/parse.js";
 import { careerProfiles, connections, duplicateGroups, jobSources, jobs, matches, rawJobRecords, users } from "../src/db/schema.js";
@@ -15,6 +16,9 @@ import { FakeProfileAssistant } from "./support/assistant.js";
 import { createTestDb, type TestDb } from "./support/db.js";
 import { FakeCvTailorer } from "./support/tailorer.js";
 import { BOT_INFO, DANA, callbackUpdate, captureApiCalls, documentUpdate, textUpdate, type ApiCall } from "./support/telegram.js";
+
+const en = strings("en");
+const messages = en.messages;
 
 const CSV = [
   "Notes:",
@@ -146,24 +150,24 @@ describe("connections in matches", () => {
 
     const list = await matchService.whatsNew(userId, 5);
     expect(list.map((m) => [m.company, m.connectionCount])).toEqual(expect.arrayContaining([["Via", 2], ["Wiz", 0]]));
-    expect(matchListItem(list.find((m) => m.company === "Via")!).text).toContain("👥 2 connections at Via");
-    expect(matchListItem(list.find((m) => m.company === "Wiz")!).text).not.toContain("👥");
+    expect(matchListItem(en, list.find((m) => m.company === "Via")!).text).toContain("👥 2 connections at Via");
+    expect(matchListItem(en, list.find((m) => m.company === "Wiz")!).text).not.toContain("👥");
 
     const details = (await matchService.details(userId, viaMatch))!;
     expect(details.contacts.map((c) => c.fullName)).toEqual(["Avi Levi", "Noa Cohen"]);
-    const text = matchDetailsView(details).text;
+    const text = matchDetailsView(en, details).text;
     expect(text).toContain("<b>People you know at Via</b>");
     expect(text).toContain('<a href="https://www.linkedin.com/in/avilevi">Avi Levi</a> — Senior Backend Engineer, Routing');
     expect(text).not.toContain("From your LinkedIn export");
     await db.update(connections).set({ importedAt: new Date("2026-05-01T00:00:00Z") });
-    expect(matchDetailsView((await matchService.details(userId, viaMatch))!).text).toContain(
+    expect(matchDetailsView(en, (await matchService.details(userId, viaMatch))!).text).toContain(
       "From your LinkedIn export of 2026-05. Send /connections to refresh it.",
     );
 
     const sent: MatchSummary[][] = [];
     await db.update(matches).set({ status: "ready", notifiedAt: null });
     await runNotifications(db, { sendDigest: async (_chat, digest) => void sent.push(digest) });
-    expect(digestView(sent[0]!, 0).text).toContain("👥 2 connections at Via");
+    expect(digestView(en, sent[0]!, 0).text).toContain("👥 2 connections at Via");
   });
 
   describe("in the bot", () => {

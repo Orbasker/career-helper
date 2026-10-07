@@ -19,8 +19,8 @@ interface QuestionsContext {
   index?: number;
 }
 
-const SKIP = /^\s*(skip|no|none|nope|n\/a|-)\s*[.!]?\s*$/i;
-const DONE = /^\s*(done|analy[sz]e|that'?s all|finished|continue)\s*[.!]?\s*$/i;
+const SKIP = /^\s*(skip|no|none|nope|n\/a|-|דלג|תדלג|לדלג|לא|אין|בלי)\s*[.!]?\s*$/i;
+const DONE = /^\s*(done|analy[sz]e|that'?s all|finished|continue|סיימתי|זהו|זה הכל|זה הכול|נתח|תנתח|ניתוח|המשך|תמשיך)\s*[.!]?\s*$/i;
 
 export class PgOnboardingService implements OnboardingService {
   constructor(
@@ -71,7 +71,13 @@ export class PgOnboardingService implements OnboardingService {
     });
   }
 
-  async answer(userId: string, step: string, context: QuestionsContext, text: string): Promise<ProfileReply[]> {
+  async answer(
+    userId: string,
+    step: string,
+    context: QuestionsContext,
+    text: string,
+    language: ConversationLanguage,
+  ): Promise<ProfileReply[]> {
     switch (step as OnboardingStepKey) {
       case "language": {
         const language = parseLanguageChoice(text);
@@ -84,15 +90,15 @@ export class PgOnboardingService implements OnboardingService {
         return [{ kind: "ask_documents", linkedinSaved: url !== null }];
       }
       case "documents":
-        if (DONE.test(text)) return [await this.analyze(userId)];
+        if (DONE.test(text)) return [await this.analyze(userId, language)];
         await this.db.insert(profileSources).values({ userId, kind: "pasted_text", content: text });
         return [{ kind: "source_received", source: "pasted_text", fileName: null }];
       case "analyzing":
         return [{ kind: "busy" }];
       case "questions":
-        return this.answerQuestion(userId, context, text);
+        return this.answerQuestion(userId, context, text, language);
       case "review":
-        return this.correctReview(userId, text);
+        return this.correctReview(userId, text, language);
       default:
         return this.start(userId);
     }
@@ -130,7 +136,7 @@ export class PgOnboardingService implements OnboardingService {
     return { kind: "source_received", source: kind, fileName: document.fileName };
   }
 
-  async analyze(userId: string): Promise<ProfileReply> {
+  async analyze(userId: string, language: ConversationLanguage): Promise<ProfileReply> {
     const [sources] = await this.db
       .select({ n: count() })
       .from(profileSources)
@@ -160,7 +166,11 @@ export class PgOnboardingService implements OnboardingService {
         .from(profileSources)
         .where(eq(profileSources.userId, userId))
         .orderBy(profileSources.createdAt);
-      const extraction = await this.assistant.extract({ linkedinUrl: profile?.linkedinUrl ?? null, sources: sourceRows });
+      const extraction = await this.assistant.extract({
+        linkedinUrl: profile?.linkedinUrl ?? null,
+        sources: sourceRows,
+        language,
+      });
 
       await this.db.transaction(async (tx) => {
         await applyChanges(tx, userId, extraction.changes, "draft");
@@ -195,13 +205,23 @@ export class PgOnboardingService implements OnboardingService {
     });
   }
 
-  private async answerQuestion(userId: string, context: QuestionsContext, text: string): Promise<ProfileReply[]> {
+  private async answerQuestion(
+    userId: string,
+    context: QuestionsContext,
+    text: string,
+    language: ConversationLanguage,
+  ): Promise<ProfileReply[]> {
     const questions = context.questions ?? [];
     const index = context.index ?? 0;
     const replies: ProfileReply[] = [];
     if (!SKIP.test(text)) {
       const snapshot = await loadSnapshot(this.db, userId);
-      const interpretation = await this.assistant.interpret({ snapshot, message: text, question: questions[index] ?? null });
+      const interpretation = await this.assistant.interpret({
+        snapshot,
+        message: text,
+        question: questions[index] ?? null,
+        language,
+      });
       await this.db.transaction((tx) => applyChanges(tx, userId, interpretation.changes, "draft"));
       if (interpretation.changes.length === 0 && interpretation.reply) {
         replies.push({ kind: "no_change", reply: interpretation.reply });
@@ -214,9 +234,9 @@ export class PgOnboardingService implements OnboardingService {
     return replies;
   }
 
-  private async correctReview(userId: string, text: string): Promise<ProfileReply[]> {
+  private async correctReview(userId: string, text: string, language: ConversationLanguage): Promise<ProfileReply[]> {
     const snapshot = await loadSnapshot(this.db, userId);
-    const interpretation = await this.assistant.interpret({ snapshot, message: text, question: null });
+    const interpretation = await this.assistant.interpret({ snapshot, message: text, question: null, language });
     if (interpretation.changes.length === 0) {
       return [{ kind: "no_change", reply: interpretation.reply }];
     }

@@ -1,6 +1,6 @@
 import { parseEnv } from "@neon/env";
 import config from "../neon.js";
-import { BOT_COMMANDS } from "./bot/bot.js";
+import { registerCommands } from "./bot/bot.js";
 import { createProductionBot } from "./bot/production.js";
 import { ALLOWED_UPDATES, telegramBotToken } from "./bot/telegram-env.js";
 import { createDb } from "./db/client.js";
@@ -25,7 +25,7 @@ const shutdown = async () => {
 process.once("SIGINT", shutdown);
 process.once("SIGTERM", shutdown);
 
-await bot.api.setMyCommands(BOT_COMMANDS);
+await registerCommands(bot.api);
 await bot.start({
   allowed_updates: [...ALLOWED_UPDATES],
   onStart: (me) => console.log(`bot @${me.username} polling`),

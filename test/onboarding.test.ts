@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createPgServices } from "../src/app/postgres/index.js";
 import { createBot } from "../src/bot/bot.js";
 import { encodeCallback } from "../src/bot/callbacks.js";
-import { messages } from "../src/bot/views.js";
+import { ASK_LANGUAGE } from "../src/bot/views.js";
 import {
   careerFacts,
   careerProfiles,
@@ -15,6 +15,7 @@ import {
   workExperiences,
 } from "../src/db/schema.js";
 import type { ProfileChange } from "../src/domain/profile.js";
+import { strings } from "../src/i18n/index.js";
 import { FakeProfileAssistant } from "./support/assistant.js";
 import { FakeCvTailorer } from "./support/tailorer.js";
 import { createTestDb, type TestDb } from "./support/db.js";
@@ -29,6 +30,9 @@ import {
   type ApiCall,
   type TelegramPerson,
 } from "./support/telegram.js";
+
+const en = strings("en");
+const messages = en.messages;
 
 const CV_TEXT = "Dana Levi\nHR Manager, Acme Ltd, 2019 - present\nManaged a team of 6 recruiters\nCut time-to-hire by 30%";
 
@@ -127,11 +131,11 @@ async function onboard(person: TelegramPerson = DANA) {
 describe("career-profile onboarding", () => {
   it("imports LinkedIn and CV, asks follow-ups and saves facts only after review", async () => {
     await send(textUpdate("/start"));
-    expect(sent()).toEqual([messages.askLanguage]);
+    expect(sent()).toEqual([ASK_LANGUAGE]);
     expect(lastKeyboardData()).toEqual(["lang:en", "lang:he"]);
 
     await send(callbackUpdate(encodeCallback({ type: "set_language", language: "en" })));
-    expect(sent()).toEqual([messages.languageSaved.en, messages.welcomeNew, messages.askLinkedin]);
+    expect(sent()).toEqual([messages.languageSaved, messages.welcomeNew, messages.askLinkedin]);
 
     await send(textUpdate("Sure: https://www.linkedin.com/in/dana-levi/"));
     expect(sent()[0]).toContain(messages.linkedinSaved);
@@ -155,6 +159,7 @@ describe("career-profile onboarding", () => {
           { kind: "cv", content: CV_TEXT },
           { kind: "linkedin_export", content: expect.stringContaining("Page 1 of 2") },
         ],
+        language: "en",
       },
     ]);
 
@@ -488,11 +493,12 @@ describe("conversation language", () => {
   it("lets a new user answer the language question in text and keeps asking until it is clear", async () => {
     await send(textUpdate("/start"));
     await send(textUpdate("French"));
-    expect(sent()).toEqual([messages.askLanguage]);
+    expect(sent()).toEqual([ASK_LANGUAGE]);
     expect(await languageOf()).toBeNull();
 
     await send(textUpdate("עברית"));
-    expect(sent()).toEqual([messages.languageSaved.he, messages.welcomeNew, messages.askLinkedin]);
+    const he = strings("he").messages;
+    expect(sent()).toEqual([he.languageSaved, he.welcomeNew, he.askLinkedin]);
     expect(await languageOf()).toBe("he");
   });
 
@@ -515,21 +521,21 @@ describe("conversation language", () => {
     const [profileBefore] = await db.select().from(careerProfiles).where(eq(careerProfiles.userId, userId));
 
     await send(textUpdate("Switch to Hebrew"));
-    expect(sent()).toEqual([messages.languageSaved.he]);
+    expect(sent()).toEqual([strings("he").messages.languageSaved]);
     expect(assistant.interpretCalls).toHaveLength(0);
     expect(await languageOf()).toBe("he");
 
     await send(textUpdate("/language"));
     expect(sent()[0]).toContain("<b>עברית</b>");
     await send(callbackUpdate(encodeCallback({ type: "set_language", language: "en" })));
-    expect(sent()).toEqual([messages.languageSaved.en]);
+    expect(sent()).toEqual([messages.languageSaved]);
     expect(await languageOf()).toBe("en");
 
     await send(textUpdate("תדבר איתי בעברית"));
     expect(await languageOf()).toBe("he");
 
     await send(textUpdate("change language"));
-    expect(sent()[0]).toContain("Tap a language");
+    expect(sent()[0]).toContain("לחצו על שפה כדי לשנות");
 
     const factsAfter = await db.select().from(careerFacts).where(eq(careerFacts.userId, userId));
     const [profileAfter] = await db.select().from(careerProfiles).where(eq(careerProfiles.userId, userId));
@@ -545,12 +551,12 @@ describe("conversation language", () => {
     expect(user!.preferredLanguage).toBeNull();
 
     await send(textUpdate("/new"));
-    expect(sent()).toEqual([messages.noMatches, messages.askLanguage]);
+    expect(sent()).toEqual([messages.noMatches, ASK_LANGUAGE]);
     await send(textUpdate("/new"));
     expect(sent()).toEqual([messages.noMatches]);
 
     await send(callbackUpdate(encodeCallback({ type: "set_language", language: "he" })));
-    expect(sent()).toEqual([messages.languageSaved.he]);
+    expect(sent()).toEqual([strings("he").messages.languageSaved]);
     expect(await languageOf()).toBe("he");
   });
 

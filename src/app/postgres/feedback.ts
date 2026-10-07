@@ -1,5 +1,5 @@
 import { and, desc, eq, gt, sql } from "drizzle-orm";
-import type { FeedbackVerdict } from "../../domain/enums.js";
+import type { ConversationLanguage, FeedbackVerdict } from "../../domain/enums.js";
 import { conversationStates, feedback, jobs, matches, preferenceEvidence, preferences } from "../../db/schema.js";
 import type { Db } from "../../db/types.js";
 import { inferPreferences, type FeedbackReasonTag, type FeedbackSignal } from "../../learning/infer.js";
@@ -104,7 +104,7 @@ export class PgFeedbackService implements FeedbackService {
     });
   }
 
-  async learn(userId: string): Promise<PreferenceProposalView[]> {
+  async learn(userId: string, language: ConversationLanguage): Promise<PreferenceProposalView[]> {
     const rows = await this.db
       .select({
         feedbackId: feedback.id,
@@ -140,6 +140,7 @@ export class PgFeedbackService implements FeedbackService {
       signals: [...latestByGroup.values()],
       ownTitles: [snapshot.profile.headline ?? "", ...snapshot.experiences.map((e) => e.title)],
       preferences: allPreferences,
+      language,
     });
     if (proposals.length === 0) return [];
 

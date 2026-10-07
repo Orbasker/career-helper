@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import type { ConversationLanguage } from "../../domain/enums.js";
 import type { ProfileChange } from "../../domain/profile.js";
+import { strings } from "../../i18n/index.js";
 import { careerProfiles, conversationStates } from "../../db/schema.js";
 import type { Db } from "../../db/types.js";
 import type { ConversationService, ProfileAssistant, ProfileReply } from "../services.js";
@@ -20,19 +21,19 @@ export class PgConversationService implements ConversationService {
     private readonly assistant: ProfileAssistant,
   ) {}
 
-  async handleText(userId: string, text: string): Promise<ProfileReply[]> {
+  async handleText(userId: string, text: string, language: ConversationLanguage): Promise<ProfileReply[]> {
     const [state] = await this.db
       .select({ flow: conversationStates.flow, step: conversationStates.step, context: conversationStates.context })
       .from(conversationStates)
       .where(eq(conversationStates.userId, userId));
 
     if (state?.flow === "onboarding" && state.step) {
-      return this.onboarding.answer(userId, state.step, state.context, text);
+      return this.onboarding.answer(userId, state.step, state.context, text, language);
     }
     if (!(await this.isConfirmed(userId))) return [{ kind: "not_onboarded" }];
 
     const snapshot = await loadSnapshot(this.db, userId);
-    const { changes, reply } = await this.assistant.interpret({ snapshot, message: text, question: null });
+    const { changes, reply } = await this.assistant.interpret({ snapshot, message: text, question: null, language });
     if (changes.length === 0) return [{ kind: "no_change", reply }];
 
     const pending: PendingEdit = { token: randomBytes(6).toString("base64url"), changes };
@@ -43,7 +44,7 @@ export class PgConversationService implements ConversationService {
         target: conversationStates.userId,
         set: { flow: "profile_edit", step: "confirm", context: { ...pending } },
       });
-    return [{ kind: "edit_proposed", token: pending.token, changes: describeChanges(changes, snapshot) }];
+    return [{ kind: "edit_proposed", token: pending.token, changes: describeChanges(strings(language), changes, snapshot) }];
   }
 
   async applyEdit(userId: string, token: string): Promise<ProfileReply> {

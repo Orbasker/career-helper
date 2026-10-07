@@ -35,7 +35,16 @@
 
 ### Conversation language
 
-The default language lives on `users.preferred_language` and is loaded with every update. Users who confirmed their profile before languages existed are asked once, after the reply to their next message (`users.language_prompted_at` makes the prompt one-time). Localizing the replies themselves is ANI-95.
+The default language lives on `users.preferred_language` and is loaded with every update. Users who confirmed their profile before languages existed are asked once, after the reply to their next message (`users.language_prompted_at` makes the prompt one-time).
+
+All user-facing copy lives in `src/i18n/`: `en.ts` defines the catalog and its `Strings` type, `he.ts` must implement every key, and `strings(language)` returns the catalog for a user (English until they choose). Views in `src/bot/views.ts` take the catalog as their first argument, so handlers hold no copy and no per-language logic; the bot puts it on `ctx.t`. Adding a language means adding it to `CONVERSATION_LANGUAGES`, `LANGUAGE_NAMES` and a catalog file.
+
+- **Switching** takes effect on the reply that confirms it: the bot swaps `ctx.t`, re-sends the main menu with the new labels and sets the chat's command list (`setMyCommands` with a chat scope). Menu buttons in any language keep working.
+- **Commands** are registered in English by default and in Hebrew for Telegram clients set to Hebrew (`registerCommands`).
+- **Right-to-left**: Hebrew paragraphs must start with a Hebrew character or a right-to-left mark (`RLM` in `he.ts`), and `/commands` inside Hebrew text are preceded by a left-to-right mark so the slash stays attached. `test/localization.test.ts` enforces both.
+- **Typed answers** such as *skip* / *דלג*, *done* / *סיימתי*, "delete my connections" / "תמחק את אנשי הקשר" and "search on <site>" / "תחפש גם ב-<site>" are understood in both languages.
+- **Models** get the language too: `ProfileAssistant` writes follow-up questions and replies in it (facts stay in the language of the sources), the deep matcher writes explanations and evidence in it, and feedback learning words proposals in it. Job postings, company names and tailored CVs (which follow the language of the user's facts) are not translated. Explanations are written when a match is evaluated, so switching language does not rewrite existing ones.
+- `/stats` is an operator report and stays in English.
 
 ### Continuous editing
 

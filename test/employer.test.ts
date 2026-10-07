@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { MatchSummary } from "../src/app/services.js";
 import { digestView, matchListItem } from "../src/bot/views.js";
+import { strings } from "../src/i18n/index.js";
+
+const en = strings("en");
 import { employerRelation } from "../src/matching/employer.js";
 
 const history = [
@@ -36,8 +39,8 @@ describe("employer notes in messages", () => {
   });
 
   it("flags internal roles and former employers in the list and the digest", () => {
-    expect(matchListItem(match({ kind: "current", employer: "Via" })).text).toContain("Internal opportunity at Via</b>, where you work today");
-    expect(digestView([match({ kind: "former", employer: "Via" })], 0).text).toContain("You worked at Via before.");
-    expect(matchListItem(match(null)).text).not.toMatch(/Internal opportunity|worked at/);
+    expect(matchListItem(en, match({ kind: "current", employer: "Via" })).text).toContain("Internal opportunity at Via</b>, where you work today");
+    expect(digestView(en, [match({ kind: "former", employer: "Via" })], 0).text).toContain("You worked at Via before.");
+    expect(matchListItem(en, match(null)).text).not.toMatch(/Internal opportunity|worked at/);
   });
 });
