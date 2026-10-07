@@ -15,12 +15,17 @@ import type {
   JobLinkOutcome,
   ConnectionSummary,
   CvDraftView,
+  JobOrigin,
+  JobProvenance,
   JobSiteView,
   MatchDetails,
   MatchSummary,
   PreferenceProposalView,
   ProfileReply,
   ProfileView,
+  SourceCoverage,
+  SourceIssue,
+  SourcesOverview,
 } from "../app/services.js";
 import type { FeedbackReasonTag } from "../learning/infer.js";
 import { encodeCallback } from "./callbacks.js";
@@ -53,7 +58,7 @@ export const messages = {
   welcomeNew: "Hi! I'm your career agent. I'll find jobs that fit your experience — including adjacent roles — and help tailor your CV. Let's build your career profile first.",
   askLinkedin: "First, send me your <b>LinkedIn profile URL</b> (e.g. linkedin.com/in/your-name), or reply <i>skip</i>.",
   askDocuments: [
-    "Now send me your <b>CV / resume</b> (PDF, DOCX or TXT).",
+    "Now send me your <b>CV / resume</b> (PDF, DOCX or TXT). Have it in more than one language, e.g. Hebrew and English? Send each one.",
     "",
     "LinkedIn doesn't let me read profiles directly. To import yours too, open your LinkedIn profile → <b>More</b> → <b>Save to PDF</b> and send me that file.",
     "",
@@ -63,6 +68,7 @@ export const messages = {
   linkedinSkipped: "No LinkedIn URL saved — you can add it later.",
   documentTooLarge: "That file is too large (max 10 MB). Please send a smaller PDF, DOCX or TXT file.",
   unreadableDocument: "I couldn't read text from that file. Please send a PDF, DOCX or TXT file (not a scanned image), or paste the text.",
+  legacyDoc: "I can't read old Word <b>.doc</b> files. In Word choose <b>File → Save As → Word Document (.docx)</b> or <b>PDF</b>, and send me that file.",
   needSource: "I need at least one CV, LinkedIn PDF or a short written summary of your experience before I can analyze it.",
   analyzing: "Reading your documents and building your profile… this can take a minute.",
   analysisFailed: "Sorry, I couldn't analyze your documents this time. Tap <b>Analyze</b> to try again, or send more details.",
@@ -78,7 +84,9 @@ export const messages = {
   expired: "That action is no longer available.",
   noChange: "I didn't find anything to change in your profile. Tell me what to add, correct or remove — e.g. <i>\"add that I managed a team of 5\"</i>.",
   notOnboarded: "Let's set up your career profile first — send /start.",
-  documentNotExpected: "I only import documents while building your profile. To change your profile, just tell me what to add or correct.",
+  documentNotExpected: "I can't take documents at this step. Finish setting up your profile first (or send /start), then send it again.",
+  documentNothingNew: "Your profile already covers everything in this document, so there's nothing to change.",
+  documentMergeFailed: "I saved the file, but couldn't compare it with your profile right now. Tell me what to add in your own words, or send it again later.",
   noMatches: "No new matches right now. I'll message you when something relevant shows up.",
   matchNotFound: "I couldn't find that job anymore.",
   feedbackInterested: "Marked as interested 👍",
@@ -102,6 +110,8 @@ export const messages = {
     "<b>What I can do</b>",
     "• /new — your latest matches",
     "• /profile — your career profile",
+    "• Send an updated CV (PDF, DOCX or TXT) anytime — I'll show what it adds to your profile before saving anything.",
+    "• /sources — where I search for jobs and what I found there",
     "• /sites — job sites I search for you (add one with /addsite example.co.il)",
     "• /connections — import your LinkedIn connections to see who you know at each company",
     "• Send me a link to a job posting and I'll tell you how well it fits you.",
@@ -272,7 +282,7 @@ export function matchDetailsView(match: MatchDetails): { text: string; keyboard:
       ? `${match.description.slice(0, DESCRIPTION_PREVIEW_LENGTH)}…`
       : match.description;
   sections.push(escapeHtml(description));
-  sections.push(`<a href="${escapeHtml(match.sourceUrl)}">Open original posting</a>`);
+  sections.push(provenanceSection(match.sourceUrl, match.provenance));
 
   const { matchId } = match;
   const keyboard = new InlineKeyboard()
@@ -285,6 +295,129 @@ export function matchDetailsView(match: MatchDetails): { text: string; keyboard:
     .text("📝 Tailor my CV", encodeCallback({ type: "tailor_cv", matchId }))
     .url("🔗 Original posting", match.sourceUrl);
   return { text: sections.join("\n\n"), keyboard };
+}
+
+const ORIGIN_LABELS: Record<Exclude<JobOrigin, "board">, string> = {
+  user_site: "⭐ One of your saved sites",
+  web_search: "🌐 My web search",
+  user_link: "🔗 A link you sent me",
+};
+
+const shortSourceName = (name: string) => name.replace(/\s+job boards?$/i, "");
+const isoDay = (date: Date) => date.toISOString().slice(0, 10);
+
+function hostname(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
+function provenanceSection(sourceUrl: string, provenance: JobProvenance): string {
+  const origin =
+    provenance.origin === "board"
+      ? `🏢 Official company job board (${escapeHtml(shortSourceName(provenance.sourceName))})`
+      : ORIGIN_LABELS[provenance.origin];
+  const lines = [
+    "<b>Where I found it</b>",
+    `${origin} · first seen ${isoDay(provenance.firstCollectedAt)}`,
+    `<a href="${escapeHtml(sourceUrl)}">Open original posting</a>`,
+  ];
+  if (provenance.otherUrls.length > 0) {
+    const links = provenance.otherUrls.map((url) => `<a href="${escapeHtml(url)}">${escapeHtml(hostname(url))}</a>`);
+    lines.push(`Also posted on ${links.join(", ")}`);
+  }
+  return lines.join("\n");
+}
+
+/** "5 min ago", "3h ago", "2 days ago". */
+export function timeAgo(date: Date, now = new Date()): string {
+  const minutes = Math.max(0, Math.floor((now.getTime() - date.getTime()) / 60_000));
+  if (minutes < 60) return minutes <= 1 ? "just now" : `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return days === 1 ? "yesterday" : `${days} days ago`;
+}
+
+const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
+
+function coverageLine(coverage: SourceCoverage, days: number): string {
+  return `New in the last ${days} days: ${plural(coverage.jobs, "job")}, ${coverage.newCompanies} new ${coverage.newCompanies === 1 ? "company" : "companies"}.`;
+}
+
+function issueLine(issue: SourceIssue): string {
+  switch (issue.kind) {
+    case "turned_off":
+      return `${escapeHtml(issue.source)} is turned off right now.`;
+    case "unreachable_boards": {
+      const shown = issue.boards.slice(0, 5).map(escapeHtml).join(", ");
+      const more = issue.boards.length > 5 ? ` and ${issue.boards.length - 5} more` : "";
+      return `${escapeHtml(shortSourceName(issue.source))}: couldn't reach ${plural(issue.boards.length, "board")} in the last run (${shown}${more}).`;
+    }
+    case "collection_failed":
+      return `${escapeHtml(issue.source)}: the last collection failed. I'll retry in the next daily run.`;
+    case "search_failed":
+      return "The last web search failed. I'll retry in the next daily run.";
+    case "user_search_failed":
+      return "My last web search for you failed. I'll retry in the next daily run.";
+  }
+}
+
+export function sourcesView(overview: SourcesOverview, now = new Date()): View {
+  const days = overview.coverageDays;
+  const active = overview.boardSources.filter((s) => s.enabled && s.boards.length > 0);
+  const boardCount = active.reduce((sum, s) => sum + s.boards.length, 0);
+  const collected = active.flatMap((s) => (s.lastCollectedAt ? [s.lastCollectedAt] : []));
+  const lastCollected = collected.length ? new Date(Math.max(...collected.map((d) => d.getTime()))) : null;
+  const boardLines = [
+    "🏢 <b>Company job boards</b>",
+    boardCount > 0
+      ? `${plural(boardCount, "official board")} (${active.map((s) => `${escapeHtml(shortSourceName(s.name))} ${s.boards.length}`).join(", ")}), checked every day. ${lastCollected ? `Last collected ${timeAgo(lastCollected, now)}.` : "Not collected yet."}`
+      : "No company boards yet. Board links I find on the web are added here automatically.",
+    coverageLine(overview.boardCoverage, days),
+  ];
+
+  const web = overview.webSearch;
+  const webLines = [
+    "🌐 <b>Web search</b>",
+    `I search the open web for postings that fit your profile. ${
+      !web.enabled ? "Turned off right now." : web.lastSearchedAt ? `Last searched for you ${timeAgo(web.lastSearchedAt, now)}.` : "Not searched for you yet."
+    }`,
+    coverageLine(web.coverage, days),
+  ];
+
+  const siteLines = ["⭐ <b>Your sites</b>"];
+  if (overview.sites.length === 0) siteLines.push("None yet. Add one with <i>/addsite example.co.il</i> and I'll search it too.");
+  else {
+    siteLines.push(`${overview.sites.map((s) => escapeHtml(s.domain)).join(", ")}, searched together with the web search.`);
+    siteLines.push(coverageLine(overview.siteCoverage, days));
+  }
+
+  const sections = ["<b>Where I search for jobs</b>", boardLines.join("\n"), webLines.join("\n"), siteLines.join("\n")];
+  if (overview.issues.length > 0) sections.push(`⚠️ <b>Problems</b>\n${overview.issues.map((i) => `• ${issueLine(i)}`).join("\n")}`);
+  sections.push("<i>A job's Details show where I found it.</i>");
+
+  const keyboard = new InlineKeyboard();
+  if (boardCount > 0) keyboard.text("🏢 Show boards", encodeCallback({ type: "sources_boards" }));
+  keyboard.text(overview.sites.length > 0 ? "⭐ Manage my sites" : "⭐ Add a site", encodeCallback({ type: "sources_sites" }));
+  return { text: sections.join("\n\n"), keyboard };
+}
+
+const MAX_BOARDS_LISTED = 60;
+
+export function boardsViews(overview: SourcesOverview): View[] {
+  const sections = overview.boardSources
+    .filter((s) => s.boards.length > 0)
+    .map((s) => {
+      const shown = s.boards.slice(0, MAX_BOARDS_LISTED).map(escapeHtml).join(", ");
+      const more = s.boards.length > MAX_BOARDS_LISTED ? ` and ${s.boards.length - MAX_BOARDS_LISTED} more` : "";
+      const off = s.enabled ? "" : " — turned off";
+      return `<b>${escapeHtml(s.name)}</b> (${s.boards.length}${off})\n${shown}${more}`;
+    });
+  if (sections.length === 0) return [{ text: "I don't check any company job boards yet." }];
+  return packMessages(["<b>Company job boards I check every day</b>", ...sections]).map((text) => ({ text }));
 }
 
 const REASON_LABELS: [FeedbackReasonTag, string][] = [
@@ -398,6 +531,8 @@ export function addSiteReply(outcome: AddSiteOutcome): string {
   }
 }
 
+export const DOCUMENT_LANGUAGE_NAMES: Record<ConversationLanguage, string> = { en: "English", he: "Hebrew" };
+
 const SOURCE_LABELS: Record<ProfileSourceKind, string> = {
   cv: "your CV",
   linkedin_export: "your LinkedIn export",
@@ -507,6 +642,15 @@ export function languageSettingsView(current: ConversationLanguage | null): View
 export const analyzeKeyboard = () =>
   new InlineKeyboard().text("🔍 Analyze", encodeCallback({ type: "onboarding_analyze" }));
 
+export function documentLanguageKeyboard(documentId: string, detected: ConversationLanguage | null): InlineKeyboard {
+  const keyboard = new InlineKeyboard();
+  for (const language of CONVERSATION_LANGUAGES.filter((l) => l !== detected)) {
+    const label = detected ? `It's ${DOCUMENT_LANGUAGE_NAMES[language]}` : DOCUMENT_LANGUAGE_NAMES[language];
+    keyboard.text(`🌐 ${label}`, encodeCallback({ type: "document_language", documentId, language }));
+  }
+  return keyboard;
+}
+
 export function profileReplyViews(reply: ProfileReply): View[] {
   switch (reply.kind) {
     case "ask_language":
@@ -521,15 +665,35 @@ export function profileReplyViews(reply: ProfileReply): View[] {
       return [{ text: `${reply.linkedinSaved ? messages.linkedinSaved : messages.linkedinSkipped}\n\n${messages.askDocuments}` }];
     case "source_received": {
       const name = reply.fileName ? ` (${escapeHtml(reply.fileName)})` : "";
+      const language = reply.language ? ` · ${DOCUMENT_LANGUAGE_NAMES[reply.language]}` : "";
       return [
         {
-          text: `Got ${SOURCE_LABELS[reply.source]}${name} ✅ Send more, or tap <b>Analyze</b> when you're done.`,
-          keyboard: analyzeKeyboard(),
+          text: `Got ${SOURCE_LABELS[reply.source]}${name}${language} ✅ Send more, or tap <b>Analyze</b> when you're done.`,
+          keyboard: reply.documentId
+            ? documentLanguageKeyboard(reply.documentId, reply.language).row().text("🔍 Analyze", encodeCallback({ type: "onboarding_analyze" }))
+            : analyzeKeyboard(),
         },
       ];
     }
+    case "document_saved": {
+      const name = reply.fileName ? ` (${escapeHtml(reply.fileName)})` : "";
+      const language = reply.language ? ` · ${DOCUMENT_LANGUAGE_NAMES[reply.language]}` : "";
+      const version = reply.version > 1 ? ` · version ${reply.version}` : "";
+      return [
+        {
+          text: `Saved ${SOURCE_LABELS[reply.source]}${name}${language}${version} ✅ Your earlier documents are kept too.`,
+          keyboard: documentLanguageKeyboard(reply.documentId, reply.language),
+        },
+      ];
+    }
+    case "document_nothing_new":
+      return [{ text: messages.documentNothingNew }];
+    case "document_merge_failed":
+      return [{ text: messages.documentMergeFailed }];
     case "unreadable_document":
       return [{ text: messages.unreadableDocument }];
+    case "legacy_doc":
+      return [{ text: messages.legacyDoc }];
     case "need_source":
       return [{ text: messages.needSource }];
     case "analysis_failed":

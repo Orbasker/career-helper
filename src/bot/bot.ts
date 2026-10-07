@@ -5,9 +5,11 @@ import type { ConversationLanguage } from "../domain/enums.js";
 import { parseLanguageRequest } from "../domain/language.js";
 import { decodeCallback, encodeCallback } from "./callbacks.js";
 import {
+  DOCUMENT_LANGUAGE_NAMES,
   MY_PROFILE_LABEL,
   WHATS_NEW_LABEL,
   addSiteReply,
+  boardsViews,
   connectionsImportReply,
   connectionsView,
   cvDraftViews,
@@ -24,6 +26,7 @@ import {
   profileReplyViews,
   proposalView,
   sitesView,
+  sourcesView,
   type View,
 } from "./views.js";
 
@@ -52,6 +55,10 @@ export function jobLinksFromText(text: string): string[] {
   const links = (text.match(LINK) ?? []).map((l) => l.replace(/[.,;!?)\]]+$/, "")).filter((l) => !LINKEDIN_PROFILE.test(l));
   return [...new Set(links)].slice(0, MAX_JOB_LINKS);
 }
+
+/** "where are you searching?", "which sites do you check?", "איפה אתה מחפש?" and similar questions about job sources. */
+const SOURCES_REQUEST =
+  /\bwhere (?:are|do|did) you (?:search|look|find|get|check)|\b(?:which|what) (?:sites|sources|boards|job boards) (?:do|are|did) you\b|\b(?:your|job|search) sources\b|איפה (?:אתה |את )?(?:מחפש|מחפשת|חיפשת)|באילו (?:אתרים|מקורות)|מאיפה (?:אתה מביא|את מביאה|הגיעו|מגיעות)/i;
 
 export type BotContext = Context & {
   userId: string;
@@ -209,6 +216,11 @@ export function createBot(
     await ctx.reply(addSiteReply(await services.sites.add(ctx.userId, input)), { ...html, reply_markup: mainMenu });
   };
   bot.command("sites", showSites);
+  const showSources = async (ctx: BotContext) => {
+    const view = sourcesView(await services.sources.overview(ctx.userId));
+    await ctx.reply(view.text, { ...html, reply_markup: view.keyboard });
+  };
+  bot.command("sources", showSources);
   const showConnections = async (ctx: BotContext) => {
     const view = connectionsView(await services.connections.summary(ctx.userId));
     await ctx.reply(view.text, { ...html, reply_markup: view.keyboard ?? mainMenu });
@@ -248,13 +260,15 @@ export function createBot(
       await ctx.reply(connectionsImportReply(outcome), { ...html, reply_markup: mainMenu });
       return;
     }
-    const reply = await services.onboarding.addDocument(ctx.userId, {
+    const replies = await services.conversation.addDocument(ctx.userId, {
       fileRef: document.file_id,
       fileName,
       mimeType: document.mime_type ?? null,
       data,
+      sizeBytes: document.file_size ?? null,
+      label: ctx.message.caption ?? null,
     });
-    await sendReplies(ctx, [reply]);
+    await sendReplies(ctx, replies);
   });
 
   bot.on("callback_query:data", async (ctx) => {
@@ -362,6 +376,16 @@ export function createBot(
         await ctx.editMessageText(view.text, { ...html, reply_markup: view.keyboard }).catch(() => undefined);
         return;
       }
+      case "sources_boards": {
+        await ctx.answerCallbackQuery();
+        await sendViews(ctx, boardsViews(await services.sources.overview(ctx.userId)));
+        return;
+      }
+      case "sources_sites": {
+        await ctx.answerCallbackQuery();
+        await showSites(ctx);
+        return;
+      }
       case "cv_document": {
         await ctx.answerCallbackQuery();
         await sendCvDocument(ctx, action.versionId);
@@ -382,6 +406,20 @@ export function createBot(
         await ctx.reply(messages.analyzing, html);
         await typing(ctx);
         await sendReplies(ctx, [await services.onboarding.analyze(ctx.userId)]);
+        return;
+      }
+      case "document_language": {
+        const saved = await services.onboarding.setDocumentLanguage(ctx.userId, action.documentId, action.language);
+        await ctx.answerCallbackQuery({
+          text: saved ? `Marked as ${DOCUMENT_LANGUAGE_NAMES[action.language]} ✅` : messages.expired,
+        });
+        if (saved) {
+          const rows = ctx.callbackQuery.message?.reply_markup?.inline_keyboard ?? [];
+          const kept = rows
+            .map((row) => row.filter((button) => !("callback_data" in button && button.callback_data.startsWith("dl:"))))
+            .filter((row) => row.length > 0);
+          await ctx.editMessageReplyMarkup({ reply_markup: { inline_keyboard: kept } }).catch(() => undefined);
+        }
         return;
       }
       case "onboarding_confirm": {
@@ -429,6 +467,10 @@ export function createBot(
       await addSite(ctx, siteRequest);
       return;
     }
+    if (SOURCES_REQUEST.test(ctx.message.text)) {
+      await showSources(ctx);
+      return;
+    }
     if (await services.feedback.takeReasonText(ctx.userId, ctx.message.text)) {
       await ctx.reply(messages.feedbackReasonTextSaved, { ...html, reply_markup: mainMenu });
       return;
@@ -453,6 +495,7 @@ export function createBot(
 export const BOT_COMMANDS = [
   { command: "new", description: "Latest job matches" },
   { command: "profile", description: "Your career profile" },
+  { command: "sources", description: "Where I search for jobs" },
   { command: "sites", description: "Job sites I search for you" },
   { command: "connections", description: "Who you know at matched companies" },
   { command: "language", description: "Choose English or Hebrew" },

@@ -58,7 +58,7 @@ export function textUpdate(text: string, person: TelegramPerson = DANA): Update 
 }
 
 export function documentUpdate(
-  document: { fileName: string; mimeType: string; fileSize?: number },
+  document: { fileName: string; mimeType: string; fileSize?: number; caption?: string },
   person: TelegramPerson = DANA,
 ): Update {
   return {
@@ -75,6 +75,7 @@ export function documentUpdate(
         mime_type: document.mimeType,
         file_size: document.fileSize ?? 1000,
       },
+      caption: document.caption,
     },
   };
 }

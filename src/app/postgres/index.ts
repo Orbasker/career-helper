@@ -13,6 +13,7 @@ import { PgJobLinkService, type JobLinkDeps } from "./job-links.js";
 import { PgMatchService } from "./matches.js";
 import { PgOnboardingService } from "./onboarding.js";
 import { PgSiteService } from "./sites.js";
+import { PgSourceService } from "./sources.js";
 import { PgUserService } from "./users.js";
 
 export function createPgServices(
@@ -22,6 +23,7 @@ export function createPgServices(
   options: { spend?: SpendLookup; jobLinks?: JobLinkDeps } = {},
 ): AppServices {
   const onboarding = new PgOnboardingService(db, assistant);
+  const sites = new PgSiteService(db, SOURCE_ADAPTERS);
   return {
     users: new PgUserService(db),
     onboarding,
@@ -29,7 +31,8 @@ export function createPgServices(
     feedback: new PgFeedbackService(db),
     cv: new PgCvService(db, tailorer),
     conversation: new PgConversationService(db, onboarding, assistant),
-    sites: new PgSiteService(db, SOURCE_ADAPTERS),
+    sites,
+    sources: new PgSourceService(db, sites),
     connections: new PgConnectionService(db),
     jobLinks: new PgJobLinkService(db, options.jobLinks ?? { reader: new AiJobDiscoverer(), matcher: new AiDeepMatcher() }),
     stats: { report: async (days) => formatStats(await buildStats(db, { days, spend: options.spend }), { html: true }) },

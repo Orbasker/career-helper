@@ -26,6 +26,9 @@ import {
   CV_SECTIONS,
   CV_VERSION_STATUSES,
   DEDUP_METHODS,
+  DOCUMENT_FORMATS,
+  DOCUMENT_KINDS,
+  DOCUMENT_PARSE_STATUSES,
   EMPLOYMENT_TYPES,
   FACT_ORIGINS,
   FEEDBACK_VERDICTS,
@@ -51,6 +54,9 @@ export const employmentType = pgEnum("employment_type", EMPLOYMENT_TYPES);
 export const seniorityLevel = pgEnum("seniority_level", SENIORITY_LEVELS);
 export const profileStatus = pgEnum("profile_status", PROFILE_STATUSES);
 export const profileSourceKind = pgEnum("profile_source_kind", PROFILE_SOURCE_KINDS);
+export const documentKind = pgEnum("document_kind", DOCUMENT_KINDS);
+export const documentFormat = pgEnum("document_format", DOCUMENT_FORMATS);
+export const documentParseStatus = pgEnum("document_parse_status", DOCUMENT_PARSE_STATUSES);
 export const verificationStatus = pgEnum("verification_status", VERIFICATION_STATUSES);
 export const factOrigin = pgEnum("fact_origin", FACT_ORIGINS);
 export const careerFactKind = pgEnum("career_fact_kind", CAREER_FACT_KINDS);
@@ -113,6 +119,40 @@ export const careerProfiles = pgTable("career_profiles", {
   updatedAt: updatedAt(),
 });
 
+export const sourceDocuments = pgTable(
+  "source_documents",
+  {
+    id: id(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: documentKind("kind"),
+    fileName: text("file_name"),
+    mimeType: text("mime_type"),
+    format: documentFormat("format").notNull(),
+    fileRef: text("file_ref").notNull(),
+    sizeBytes: integer("size_bytes"),
+    language: text("language"),
+    languageConfirmed: boolean("language_confirmed").notNull().default(false),
+    extractedText: text("extracted_text"),
+    parseStatus: documentParseStatus("parse_status").notNull(),
+    parseError: text("parse_error"),
+    label: text("label"),
+    version: integer("version"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index("source_documents_user_idx").on(t.userId, t.createdAt),
+    check(
+      "source_documents_parsed_chk",
+      sql`(${t.parseStatus} = 'parsed') = (${t.extractedText} is not null and ${t.kind} is not null)`,
+    ),
+    check("source_documents_error_chk", sql`(${t.parseStatus} = 'parsed') = (${t.parseError} is null)`),
+    check("source_documents_language_chk", sql`not ${t.languageConfirmed} or ${t.language} is not null`),
+  ],
+);
+
 export const profileSources = pgTable(
   "profile_sources",
   {
@@ -121,12 +161,14 @@ export const profileSources = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     kind: profileSourceKind("kind").notNull(),
-    fileRef: text("file_ref"),
-    fileName: text("file_name"),
-    content: text("content").notNull(),
+    documentId: uuid("document_id").references(() => sourceDocuments.id, { onDelete: "cascade" }),
+    content: text("content"),
     createdAt: createdAt(),
   },
-  (t) => [index("profile_sources_user_idx").on(t.userId, t.createdAt)],
+  (t) => [
+    index("profile_sources_user_idx").on(t.userId, t.createdAt),
+    check("profile_sources_content_chk", sql`(${t.documentId} is null) = (${t.content} is not null)`),
+  ],
 );
 
 export const workExperiences = pgTable(
@@ -148,6 +190,7 @@ export const workExperiences = pgTable(
     verificationStatus: verificationStatus("verification_status").notNull().default("unverified"),
     origin: factOrigin("origin").notNull(),
     sourceReference: text("source_reference"),
+    sourceDocumentId: uuid("source_document_id").references(() => sourceDocuments.id, { onDelete: "set null" }),
     verifiedAt: timestamp("verified_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -177,6 +220,7 @@ export const careerFacts = pgTable(
     verificationStatus: verificationStatus("verification_status").notNull().default("unverified"),
     origin: factOrigin("origin").notNull(),
     sourceReference: text("source_reference"),
+    sourceDocumentId: uuid("source_document_id").references(() => sourceDocuments.id, { onDelete: "set null" }),
     verifiedAt: timestamp("verified_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -409,18 +453,6 @@ export const preferenceEvidence = pgTable(
   (t) => [primaryKey({ columns: [t.preferenceId, t.feedbackId] })],
 );
 
-export const masterCvs = pgTable("master_cvs", {
-  id: id(),
-  userId: uuid("user_id")
-    .notNull()
-    .unique()
-    .references(() => users.id, { onDelete: "cascade" }),
-  originalFileRef: text("original_file_ref"),
-  originalText: text("original_text"),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-});
-
 export const cvVersions = pgTable(
   "cv_versions",
   {
@@ -428,7 +460,7 @@ export const cvVersions = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    masterCvId: uuid("master_cv_id").references(() => masterCvs.id),
+    sourceDocumentId: uuid("source_document_id").references(() => sourceDocuments.id, { onDelete: "set null" }),
     matchId: uuid("match_id").references(() => matches.id, { onDelete: "set null" }),
     jobId: uuid("job_id").references(() => jobs.id),
     status: cvVersionStatus("status").notNull().default("requested"),

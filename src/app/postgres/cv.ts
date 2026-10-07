@@ -1,7 +1,7 @@
-import { and, asc, eq, inArray, lt } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lt } from "drizzle-orm";
 import type { CvTailorer } from "../../cv/tailoring.js";
 import { cvFileName, renderCvDocx } from "../../cv/render-docx.js";
-import { careerFacts, careerProfiles, cvVersionItems, cvVersions, jobs, masterCvs, matches, users } from "../../db/schema.js";
+import { careerFacts, careerProfiles, cvVersionItems, cvVersions, jobs, matches, sourceDocuments, users } from "../../db/schema.js";
 import type { Db } from "../../db/types.js";
 import { errorMessage } from "../../ingestion/ingest.js";
 import type { CvDecision, CvDocumentFile, CvDraftView, CvRequestOutcome, CvService, CvTailorOutcome } from "../services.js";
@@ -35,10 +35,15 @@ export class PgCvService implements CvService {
         ),
       );
 
-    const [masterCv] = await this.db.select({ id: masterCvs.id }).from(masterCvs).where(eq(masterCvs.userId, userId));
+    const [baseCv] = await this.db
+      .select({ id: sourceDocuments.id })
+      .from(sourceDocuments)
+      .where(and(eq(sourceDocuments.userId, userId), eq(sourceDocuments.kind, "cv"), eq(sourceDocuments.parseStatus, "parsed")))
+      .orderBy(desc(sourceDocuments.createdAt))
+      .limit(1);
     const [inserted] = await this.db
       .insert(cvVersions)
-      .values({ userId, matchId, jobId: match.jobId, masterCvId: masterCv?.id, status: "requested" })
+      .values({ userId, matchId, jobId: match.jobId, sourceDocumentId: baseCv?.id, status: "requested" })
       .onConflictDoNothing()
       .returning({ id: cvVersions.id });
     if (inserted) return { kind: "requested", versionId: inserted.id };

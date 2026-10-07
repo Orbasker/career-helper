@@ -6,6 +6,7 @@ export const MODEL_CALL_PURPOSES = [
   "discovery.extract",
   "profile.extract",
   "profile.interpret",
+  "profile.merge_document",
 ] as const;
 export type ModelCallPurpose = (typeof MODEL_CALL_PURPOSES)[number];
 

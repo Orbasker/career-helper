@@ -2,6 +2,7 @@ import type {
   CareerFactKind,
   ConfidenceLevel,
   ConversationLanguage,
+  DocumentKind,
   EmploymentType,
   FeedbackVerdict,
   MatchRecommendation,
@@ -43,6 +44,19 @@ export interface MatchSummary {
   connectionCount: number;
 }
 
+/** How a job reached us, from the user's point of view; another user's saved sites count as web search. */
+export type JobOrigin = "board" | "user_site" | "web_search" | "user_link";
+
+export interface JobProvenance {
+  origin: JobOrigin;
+  /** The board source's name, e.g. "Greenhouse job boards". */
+  sourceName: string;
+  /** When any copy of the job was first collected. */
+  firstCollectedAt: Date;
+  /** Other URLs where the same job is posted. */
+  otherUrls: string[];
+}
+
 export interface MatchDetails extends MatchSummary {
   description: string;
   sourceUrl: string;
@@ -56,6 +70,7 @@ export interface MatchDetails extends MatchSummary {
   /** The most relevant contacts at the company, best first. */
   contacts: Contact[];
   connectionsImportedAt: Date | null;
+  provenance: JobProvenance;
 }
 
 export interface ProfileView {
@@ -85,6 +100,8 @@ export interface IncomingDocument {
   fileName: string | null;
   mimeType: string | null;
   data: Uint8Array;
+  sizeBytes?: number | null;
+  label?: string | null;
 }
 
 export type ProfileReply =
@@ -93,8 +110,25 @@ export type ProfileReply =
   | { kind: "onboarding_welcome" }
   | { kind: "ask_linkedin" }
   | { kind: "ask_documents"; linkedinSaved: boolean }
-  | { kind: "source_received"; source: ProfileSourceKind; fileName: string | null }
+  | {
+      kind: "source_received";
+      source: ProfileSourceKind;
+      fileName: string | null;
+      documentId: string | null;
+      language: ConversationLanguage | null;
+    }
+  | {
+      kind: "document_saved";
+      source: DocumentKind;
+      fileName: string | null;
+      documentId: string;
+      language: ConversationLanguage | null;
+      version: number;
+    }
+  | { kind: "document_nothing_new" }
+  | { kind: "document_merge_failed" }
   | { kind: "unreadable_document" }
+  | { kind: "legacy_doc" }
   | { kind: "need_source" }
   | { kind: "analysis_failed" }
   | { kind: "busy" }
@@ -145,7 +179,10 @@ export interface UserService {
 
 export interface OnboardingService {
   start(userId: string): Promise<ProfileReply[]>;
+  /** Stores every uploaded file as its own source document; a later upload never replaces an earlier one. */
   addDocument(userId: string, document: IncomingDocument): Promise<ProfileReply>;
+  /** Records the user's confirmation of a document's language; false when the document is not theirs. */
+  setDocumentLanguage(userId: string, documentId: string, language: ConversationLanguage): Promise<boolean>;
   analyze(userId: string): Promise<ProfileReply>;
   confirm(userId: string): Promise<ProfileReply>;
 }
@@ -196,6 +233,8 @@ export interface ConversationService {
   applyEdit(userId: string, token: string): Promise<ProfileReply>;
   cancelEdit(userId: string, token: string): Promise<ProfileReply>;
   showProfile(userId: string): Promise<ProfileReply>;
+  /** During onboarding adds the file to the run; once onboarded, proposes what the file adds to the profile as an edit to approve. */
+  addDocument(userId: string, document: IncomingDocument): Promise<ProfileReply[]>;
   /** Saves the default conversation language without touching the profile, and resumes onboarding when it was waiting for it. */
   setLanguage(userId: string, language: ConversationLanguage): Promise<ProfileReply[]>;
 }
@@ -203,6 +242,8 @@ export interface ConversationService {
 export interface ProfileSourceText {
   kind: ProfileSourceKind;
   content: string;
+  documentId: string | null;
+  language: string | null;
 }
 
 export interface ProfileExtraction {
@@ -218,6 +259,8 @@ export interface ProfileInterpretation {
 export interface ProfileAssistant {
   extract(input: { linkedinUrl: string | null; sources: ProfileSourceText[] }): Promise<ProfileExtraction>;
   interpret(input: { snapshot: ProfileSnapshot; message: string; question: string | null }): Promise<ProfileInterpretation>;
+  /** Changes that a newly uploaded document adds to an existing profile, attributed to that document. */
+  mergeDocument(input: { snapshot: ProfileSnapshot; document: ProfileSourceText }): Promise<ProfileInterpretation>;
 }
 
 export interface JobSiteView {
@@ -238,6 +281,42 @@ export interface SiteService {
   /** Saves a site to search; a supported ATS board link is added as a basic board source instead. */
   add(userId: string, input: string): Promise<AddSiteOutcome>;
   remove(userId: string, siteId: string): Promise<boolean>;
+}
+
+export interface SourceCoverage {
+  jobs: number;
+  /** Companies with no job collected before the window. */
+  newCompanies: number;
+}
+
+export interface BoardSourceView {
+  name: string;
+  enabled: boolean;
+  /** Company name, or the board token when the company is unknown. */
+  boards: string[];
+  lastCollectedAt: Date | null;
+}
+
+export type SourceIssue =
+  | { kind: "turned_off"; source: string }
+  | { kind: "unreachable_boards"; source: string; boards: string[] }
+  | { kind: "collection_failed"; source: string }
+  | { kind: "search_failed" }
+  | { kind: "user_search_failed" };
+
+export interface SourcesOverview {
+  coverageDays: number;
+  boardSources: BoardSourceView[];
+  boardCoverage: SourceCoverage;
+  webSearch: { enabled: boolean; lastSearchedAt: Date | null; coverage: SourceCoverage };
+  sites: JobSiteView[];
+  siteCoverage: SourceCoverage;
+  /** Problems seen in the latest finished pipeline run, plus sources that are turned off. */
+  issues: SourceIssue[];
+}
+
+export interface SourceService {
+  overview(userId: string): Promise<SourcesOverview>;
 }
 
 export type ConnectionImport =
@@ -290,6 +369,7 @@ export interface AppServices {
   cv: CvService;
   conversation: ConversationService;
   sites: SiteService;
+  sources: SourceService;
   stats: StatsService;
   connections: ConnectionService;
   jobLinks: JobLinkService;
