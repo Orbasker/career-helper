@@ -1,4 +1,5 @@
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
+import { notAppliedTo } from "../app/postgres/applications.js";
 import type { MatchSummary } from "../app/services.js";
 import { careerProfiles, jobs, matches, users } from "../db/schema.js";
 import type { Db } from "../db/types.js";
@@ -71,8 +72,9 @@ export interface NotificationReport {
 }
 
 /**
- * Sends each user one digest of their best `ready` matches that meet the threshold. Matches are claimed as
- * `notified` before sending so concurrent or repeated runs never send them twice; a failed send releases them.
+ * Sends each user one digest of their best `ready` matches that meet the threshold, skipping jobs they already applied to.
+ * Matches are claimed as `notified` before sending so concurrent or repeated runs never send them twice; a failed send
+ * releases them.
  */
 export async function runNotifications(
   db: Db,
@@ -117,6 +119,7 @@ export async function runNotifications(
         inArray(matches.confidence, qualifyingConfidences(threshold)),
         eq(users.notificationsEnabled, true),
         eq(careerProfiles.status, "confirmed"),
+        notAppliedTo(),
       ),
     )
     .orderBy(asc(matches.createdAt), asc(matches.id));

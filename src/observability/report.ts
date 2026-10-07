@@ -1,6 +1,6 @@
 import { desc, eq, gte, sql } from "drizzle-orm";
 import { gateway } from "ai";
-import { cvVersions, feedback, jobSources, jobs, matches, modelCalls, pipelineRuns } from "../db/schema.js";
+import { applicationEvents, applications, cvVersions, feedback, jobSources, jobs, matches, modelCalls, pipelineRuns } from "../db/schema.js";
 import type { Db } from "../db/types.js";
 
 export interface SpendRow {
@@ -33,6 +33,7 @@ export interface StatsReport {
   };
   feedback: { interested: number; notInterested: number };
   cvs: { requested: number; approved: number; failed: number };
+  applications: { logged: number; fromMatches: number; statusChanges: number };
   modelCalls: { purpose: string; calls: number; errors: number; inputTokens: number; outputTokens: number; avgMs: number }[];
   spend: { rows: SpendRow[]; total: number } | { error: string } | null;
 }
@@ -84,6 +85,15 @@ export async function buildStats(
     .from(cvVersions)
     .where(gte(cvVersions.createdAt, since));
 
+  const [applicationCounts] = await db
+    .select({ logged: count(), fromMatches: count(sql`${applications.matchId} is not null`) })
+    .from(applications)
+    .where(gte(applications.createdAt, since));
+  const [statusChanges] = await db
+    .select({ n: count(sql`${applicationEvents.fromStatus} is not null`) })
+    .from(applicationEvents)
+    .where(gte(applicationEvents.createdAt, since));
+
   const calls = await db
     .select({
       purpose: modelCalls.purpose,
@@ -119,6 +129,7 @@ export async function buildStats(
     funnel: funnel!,
     feedback: feedbackCounts!,
     cvs: cvs!,
+    applications: { ...applicationCounts!, statusChanges: statusChanges!.n },
     modelCalls: calls,
     spend: spendReport,
   };
@@ -173,7 +184,7 @@ export function formatStats(report: StatsReport, { html = false }: { html?: bool
     `${bold("Funnel")}\nNew jobs: ${jobsLine}\nMatched ${f.matched} → failed must-haves ${f.hardFiltered}, low relevance ${f.lowRelevance}, deep-matched ${f.deepEvaluated} (${f.pendingDeep} waiting) → recommended ${f.recommended} → notified ${f.notified}`,
   );
   sections.push(
-    `${bold("Users")}\nFeedback: 👍 ${report.feedback.interested}, 👎 ${report.feedback.notInterested}\nCVs: ${report.cvs.requested} requested, ${report.cvs.approved} approved, ${report.cvs.failed} failed`,
+    `${bold("Users")}\nFeedback: 👍 ${report.feedback.interested}, 👎 ${report.feedback.notInterested}\nCVs: ${report.cvs.requested} requested, ${report.cvs.approved} approved, ${report.cvs.failed} failed\nApplications: ${report.applications.logged} logged (${report.applications.fromMatches} from matches), ${report.applications.statusChanges} status changes`,
   );
 
   const callLines = report.modelCalls.map(

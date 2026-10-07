@@ -6,6 +6,7 @@ import { connections } from "../../db/schema.js";
 import { listGroupSources } from "../../ingestion/dedup.js";
 import { employerRelation, loadEmployerHistory } from "../../matching/employer.js";
 import type { JobProvenance, MatchDetails, MatchService, MatchSummary } from "../services.js";
+import { applicationsForMatches, notAppliedTo } from "./applications.js";
 import { jobOrigin } from "./sources.js";
 
 const VISIBLE_STATUSES = ["ready", "notified"] as const;
@@ -29,7 +30,7 @@ export class PgMatchService implements MatchService {
       .select({ ...summaryColumns, status: matches.status })
       .from(matches)
       .innerJoin(jobs, eq(jobs.id, matches.jobId))
-      .where(and(eq(matches.userId, userId), inArray(matches.status, VISIBLE_STATUSES)))
+      .where(and(eq(matches.userId, userId), inArray(matches.status, VISIBLE_STATUSES), notAppliedTo()))
       .orderBy(sql`${matches.status} = 'ready' desc`, asc(matches.recommendation), desc(matches.createdAt))
       .limit(limit);
 
@@ -90,6 +91,7 @@ export class PgMatchService implements MatchService {
       .select({ at: sql<Date | null>`max(${connections.importedAt})`.mapWith((v) => (v ? new Date(v) : null)) })
       .from(connections)
       .where(eq(connections.userId, userId));
+    const application = (await applicationsForMatches(this.db, userId, [matchId])).get(matchId) ?? null;
     const evidence = evaluation?.evidence;
     const [group] = await this.db
       .select({ firstCollectedAt: sql<Date>`min(${jobs.collectedAt})`.mapWith((v) => new Date(v)) })
@@ -115,6 +117,7 @@ export class PgMatchService implements MatchService {
       transferableSkills: evidence?.transferableSkills ?? [],
       feedback: latestFeedback?.verdict ?? null,
       provenance,
+      application,
     };
   }
 }

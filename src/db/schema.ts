@@ -19,6 +19,9 @@ import {
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import {
+  APPLICATION_EVENT_KINDS,
+  APPLICATION_EVENT_SOURCES,
+  APPLICATION_STATUSES,
   CAREER_FACT_KINDS,
   CONFIDENCE_LEVELS,
   CONVERSATION_FLOWS,
@@ -80,6 +83,9 @@ export const cvLanguageSource = pgEnum("cv_language_source", CV_LANGUAGE_SOURCES
 export const cvFileFormat = pgEnum("cv_file_format", CV_FILE_FORMATS);
 export const conversationFlow = pgEnum("conversation_flow", CONVERSATION_FLOWS);
 export const conversationLanguage = pgEnum("conversation_language", CONVERSATION_LANGUAGES);
+export const applicationStatus = pgEnum("application_status", APPLICATION_STATUSES);
+export const applicationEventKind = pgEnum("application_event_kind", APPLICATION_EVENT_KINDS);
+export const applicationEventSource = pgEnum("application_event_source", APPLICATION_EVENT_SOURCES);
 
 const id = () => uuid("id").primaryKey().defaultRandom();
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
@@ -529,6 +535,62 @@ export const cvVersionItems = pgTable(
     generatedText: text("generated_text").notNull(),
   },
   (t) => [uniqueIndex("cv_version_items_position_uq").on(t.cvVersionId, t.section, t.position)],
+);
+
+export const applications = pgTable(
+  "applications",
+  {
+    id: id(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** Null for a job the agent never surfaced. */
+    matchId: uuid("match_id").references(() => matches.id, { onDelete: "set null" }),
+    duplicateGroupId: uuid("duplicate_group_id").references(() => duplicateGroups.id),
+    company: text("company"),
+    title: text("title").notNull(),
+    /** Normalized like jobs, so a job logged by hand is recognized when the agent later finds it. */
+    normalizedCompany: text("normalized_company"),
+    normalizedTitle: text("normalized_title"),
+    sourceUrl: text("source_url"),
+    cvVersionId: uuid("cv_version_id").references(() => cvVersions.id, { onDelete: "set null" }),
+    status: applicationStatus("status").notNull().default("applied"),
+    appliedAt: timestamp("applied_at", { withTimezone: true }).notNull().defaultNow(),
+    lastEventAt: timestamp("last_event_at", { withTimezone: true }).notNull().defaultNow(),
+    /** The latest note; every note is kept in `application_events`. */
+    notes: text("notes"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("applications_user_group_uq").on(t.userId, t.duplicateGroupId).where(sql`${t.duplicateGroupId} is not null`),
+    index("applications_user_status_idx").on(t.userId, t.status, t.lastEventAt),
+    index("applications_user_job_key_idx").on(t.userId, t.normalizedCompany, t.normalizedTitle),
+  ],
+);
+
+export const applicationEvents = pgTable(
+  "application_events",
+  {
+    id: id(),
+    applicationId: uuid("application_id")
+      .notNull()
+      .references(() => applications.id, { onDelete: "cascade" }),
+    kind: applicationEventKind("kind").notNull(),
+    fromStatus: applicationStatus("from_status"),
+    toStatus: applicationStatus("to_status"),
+    note: text("note"),
+    cvVersionId: uuid("cv_version_id").references(() => cvVersions.id, { onDelete: "set null" }),
+    source: applicationEventSource("source").notNull(),
+    /** What the change is based on, e.g. an email message id. */
+    evidenceRef: text("evidence_ref"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("application_events_application_idx").on(t.applicationId, t.createdAt),
+    check("application_events_status_chk", sql`(${t.kind} = 'status_changed') = (${t.toStatus} is not null)`),
+    check("application_events_note_chk", sql`(${t.kind} = 'note_added') = (${t.note} is not null)`),
+  ],
 );
 
 export const modelCalls = pgTable(

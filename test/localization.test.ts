@@ -91,6 +91,20 @@ const hebrewWithLatinContent = (t: Strings) => [
   t.cvs.removeConfirm("cv-en.pdf", 3),
   t.cvs.removed("cv-en.pdf"),
   t.documents.replaced(t.sources.cv, "cv-2026.pdf", t.documentLanguages.en, "cv-2025.pdf"),
+  t.buttons.appliedStatus(t.applications.statuses.interviewing),
+  t.applications.group(t.applications.statuses.applied, 2),
+  t.applications.item(1, "Product Manager", "Acme", "2026-10-01"),
+  t.applications.cardTitle("Product Manager", "Acme"),
+  t.applications.status(t.applications.statuses.offer, t.timeAgo.days(2)),
+  t.applications.appliedOn("2026-10-01", t.documentLanguages.en),
+  t.applications.eventApplied("2026-10-01"),
+  t.applications.eventStatus("2026-10-02", t.applications.statuses.applied, t.applications.statuses.screening),
+  t.applications.eventNote("2026-10-03", "Call with Dana"),
+  t.applications.eventCv("2026-10-03", t.documentLanguages.en),
+  t.applications.created("Product Manager"),
+  t.applications.exists("Product Manager"),
+  t.applications.statusChanged(t.applications.statuses.offer),
+  t.applications.notePrompt("Product Manager"),
 ];
 
 describe("hebrew copy", () => {
@@ -104,7 +118,7 @@ describe("hebrew copy", () => {
   });
 
   it("keeps commands left-to-right inside Hebrew sentences", () => {
-    const unmarked = copy.filter(([, text]) => /(?:^|[^‎])\/(?:new|profile|cvs|sites|connections|language|start|addsite)\b/.test(text));
+    const unmarked = copy.filter(([, text]) => /(?:^|[^‎])\/(?:new|profile|cvs|applications|applied|sites|connections|language|start|addsite)\b/.test(text));
     expect(unmarked.map(([path]) => path)).toEqual([]);
   });
 
@@ -255,12 +269,25 @@ describe.each(FLOWS)("core flow in $language", ({ language, skip, done }) => {
     await send(callbackUpdate(encodeCallback({ type: "job_details", matchId })));
     expect(sent()[0]).toContain(`<b>${t.match.whyItFits}</b>`);
     expect(sent()[0]).toContain(t.match.openPosting);
-    expect(inlineLabels()).toEqual([t.buttons.interested, t.buttons.notInterested, t.buttons.tailorCv, t.buttons.originalPosting]);
+    expect(inlineLabels()).toEqual([
+      t.buttons.interested,
+      t.buttons.notInterested,
+      t.buttons.tailorCv,
+      t.buttons.originalPosting,
+      t.buttons.applied,
+    ]);
 
     await send(callbackUpdate(encodeCallback({ type: "feedback", matchId, verdict: "not_interested" })));
     expect(calls.find((c) => c.method === "answerCallbackQuery")!.payload.text).toBe(t.messages.feedbackNotInterested);
     expect(sent()).toEqual([t.messages.feedbackReasonPrompt]);
     expect(inlineLabels()).toContain(t.feedbackReasons.location);
+
+    await send(callbackUpdate(encodeCallback({ type: "apply_match", matchId })));
+    expect(sent()[0]).toBe(t.applications.created("People Operations Manager"));
+    expect(sent()[1]).toContain(t.applications.statuses.applied);
+    await send(textUpdate("/applications"));
+    expect(sent()[0]).toContain(t.applications.title);
+    expect(inlineLabels()).toContain(t.buttons.logApplication);
 
     await send(textUpdate(t.menu.myProfile));
     expect(sent().at(-1)).toContain(t.messages.profileOutro);
