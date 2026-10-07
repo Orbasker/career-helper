@@ -23,6 +23,8 @@ import {
   CONFIDENCE_LEVELS,
   CONVERSATION_FLOWS,
   CONVERSATION_LANGUAGES,
+  CV_FILE_FORMATS,
+  CV_LANGUAGE_SOURCES,
   CV_SECTIONS,
   CV_VERSION_STATUSES,
   DEDUP_METHODS,
@@ -74,6 +76,8 @@ export const confidenceLevel = pgEnum("confidence_level", CONFIDENCE_LEVELS);
 export const feedbackVerdict = pgEnum("feedback_verdict", FEEDBACK_VERDICTS);
 export const cvVersionStatus = pgEnum("cv_version_status", CV_VERSION_STATUSES);
 export const cvSection = pgEnum("cv_section", CV_SECTIONS);
+export const cvLanguageSource = pgEnum("cv_language_source", CV_LANGUAGE_SOURCES);
+export const cvFileFormat = pgEnum("cv_file_format", CV_FILE_FORMATS);
 export const conversationFlow = pgEnum("conversation_flow", CONVERSATION_FLOWS);
 export const conversationLanguage = pgEnum("conversation_language", CONVERSATION_LANGUAGES);
 
@@ -472,12 +476,16 @@ export const cvVersions = pgTable(
     sourceDocumentId: uuid("source_document_id").references(() => sourceDocuments.id, { onDelete: "set null" }),
     matchId: uuid("match_id").references(() => matches.id, { onDelete: "set null" }),
     jobId: uuid("job_id").references(() => jobs.id),
+    language: conversationLanguage("language").notNull(),
+    /** Why `language` was chosen; null for versions created before languages were chosen. */
+    languageSource: cvLanguageSource("language_source"),
+    /** The version whose selection of facts this one keeps, when it was requested as another language of it. */
+    basedOnVersionId: uuid("based_on_version_id").references((): AnyPgColumn => cvVersions.id, { onDelete: "set null" }),
     status: cvVersionStatus("status").notNull().default("requested"),
     applicationNote: text("application_note"),
     profileRevision: integer("profile_revision"),
     model: text("model"),
     promptVersion: text("prompt_version"),
-    renderedFileRef: text("rendered_file_ref"),
     failureReason: text("failure_reason"),
     approvedAt: timestamp("approved_at", { withTimezone: true }),
     createdAt: createdAt(),
@@ -486,9 +494,24 @@ export const cvVersions = pgTable(
   (t) => [
     index("cv_versions_user_idx").on(t.userId, t.createdAt),
     uniqueIndex("cv_versions_open_request_uq")
-      .on(t.userId, t.matchId)
+      .on(t.userId, t.matchId, t.language)
       .where(sql`${t.status} in ('requested', 'draft')`),
   ],
+);
+
+/** A rendered file of an approved version, stored as the Telegram file it was sent as so it is never rendered twice. */
+export const cvVersionFiles = pgTable(
+  "cv_version_files",
+  {
+    id: id(),
+    cvVersionId: uuid("cv_version_id")
+      .notNull()
+      .references(() => cvVersions.id, { onDelete: "cascade" }),
+    format: cvFileFormat("format").notNull(),
+    fileRef: text("file_ref").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("cv_version_files_format_uq").on(t.cvVersionId, t.format)],
 );
 
 export const cvVersionItems = pgTable(

@@ -22,7 +22,10 @@ describe("callback data", () => {
     { type: "proposal_decision", preferenceId: feedbackId, accept: true },
     { type: "cv_decision", versionId: feedbackId, approve: true },
     { type: "cv_decision", versionId: feedbackId, approve: false },
-    { type: "cv_document", versionId: feedbackId },
+    { type: "cv_document", versionId: feedbackId, format: "docx" },
+    { type: "cv_document", versionId: feedbackId, format: "pdf" },
+    { type: "cv_language", versionId: feedbackId, language: "he" },
+    { type: "cv_language", versionId: feedbackId, language: "en" },
     { type: "site_remove", siteId: feedbackId },
     { type: "connections_delete" },
     { type: "sources_boards" },
@@ -42,7 +45,11 @@ describe("callback data", () => {
     expect(decodeCallback(data)).toEqual(action);
   });
 
-  it.each(["", "job:not-a-uuid", `fb:x:${matchId}`, `unknown:${matchId}`, `job:extra:${matchId}`, "pe:x:abcdefgh", "pe:a:no spaces", "ob:other", `fr:z:${feedbackId}`, `pp:x:${feedbackId}`, "fr:r:not-a-uuid", `dl:fr:${feedbackId}`, `doc:z:${feedbackId}`, "doc:not-a-uuid", "doc:other"])(
+  it("reads Word document buttons sent before PDFs existed", () => {
+    expect(decodeCallback(`cvf:${feedbackId}`)).toEqual({ type: "cv_document", versionId: feedbackId, format: "docx" });
+  });
+
+  it.each(["", "job:not-a-uuid", `fb:x:${matchId}`, `unknown:${matchId}`, `job:extra:${matchId}`, "pe:x:abcdefgh", "pe:a:no spaces", "ob:other", `fr:z:${feedbackId}`, `pp:x:${feedbackId}`, "fr:r:not-a-uuid", `dl:fr:${feedbackId}`, `doc:z:${feedbackId}`, "doc:not-a-uuid", "doc:other", `cvf:x:${feedbackId}`, `cvl:fr:${feedbackId}`])(
     "rejects %s",
     (data) => {
       expect(decodeCallback(data)).toBeNull();

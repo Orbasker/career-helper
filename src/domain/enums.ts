@@ -108,6 +108,12 @@ export type CvVersionStatus = (typeof CV_VERSION_STATUSES)[number];
 export const CV_SECTIONS = ["summary", "experience", "skills", "education", "certifications", "languages", "other"] as const;
 export type CvSection = (typeof CV_SECTIONS)[number];
 
+export const CV_LANGUAGE_SOURCES = ["requested", "job", "cv", "conversation"] as const;
+export type CvLanguageSource = (typeof CV_LANGUAGE_SOURCES)[number];
+
+export const CV_FILE_FORMATS = ["docx", "pdf"] as const;
+export type CvFileFormat = (typeof CV_FILE_FORMATS)[number];
+
 export const CONVERSATION_FLOWS = ["idle", "onboarding", "preference_update", "profile_edit", "cv_request", "cv_library"] as const;
 export type ConversationFlow = (typeof CONVERSATION_FLOWS)[number];
 

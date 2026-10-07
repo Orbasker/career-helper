@@ -1,4 +1,5 @@
 import type { ConversationLanguage, DocumentFormat, DocumentKind } from "../domain/enums.js";
+import { detectLanguage } from "../domain/language.js";
 import type { IncomingDocument } from "./services.js";
 
 export const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
@@ -37,10 +38,6 @@ export function detectDocumentLanguage(text: string): DetectedLanguage {
   if (share > 0.3) return { language: "he", certain: share >= 0.4 };
   if (latin === 0) return { language: null, certain: false };
   return { language: "en", certain: share <= 0.05 };
-}
-
-export function detectLanguage(text: string): ConversationLanguage | null {
-  return detectDocumentLanguage(text).language;
 }
 
 async function extractText(format: DocumentFormat, data: Uint8Array): Promise<string> {

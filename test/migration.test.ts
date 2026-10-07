@@ -8,6 +8,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 const LAST_SINGLE_CV_MIGRATION = "0007_preferred_language";
 
+const LAST_SINGLE_LANGUAGE_CV_MIGRATION = "0009_cv_library";
+
 let client: PGlite;
 let legacyFolder: string;
 
@@ -141,5 +143,49 @@ describe("multi-document CV migration", () => {
     ]);
 
     expect(await rows(`select to_regclass('master_cvs') as table`)).toEqual([{ table: null }]);
+  });
+});
+
+describe("CV language and formats migration", () => {
+  let folder: string;
+
+  beforeEach(async () => {
+    await client.close();
+    client = new PGlite();
+    folder = await migrationsUpTo(LAST_SINGLE_LANGUAGE_CV_MIGRATION);
+    await migrate(drizzle(client), { migrationsFolder: folder });
+  });
+
+  afterEach(async () => {
+    await rm(folder, { recursive: true, force: true });
+  });
+
+  it("detects each existing version's language and keeps its sent Word document", async () => {
+    await client.exec(`
+      insert into users (id, telegram_user_id, telegram_chat_id, preferred_language) values
+        ('00000000-0000-4000-8000-00000000000a', 1, 1, null),
+        ('00000000-0000-4000-8000-00000000000b', 2, 2, 'he');
+      insert into career_facts (id, user_id, kind, statement, origin, verification_status, verified_at) values
+        ('40000000-0000-4000-8000-00000000000a', '00000000-0000-4000-8000-00000000000a', 'skill', 'Excel', 'cv_upload', 'verified', now()),
+        ('40000000-0000-4000-8000-00000000000b', '00000000-0000-4000-8000-00000000000b', 'skill', 'אקסל', 'cv_upload', 'verified', now());
+      insert into cv_versions (id, user_id, status, rendered_file_ref) values
+        ('30000000-0000-4000-8000-00000000000a', '00000000-0000-4000-8000-00000000000a', 'approved', 'tg-docx'),
+        ('30000000-0000-4000-8000-00000000000b', '00000000-0000-4000-8000-00000000000b', 'draft', null),
+        ('30000000-0000-4000-8000-00000000000c', '00000000-0000-4000-8000-00000000000b', 'failed', null);
+      insert into cv_version_items (cv_version_id, career_fact_id, section, position, generated_text) values
+        ('30000000-0000-4000-8000-00000000000a', '40000000-0000-4000-8000-00000000000a', 'skills', 0, 'Excel'),
+        ('30000000-0000-4000-8000-00000000000b', '40000000-0000-4000-8000-00000000000b', 'skills', 0, 'מנהלת משאבי אנוש ב-Acme');
+    `);
+
+    await migrate(drizzle(client), { migrationsFolder: "drizzle" });
+
+    expect(await rows(`select id, language, language_source from cv_versions order by id`)).toEqual([
+      { id: "30000000-0000-4000-8000-00000000000a", language: "en", language_source: null },
+      { id: "30000000-0000-4000-8000-00000000000b", language: "he", language_source: null },
+      { id: "30000000-0000-4000-8000-00000000000c", language: "he", language_source: null },
+    ]);
+    expect(await rows(`select cv_version_id, format, file_ref from cv_version_files`)).toEqual([
+      { cv_version_id: "30000000-0000-4000-8000-00000000000a", format: "docx", file_ref: "tg-docx" },
+    ]);
   });
 });

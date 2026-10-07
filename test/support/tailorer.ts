@@ -1,7 +1,6 @@
-import { sectionFor, type CvTailorer, type TailoredCv, type TailoringJob } from "../../src/cv/tailoring.js";
-import type { ProfileSnapshot } from "../../src/domain/profile.js";
+import { sectionFor, type CvTailorer, type TailoredCv, type TailoringInput } from "../../src/cv/tailoring.js";
 
-type TailorInput = { profile: ProfileSnapshot; job: TailoringJob };
+type TailorInput = TailoringInput;
 
 /** Copies every fact verbatim into its section unless `result` is replaced. */
 export class FakeCvTailorer implements CvTailorer {

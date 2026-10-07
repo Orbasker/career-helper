@@ -1,6 +1,7 @@
 import type {
   CareerFactKind,
   ConversationLanguage,
+  CvLanguageSource,
   DocumentKind,
   MatchRecommendation,
   PreferenceKind,
@@ -50,6 +51,9 @@ export const en = {
     approve: "✅ Approve",
     discard: "🗑 Discard",
     sendDocument: "📄 Send document",
+    pdf: "📕 PDF",
+    word: "📝 Word",
+    cvInLanguage: (language: string) => `🌐 ${language} version`,
     deleteConnections: "🗑 Delete my connections",
     analyze: "🔍 Analyze",
     showBoards: "🏢 Show boards",
@@ -129,7 +133,9 @@ export const en = {
     cvFailed: "Sorry, I couldn't prepare the CV this time. Tap <b>Tailor my CV</b> again to retry.",
     cvDraftOutro:
       "Every line comes from your confirmed profile: I only chose, ordered and reworded it for this job. Approve to keep this version, or discard it.",
-    cvApproved: "Saved ✅ Here's your CV for this job as a Word document.",
+    cvLanguageRequested: (language: string) =>
+      `I'm preparing the ${language} version, keeping the same highlights. It takes about a minute; I'll send it here for your review.`,
+    cvApproved: "Saved ✅ Here's your CV for this job as a Word document. Tap below for a PDF or another language.",
     cvDocumentCaption: "Your tailored CV. Every line comes from your confirmed profile.",
     cvDocumentFailed: "Your CV is saved, but I couldn't create the document right now. Tap below to try again.",
     cvDiscarded: "Discarded. Tap <b>Tailor my CV</b> on the job to start over.",
@@ -224,6 +230,13 @@ export const en = {
 
   cv: {
     title: (job: string, company: string | null) => `<b>📝 Tailored CV for ${job}${company ? ` at ${company}` : ""}</b>`,
+    language: (language: string, reason: string | null) => `🌐 ${language}${reason ? ` (${reason})` : ""}`,
+    languageReasons: {
+      requested: "as you asked",
+      job: "the language of the job posting",
+      cv: "the language of your CV",
+      conversation: "the language we chat in",
+    } satisfies Record<CvLanguageSource, string>,
     summary: "Summary",
     skills: "Skills",
     education: "Education",

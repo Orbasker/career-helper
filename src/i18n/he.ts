@@ -40,6 +40,9 @@ export const he: Strings = {
     approve: "✅ אישור",
     discard: "🗑 מחיקה",
     sendDocument: "📄 שליחת המסמך",
+    pdf: "📕 קובץ PDF",
+    word: "📝 קובץ Word",
+    cvInLanguage: (language) => `🌐 גרסה ב${language}`,
     deleteConnections: "🗑 מחיקת אנשי הקשר",
     analyze: "🔍 ניתוח",
     showBoards: "🏢 הצגת הלוחות",
@@ -113,7 +116,9 @@ export const he: Strings = {
     cvFailed: "מצטער, לא הצלחתי להכין את קורות החיים הפעם. לחצו שוב על <b>התאמת קורות חיים</b> כדי לנסות שוב.",
     cvDraftOutro:
       "כל שורה מגיעה מהפרופיל שאישרתם: רק בחרתי, סידרתי וניסחתי מחדש עבור המשרה הזו. אשרו כדי לשמור את הגרסה, או מחקו אותה.",
-    cvApproved: "נשמר ✅ הנה קורות החיים למשרה הזו כקובץ Word.",
+    cvLanguageRequested: (language) =>
+      `אני מכין את הגרסה ב${language}, עם אותן נקודות עיקריות. זה לוקח בערך דקה, ואשלח אותה לכאן לבדיקה.`,
+    cvApproved: "נשמר ✅ הנה קורות החיים למשרה הזו כקובץ Word. אפשר לבקש למטה גם PDF או שפה אחרת.",
     cvDocumentCaption: "קורות החיים המותאמים. כל שורה מגיעה מהפרופיל שאישרתם.",
     cvDocumentFailed: "קורות החיים נשמרו, אבל לא הצלחתי ליצור את הקובץ כרגע. לחצו למטה כדי לנסות שוב.",
     cvDiscarded: "נמחק. לחצו על <b>התאמת קורות חיים</b> במשרה כדי להתחיל מחדש.",
@@ -206,6 +211,13 @@ export const he: Strings = {
 
   cv: {
     title: (job, company) => `<b>📝 קורות חיים מותאמים ל-${job}${company ? ` ב-${company}` : ""}</b>`,
+    language: (language, reason) => `🌐 ${language}${reason ? ` (${reason})` : ""}`,
+    languageReasons: {
+      requested: "לפי בקשתך",
+      job: "שפת המודעה",
+      cv: "השפה של קורות החיים שלך",
+      conversation: "השפה שבה אנחנו מדברים",
+    },
     summary: "תקציר",
     skills: "כישורים",
     education: "השכלה",

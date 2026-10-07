@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { decodeCallback, encodeCallback } from "../src/bot/callbacks.js";
-import { parseLanguageChoice, parseLanguageRequest } from "../src/domain/language.js";
+import { chooseCvLanguage } from "../src/cv/language.js";
+import { parseLanguageChoice, parseLanguageRequest, postingLanguage } from "../src/domain/language.js";
 
 describe("language parsing", () => {
   it("reads answers to the language question", () => {
@@ -31,5 +32,28 @@ describe("language parsing", () => {
   it("round-trips the language callback", () => {
     expect(decodeCallback(encodeCallback({ type: "set_language", language: "he" }))).toEqual({ type: "set_language", language: "he" });
     expect(decodeCallback("lang:fr")).toBeNull();
+  });
+});
+
+describe("CV language", () => {
+  const english = "Senior HR Business Partner. Partner with R&D leadership on performance reviews and retention.";
+  const hebrew = "שותפה עסקית משאבי אנוש. ליווי הנהלת מחקר ופיתוח בתהליכי הערכת ביצועים ושימור, כולל עבודה עם Workday ו-HiBob.";
+
+  it("reads the posting's language only when it is clear", () => {
+    expect(postingLanguage(english)).toBe("en");
+    expect(postingLanguage(hebrew)).toBe("he");
+    expect(postingLanguage("HR Lead")).toBeNull();
+    expect(postingLanguage(`${english} ${english} ${english} נדרשת עברית ברמת שפת אם`)).toBeNull();
+  });
+
+  it("prefers the request, then the posting, then a single CV language, then the conversation language", () => {
+    const choose = (input: Partial<Parameters<typeof chooseCvLanguage>[0]>) =>
+      chooseCvLanguage({ requested: null, posting: "", cvLanguages: [], conversation: null, ...input });
+
+    expect(choose({ requested: "en", posting: hebrew, cvLanguages: ["he"], conversation: "he" })).toEqual({ language: "en", source: "requested" });
+    expect(choose({ posting: hebrew, cvLanguages: ["en"], conversation: "en" })).toEqual({ language: "he", source: "job" });
+    expect(choose({ posting: "HR Lead", cvLanguages: ["he", "he"], conversation: "en" })).toEqual({ language: "he", source: "cv" });
+    expect(choose({ posting: "HR Lead", cvLanguages: ["he", "en"], conversation: "he" })).toEqual({ language: "he", source: "conversation" });
+    expect(choose({})).toEqual({ language: "en", source: "conversation" });
   });
 });

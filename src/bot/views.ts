@@ -1,6 +1,13 @@
 import { InlineKeyboard, Keyboard } from "grammy";
 import { formatMonth } from "../domain/dates.js";
-import { CONVERSATION_LANGUAGES, type ConversationLanguage, type DocumentFormat, type PreferenceKind } from "../domain/enums.js";
+import {
+  CONVERSATION_LANGUAGES,
+  CV_FILE_FORMATS,
+  type ConversationLanguage,
+  type CvFileFormat,
+  type DocumentFormat,
+  type PreferenceKind,
+} from "../domain/enums.js";
 import { DEFAULT_LANGUAGE, LANGUAGE_NAMES } from "../domain/language.js";
 import type { Strings } from "../i18n/index.js";
 import type {
@@ -317,8 +324,13 @@ export function proposalView(t: Strings, proposal: PreferenceProposalView): { te
 const period = (t: Strings, e: { startDate: string | null; endDate: string | null; isCurrent: boolean }) =>
   `${formatMonth(e.startDate) ?? "?"} – ${e.isCurrent ? t.profile.present : (formatMonth(e.endDate) ?? "?")}`;
 
+const otherLanguage = (language: ConversationLanguage) => CONVERSATION_LANGUAGES.find((l) => l !== language)!;
+
 export function cvDraftViews(t: Strings, draft: CvDraftView): View[] {
-  const sections = [t.cv.title(escapeHtml(draft.jobTitle), draft.company ? escapeHtml(draft.company) : null)];
+  const reason = draft.languageSource ? t.cv.languageReasons[draft.languageSource] : null;
+  const sections = [
+    `${t.cv.title(escapeHtml(draft.jobTitle), draft.company ? escapeHtml(draft.company) : null)}\n${t.cv.language(t.documentLanguages[draft.language], reason)}`,
+  ];
   if (draft.summary.length) sections.push(`<b>${t.cv.summary}</b>\n${escapeHtml(draft.summary.join(" "))}`);
   for (const e of draft.experiences) {
     const lines = [`<b>${escapeHtml(e.title)}</b> — ${escapeHtml(e.employer)}`, `<i>${period(t, e)}</i>`];
@@ -336,13 +348,29 @@ export function cvDraftViews(t: Strings, draft: CvDraftView): View[] {
   if (draft.applicationNote) sections.push(`<b>${t.cv.applicationNote}</b>\n${escapeHtml(draft.applicationNote)}`);
 
   const { versionId } = draft;
+  const language = otherLanguage(draft.language);
   return withFinalKeyboard(
     sections,
     t.messages.cvDraftOutro,
     new InlineKeyboard()
       .text(t.buttons.approve, encodeCallback({ type: "cv_decision", versionId, approve: true }))
-      .text(t.buttons.discard, encodeCallback({ type: "cv_decision", versionId, approve: false })),
+      .text(t.buttons.discard, encodeCallback({ type: "cv_decision", versionId, approve: false }))
+      .row()
+      .text(t.buttons.cvInLanguage(t.documentLanguages[language]), encodeCallback({ type: "cv_language", versionId, language })),
   );
+}
+
+/** Offers the sent CV in its other file format and in the other language. */
+export function cvDocumentKeyboard(
+  t: Strings,
+  versionId: string,
+  sent: { format: CvFileFormat; language: ConversationLanguage },
+): InlineKeyboard {
+  const format = CV_FILE_FORMATS.find((f) => f !== sent.format)!;
+  const language = otherLanguage(sent.language);
+  return new InlineKeyboard()
+    .text(format === "pdf" ? t.buttons.pdf : t.buttons.word, encodeCallback({ type: "cv_document", versionId, format }))
+    .text(t.buttons.cvInLanguage(t.documentLanguages[language]), encodeCallback({ type: "cv_language", versionId, language }));
 }
 
 export function sitesView(t: Strings, sites: JobSiteView[]): { text: string; keyboard?: InlineKeyboard } {

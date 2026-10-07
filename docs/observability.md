@@ -52,7 +52,7 @@ A failing recorder never fails the call.
 | Suite | Cases | A case fails when |
 | --- | --- | --- |
 | `matching` (`src/matching/deep-match-eval.ts`) | Senior HRBP profile: obvious HR roles, adjacent roles, clear negatives | The recommendation is outside the accepted ones, a recommended verdict has no grounded evidence, or the explanation states a numeric score |
-| `cv` (`src/cv/cv-eval.ts`) | Same profile tailored to an HRBP, People Ops, L&D and a numbers-heavy posting | The model made an unsupported claim (a number, year or employer its facts don't state, still present after the retry), a line cites an unknown fact, a key fact is not among the bullets, or the summary or application note is missing |
+| `cv` (`src/cv/cv-eval.ts`) | Same English profile tailored to an HRBP, People Ops, L&D and a numbers-heavy posting, and to a Hebrew HRBP posting in Hebrew | The model made an unsupported claim (a number, year or employer its facts don't state, still present after the retry), a line cites an unknown fact, a key fact is not among the bullets, the summary or application note is missing, or a summary sentence or bullet is not in the CV's language |
 
 Options: `--decision-model`, `--explanation-model`, `--cv-model` (defaults: the production models). The output lists each case, the pass rate per suite against the baseline, any model or prompt-version changes, the cases that were fixed, and **regressions** (passed in the baseline, failing now). The script exits non-zero on any regression.
 
