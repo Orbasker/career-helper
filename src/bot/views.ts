@@ -14,12 +14,17 @@ import type {
   ConnectionImport,
   ConnectionSummary,
   CvDraftView,
+  JobOrigin,
+  JobProvenance,
   JobSiteView,
   MatchDetails,
   MatchSummary,
   PreferenceProposalView,
   ProfileReply,
   ProfileView,
+  SourceCoverage,
+  SourceIssue,
+  SourcesOverview,
 } from "../app/services.js";
 import type { FeedbackReasonTag } from "../learning/infer.js";
 import { encodeCallback } from "./callbacks.js";
@@ -101,6 +106,7 @@ export const messages = {
     "<b>What I can do</b>",
     "• /new — your latest matches",
     "• /profile — your career profile",
+    "• /sources — where I search for jobs and what I found there",
     "• /sites — job sites I search for you (add one with /addsite example.co.il)",
     "• /connections — import your LinkedIn connections to see who you know at each company",
     "• /language — choose English or Hebrew",
@@ -224,7 +230,7 @@ export function matchDetailsView(match: MatchDetails): { text: string; keyboard:
       ? `${match.description.slice(0, DESCRIPTION_PREVIEW_LENGTH)}…`
       : match.description;
   sections.push(escapeHtml(description));
-  sections.push(`<a href="${escapeHtml(match.sourceUrl)}">Open original posting</a>`);
+  sections.push(provenanceSection(match.sourceUrl, match.provenance));
 
   const { matchId } = match;
   const keyboard = new InlineKeyboard()
@@ -236,6 +242,129 @@ export function matchDetailsView(match: MatchDetails): { text: string; keyboard:
     .row()
     .text("📝 Tailor my CV", encodeCallback({ type: "tailor_cv", matchId }));
   return { text: sections.join("\n\n"), keyboard };
+}
+
+const ORIGIN_LABELS: Record<Exclude<JobOrigin, "board">, string> = {
+  user_site: "⭐ One of your saved sites",
+  web_search: "🌐 My web search",
+  user_link: "🔗 A link you sent me",
+};
+
+const shortSourceName = (name: string) => name.replace(/\s+job boards?$/i, "");
+const isoDay = (date: Date) => date.toISOString().slice(0, 10);
+
+function hostname(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
+function provenanceSection(sourceUrl: string, provenance: JobProvenance): string {
+  const origin =
+    provenance.origin === "board"
+      ? `🏢 Official company job board (${escapeHtml(shortSourceName(provenance.sourceName))})`
+      : ORIGIN_LABELS[provenance.origin];
+  const lines = [
+    "<b>Where I found it</b>",
+    `${origin} · first seen ${isoDay(provenance.firstCollectedAt)}`,
+    `<a href="${escapeHtml(sourceUrl)}">Open original posting</a>`,
+  ];
+  if (provenance.otherUrls.length > 0) {
+    const links = provenance.otherUrls.map((url) => `<a href="${escapeHtml(url)}">${escapeHtml(hostname(url))}</a>`);
+    lines.push(`Also posted on ${links.join(", ")}`);
+  }
+  return lines.join("\n");
+}
+
+/** "5 min ago", "3h ago", "2 days ago". */
+export function timeAgo(date: Date, now = new Date()): string {
+  const minutes = Math.max(0, Math.floor((now.getTime() - date.getTime()) / 60_000));
+  if (minutes < 60) return minutes <= 1 ? "just now" : `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return days === 1 ? "yesterday" : `${days} days ago`;
+}
+
+const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
+
+function coverageLine(coverage: SourceCoverage, days: number): string {
+  return `New in the last ${days} days: ${plural(coverage.jobs, "job")}, ${coverage.newCompanies} new ${coverage.newCompanies === 1 ? "company" : "companies"}.`;
+}
+
+function issueLine(issue: SourceIssue): string {
+  switch (issue.kind) {
+    case "turned_off":
+      return `${escapeHtml(issue.source)} is turned off right now.`;
+    case "unreachable_boards": {
+      const shown = issue.boards.slice(0, 5).map(escapeHtml).join(", ");
+      const more = issue.boards.length > 5 ? ` and ${issue.boards.length - 5} more` : "";
+      return `${escapeHtml(shortSourceName(issue.source))}: couldn't reach ${plural(issue.boards.length, "board")} in the last run (${shown}${more}).`;
+    }
+    case "collection_failed":
+      return `${escapeHtml(issue.source)}: the last collection failed. I'll retry in the next daily run.`;
+    case "search_failed":
+      return "The last web search failed. I'll retry in the next daily run.";
+    case "user_search_failed":
+      return "My last web search for you failed. I'll retry in the next daily run.";
+  }
+}
+
+export function sourcesView(overview: SourcesOverview, now = new Date()): View {
+  const days = overview.coverageDays;
+  const active = overview.boardSources.filter((s) => s.enabled && s.boards.length > 0);
+  const boardCount = active.reduce((sum, s) => sum + s.boards.length, 0);
+  const collected = active.flatMap((s) => (s.lastCollectedAt ? [s.lastCollectedAt] : []));
+  const lastCollected = collected.length ? new Date(Math.max(...collected.map((d) => d.getTime()))) : null;
+  const boardLines = [
+    "🏢 <b>Company job boards</b>",
+    boardCount > 0
+      ? `${plural(boardCount, "official board")} (${active.map((s) => `${escapeHtml(shortSourceName(s.name))} ${s.boards.length}`).join(", ")}), checked every day. ${lastCollected ? `Last collected ${timeAgo(lastCollected, now)}.` : "Not collected yet."}`
+      : "No company boards yet. Board links I find on the web are added here automatically.",
+    coverageLine(overview.boardCoverage, days),
+  ];
+
+  const web = overview.webSearch;
+  const webLines = [
+    "🌐 <b>Web search</b>",
+    `I search the open web for postings that fit your profile. ${
+      !web.enabled ? "Turned off right now." : web.lastSearchedAt ? `Last searched for you ${timeAgo(web.lastSearchedAt, now)}.` : "Not searched for you yet."
+    }`,
+    coverageLine(web.coverage, days),
+  ];
+
+  const siteLines = ["⭐ <b>Your sites</b>"];
+  if (overview.sites.length === 0) siteLines.push("None yet. Add one with <i>/addsite example.co.il</i> and I'll search it too.");
+  else {
+    siteLines.push(`${overview.sites.map((s) => escapeHtml(s.domain)).join(", ")}, searched together with the web search.`);
+    siteLines.push(coverageLine(overview.siteCoverage, days));
+  }
+
+  const sections = ["<b>Where I search for jobs</b>", boardLines.join("\n"), webLines.join("\n"), siteLines.join("\n")];
+  if (overview.issues.length > 0) sections.push(`⚠️ <b>Problems</b>\n${overview.issues.map((i) => `• ${issueLine(i)}`).join("\n")}`);
+  sections.push("<i>A job's Details show where I found it.</i>");
+
+  const keyboard = new InlineKeyboard();
+  if (boardCount > 0) keyboard.text("🏢 Show boards", encodeCallback({ type: "sources_boards" }));
+  keyboard.text(overview.sites.length > 0 ? "⭐ Manage my sites" : "⭐ Add a site", encodeCallback({ type: "sources_sites" }));
+  return { text: sections.join("\n\n"), keyboard };
+}
+
+const MAX_BOARDS_LISTED = 60;
+
+export function boardsViews(overview: SourcesOverview): View[] {
+  const sections = overview.boardSources
+    .filter((s) => s.boards.length > 0)
+    .map((s) => {
+      const shown = s.boards.slice(0, MAX_BOARDS_LISTED).map(escapeHtml).join(", ");
+      const more = s.boards.length > MAX_BOARDS_LISTED ? ` and ${s.boards.length - MAX_BOARDS_LISTED} more` : "";
+      const off = s.enabled ? "" : " — turned off";
+      return `<b>${escapeHtml(s.name)}</b> (${s.boards.length}${off})\n${shown}${more}`;
+    });
+  if (sections.length === 0) return [{ text: "I don't check any company job boards yet." }];
+  return packMessages(["<b>Company job boards I check every day</b>", ...sections]).map((text) => ({ text }));
 }
 
 const REASON_LABELS: [FeedbackReasonTag, string][] = [
