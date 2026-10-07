@@ -32,6 +32,24 @@ export function atsBoardFromUrl(url: string): AtsBoard | null {
   return { source, token };
 }
 
+export interface AtsPosting extends AtsBoard {
+  postingId: string;
+  /** Lever and Greenhouse run separate EU instances with their own APIs. */
+  eu: boolean;
+}
+
+/** The single posting a board URL points to, e.g. `https://jobs.lever.co/acme/1f2e…` → lever `acme` posting `1f2e…`. */
+export function atsPostingFromUrl(url: string): AtsPosting | null {
+  const board = atsBoardFromUrl(url);
+  if (!board) return null;
+  const parsed = new URL(url);
+  const segments = parsed.pathname.split("/").filter(Boolean).map(decodeURIComponent);
+  const postingId = board.source === "greenhouse" ? (segments[1] === "jobs" ? segments[2] : undefined) : segments[1];
+  const valid = board.source === "greenhouse" ? /^\d+$/ : /^[0-9a-f-]{8,}$/i;
+  if (!postingId || !valid.test(postingId)) return null;
+  return { ...board, postingId: postingId.toLowerCase(), eu: /\.eu\./.test(parsed.hostname) };
+}
+
 /**
  * Adds boards to their source's `config.boards` so the basic collectors fetch them from now on; boards already
  * configured are left alone. Returns the boards that were new.

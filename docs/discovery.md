@@ -2,7 +2,7 @@
 
 Code: `src/discovery/` (plan, page reading, ATS boards, run), `src/ai/job-discoverer.ts` (agent), `src/app/postgres/sites.ts` (user sites). Tables: `job_sources`, `user_job_sites`.
 
-Jobs come from three kinds of source. All of them go through the same ingestion, dedup and matching:
+Jobs come from three kinds of source, plus links users send the bot (`user_submitted`, see `docs/job-links.md`). All of them go through the same ingestion, dedup and matching:
 
 | Source | How it finds jobs |
 | --- | --- |

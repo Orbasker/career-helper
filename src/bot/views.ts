@@ -12,6 +12,7 @@ import { DEFAULT_LANGUAGE, LANGUAGE_NAMES } from "../domain/language.js";
 import type {
   AddSiteOutcome,
   ConnectionImport,
+  JobLinkOutcome,
   ConnectionSummary,
   CvDraftView,
   JobOrigin,
@@ -113,6 +114,7 @@ export const messages = {
     "• /sources — where I search for jobs and what I found there",
     "• /sites — job sites I search for you (add one with /addsite example.co.il)",
     "• /connections — import your LinkedIn connections to see who you know at each company",
+    "• Send me a link to a job posting and I'll tell you how well it fits you.",
     "• /language — choose English or Hebrew",
     "• /start — set up your profile",
     "• Tell me anything to update your profile (e.g. \"no more than 40 minutes commute\", \"add that I managed X\").",
@@ -140,7 +142,53 @@ export const messages = {
   siteInvalid: "That doesn't look like a website. Send something like <i>/addsite example.co.il</i>.",
   siteLimit: "You already have 20 sites, the most I can search. Remove one with /sites first.",
   siteRemoved: "Removed. I won't search that site anymore.",
+  jobLinkKnown: "I already had this job. Here's how it fits you:",
+  jobLinkFits: "Here's how this job fits you:",
+  jobLinkFailsMustHave: "⚠️ This job breaks one of your must-haves, so I didn't evaluate it further. If that must-have has changed, just tell me.",
+  jobLinkConnectionsTip: "Send /connections to see who you know at {company}.",
 };
+
+const JOB_LINK_FAILURES: Record<Exclude<JobLinkOutcome["kind"], "evaluated" | "fails_must_have">, string> = {
+  not_onboarded: messages.notOnboarded,
+  invalid: "That link doesn't look like a public web page I can open.",
+  inaccessible:
+    "I couldn't open that page: the site may be down or may not allow automated reading. Try again later, or send a link to the same job on the company's careers page.",
+  login_required:
+    "That page needs a login, so I can't read it. Send a link to the same job on the company's careers page or another public job site.",
+  gone: "That page no longer exists, so the job was probably taken down.",
+  closed: "That posting is closed or expired, so I didn't evaluate it.",
+  not_a_job:
+    "I couldn't find a single open job posting on that page. Send the link to the posting itself, not a list of jobs or a company page.",
+  unavailable: "I can't read job links right now. Please try again later.",
+  evaluation_failed: "I saved the job but couldn't evaluate it right now. I'll include it in my next daily check.",
+};
+
+const linkHost = (link: string) => escapeHtml(new URL(link).hostname.replace(/^www\./, ""));
+
+export function jobLinkReadingText(link: string, several: boolean): string {
+  return several
+    ? `🔎 Reading the job at <b>${linkHost(link)}</b>…`
+    : "🔎 Reading the job posting and checking how it fits you. This can take up to a minute.";
+}
+
+/** Why a link could not be evaluated; `link` names it when the user sent several. */
+export function jobLinkFailureText(outcome: { kind: keyof typeof JOB_LINK_FAILURES }, link: string | null): string {
+  const text = JOB_LINK_FAILURES[outcome.kind];
+  return link ? `<b>${linkHost(link)}</b>: ${text}` : text;
+}
+
+export function jobLinkResultView(
+  outcome: Extract<JobLinkOutcome, { kind: "evaluated" | "fails_must_have" }>,
+  match: MatchDetails,
+): View {
+  const intro = outcome.kind === "fails_must_have" ? messages.jobLinkFailsMustHave : outcome.known ? messages.jobLinkKnown : messages.jobLinkFits;
+  const view = matchDetailsView(match);
+  const sections = [intro, view.text];
+  if (match.company && !match.connectionsImportedAt) {
+    sections.push(`<i>${messages.jobLinkConnectionsTip.replace("{company}", escapeHtml(match.company))}</i>`);
+  }
+  return { text: sections.join("\n\n"), keyboard: view.keyboard };
+}
 
 export function employerNote(match: Pick<MatchSummary, "employerRelation">): string | null {
   const relation = match.employerRelation;
@@ -244,7 +292,8 @@ export function matchDetailsView(match: MatchDetails): { text: string; keyboard:
       encodeCallback({ type: "feedback", matchId, verdict: "not_interested" }),
     )
     .row()
-    .text("📝 Tailor my CV", encodeCallback({ type: "tailor_cv", matchId }));
+    .text("📝 Tailor my CV", encodeCallback({ type: "tailor_cv", matchId }))
+    .url("🔗 Original posting", match.sourceUrl);
   return { text: sections.join("\n\n"), keyboard };
 }
 
