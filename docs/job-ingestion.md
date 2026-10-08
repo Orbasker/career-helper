@@ -60,15 +60,19 @@ Each job keeps its own row and `source_url`, so a group holds every source's URL
 
 ## Sources
 
-Besides the boards below, the agent web search and users' own sites find postings anywhere on the web (`docs/discovery.md`).
+Besides the boards below, job sites (LinkedIn, AllJobs, Drushim, JobMaster), the agent web search and users' own sites find postings anywhere on the web (`docs/discovery.md`).
 
-All three are official, unauthenticated job-board APIs that ATS vendors publish for embedding a company's open roles; we fetch each configured board once per run (no scraping, no per-posting requests).
+All of these are unauthenticated job-board APIs that ATS vendors publish for embedding a company's open roles; we fetch each configured board once per run. Workday and SmartRecruiters lists lack descriptions, so they also fetch each posting, at most 60 and 50 per board per run.
 
 | Key | API | Company / work mode / employment type |
 | --- | --- | --- |
 | `greenhouse` | `GET boards-api.greenhouse.io/v1/boards/{board}/jobs?content=true` | `company_name`; work mode inferred from location; no employment type |
 | `lever` | `GET api.lever.co/v0/postings/{board}?mode=json` | config only; `workplaceType`; `categories.commitment` |
 | `ashby` | `GET api.ashbyhq.com/posting-api/job-board/{board}?includeCompensation=true` | config only; `workplaceType` / `isRemote`; `employmentType`. Unlisted postings are skipped |
+| `comeet` | careers page `comeet.com/jobs/{slug}/{uid}` for the API token, then `GET comeet.co/careers-api/2.0/company/{uid}/positions?details=true` | `company_name`; `workplace_type`; `employment_type`. Board `{slug}/{uid}` (e.g. `silverfort/54.007`); `apiToken` skips the page |
+| `workable` | `GET apply.workable.com/api/v1/widget/accounts/{board}?details=true` | config or account name; remote when `telecommuting`; `employment_type` |
+| `smartrecruiters` | `GET api.smartrecruiters.com/v1/companies/{board}/postings`, then each new posting | `company.name`; `location.remote` / `hybrid`; `typeOfEmployment`. Only `country` (default `il`, `null` for all); details only for postings released since the last run |
+| `workday` | `POST {tenant}.{wdN}.myworkdayjobs.com/wday/cxs/{tenant}/{site}/jobs`, then each new posting | config or tenant; none; `timeType`. Board `{tenant}.{wdN}/{site}`; filtered to the board's Israel location facet and to postings since the last run |
 
 Boards are configured per source in `job_sources.config`; a source with no boards collects nothing:
 

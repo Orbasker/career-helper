@@ -81,6 +81,9 @@ export type PreferenceOrigin = (typeof PREFERENCE_ORIGINS)[number];
 export const JOB_SOURCE_KINDS = ["api", "rss", "scraper", "manual", "web_search"] as const;
 export type JobSourceKind = (typeof JOB_SOURCE_KINDS)[number];
 
+export const JOB_SEARCH_STATUSES = ["running", "completed", "failed"] as const;
+export type JobSearchStatus = (typeof JOB_SEARCH_STATUSES)[number];
+
 export const DEDUP_METHODS = ["deterministic_key", "similarity", "manual"] as const;
 export type DedupMethod = (typeof DEDUP_METHODS)[number];
 

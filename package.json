@@ -18,6 +18,7 @@
     "daily": "bun scripts/daily.ts",
     "report": "bun scripts/report.ts",
     "eval": "bun scripts/eval.ts",
+    "benchmark:sources": "bun scripts/benchmark-sources.ts",
     "vercel-build": "tsc && bun scripts/vercel-build.ts"
   },
   "dependencies": {

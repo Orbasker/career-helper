@@ -1,0 +1,62 @@
+[
+  {
+    "uid": "72.E6C",
+    "name": "DevOps Platform Engineer",
+    "company_name": "Silverfort",
+    "department": "R&D",
+    "url_comeet_hosted_page": "https://www.comeet.com/jobs/silverfort/54.007/devops-platform-engineer/72.E6C",
+    "url_active_page": "https://www.comeet.com/jobs/silverfort/54.007/devops-platform-engineer/72.E6C",
+    "employment_type": null,
+    "experience_level": "Senior",
+    "time_updated": "2026-09-08T11:04:25Z",
+    "workplace_type": "Hybrid",
+    "location": {
+      "name": "Tel Aviv, Israel",
+      "country": "IL",
+      "city": "Tel Aviv-Yafo",
+      "is_remote": true
+    },
+    "details": [
+      {
+        "name": "Requirements",
+        "value": "<ul><li>5+ years as a DevOps Engineer</li><li>Kubernetes &amp; Terraform</li></ul>",
+        "order": 2
+      },
+      {
+        "name": "Description",
+        "value": "<p>Join our R&amp;D team.</p>",
+        "order": 1
+      }
+    ]
+  },
+  {
+    "uid": "CB.F60",
+    "name": "Channel Account Manager - South East",
+    "company_name": "Silverfort",
+    "department": "Sales",
+    "url_comeet_hosted_page": "https://www.comeet.com/jobs/silverfort/54.007/channel-account-manager---south-east/CB.F60",
+    "url_active_page": "https://www.comeet.com/jobs/silverfort/54.007/channel-account-manager---south-east/CB.F60",
+    "employment_type": null,
+    "experience_level": null,
+    "time_updated": "2026-09-18T05:42:22Z",
+    "workplace_type": "Remote",
+    "location": {
+      "name": "United States",
+      "country": "US",
+      "city": "Austin",
+      "is_remote": true
+    },
+    "details": [
+      {
+        "name": "Description",
+        "value": "<p>Grow channel sales in the South East.</p>",
+        "order": 1
+      },
+      {
+        "name": "Benefits",
+        "value": "",
+        "order": 2
+      }
+    ]
+  }
+]

@@ -7,6 +7,7 @@ import { boardsFromConfig } from "../../ingestion/sources/shared.js";
 import type {
   BoardSourceView,
   JobOrigin,
+  JobSiteSourceView,
   SiteService,
   SourceCoverage,
   SourceIssue,
@@ -16,13 +17,14 @@ import type {
 
 export const COVERAGE_DAYS = 7;
 
-const NON_BOARD_KINDS = ["web_search", "manual"];
+const NON_BOARD_KINDS = ["web_search", "manual", "scraper"];
 
 /** The job's origin for `userId`; needs `jobs` joined with `job_sources` and `raw_job_records`. */
 export function jobOrigin(userId: string) {
   const foundBy = sql`${rawJobRecords.payload}->'foundBy'`;
   return sql<JobOrigin>`case
     when ${jobSources.kind} = 'manual' then 'user_link'
+    when ${jobSources.kind} = 'scraper' then 'job_site'
     when ${jobSources.kind} = 'web_search' then
       case when ${foundBy}->>'userId' = ${userId} and ${foundBy}->>'site' = 'true' then 'user_site' else 'web_search' end
     else 'board' end`;
@@ -38,6 +40,12 @@ interface IngestSummary {
   source: string;
   errors: number;
   errorScopes?: string[];
+}
+
+interface SiteSearchSummary {
+  source: string;
+  blocked: boolean;
+  ingest: IngestSummary;
 }
 
 export class PgSourceService implements SourceService {
@@ -58,6 +66,8 @@ export class PgSourceService implements SourceService {
       boards: boardsFromConfig(s.config).map((b) => b.company ?? b.token),
       lastCollectedAt: s.lastCollectedAt,
     }));
+    const siteRows = sources.filter((s) => s.kind === "scraper");
+    const jobSites: JobSiteSourceView[] = siteRows.map((s) => ({ name: s.name, enabled: s.enabled, lastCollectedAt: s.lastCollectedAt }));
     const webSource = sources.find((s) => s.key === WEB_SEARCH_SOURCE_KEY);
 
     const [lastRun] = await this.db
@@ -68,9 +78,10 @@ export class PgSourceService implements SourceService {
       .limit(1);
     const discovery = lastRun?.report?.discovery as StageResult | null | undefined;
     const ingestion = lastRun?.report?.ingestion as StageResult | undefined;
+    const siteSearch = lastRun?.report?.siteSearch as StageResult | null | undefined;
     const webEnabled = webSource?.enabled !== false && !(lastRun && (discovery === null || discovery?.report?.disabled));
 
-    const [searched] = await this.db
+    const [lastSearch] = await this.db
       .select({ at: sql<Date | null>`max(${pipelineRuns.startedAt})`.mapWith((v) => (v ? new Date(v) : null)) })
       .from(pipelineRuns)
       .where(sql`${pipelineRuns.report}->'discovery'->'report'->'searchedUsers' @> ${JSON.stringify([userId])}::jsonb`);
@@ -91,6 +102,14 @@ export class PgSourceService implements SourceService {
       );
     }
     if (ingestion && !ingestion.ok) issues.push({ kind: "collection_failed", source: "Company job boards" });
+    const searched = (siteSearch?.report?.sources as SiteSearchSummary[] | undefined) ?? [];
+    for (const site of siteRows) {
+      const summary = searched.find((s) => s.source === site.key);
+      if (!site.enabled) issues.push({ kind: "turned_off", source: site.name });
+      else if (summary?.blocked) issues.push({ kind: "blocked", source: site.name });
+      else if (summary && summary.ingest.errors > 0) issues.push({ kind: "collection_failed", source: site.name });
+    }
+    if (siteSearch && !siteSearch.ok) issues.push({ kind: "collection_failed", source: "Job sites" });
     if (!webEnabled) issues.push({ kind: "turned_off", source: webSource?.name ?? "Agent web search" });
     else if (discovery && !discovery.ok) issues.push({ kind: "search_failed" });
     else if ((discovery?.report?.errors as { scope: string }[] | undefined)?.some((e) => e.scope === `user:${userId}`)) {
@@ -102,7 +121,9 @@ export class PgSourceService implements SourceService {
       coverageDays: COVERAGE_DAYS,
       boardSources,
       boardCoverage: coverage.board,
-      webSearch: { enabled: webEnabled, lastSearchedAt: searched?.at ?? null, coverage: coverage.web_search },
+      jobSites,
+      jobSiteCoverage: coverage.job_site,
+      webSearch: { enabled: webEnabled, lastSearchedAt: lastSearch?.at ?? null, coverage: coverage.web_search },
       sites: await this.sites.list(userId),
       siteCoverage: coverage.user_site,
       issues,
@@ -134,7 +155,7 @@ export class PgSourceService implements SourceService {
       .where(gte(jobs.createdAt, since))
       .groupBy(sql`1`);
     const empty = (): SourceCoverage => ({ jobs: 0, newCompanies: 0 });
-    const result: Record<JobOrigin, SourceCoverage> = { board: empty(), user_site: empty(), web_search: empty(), user_link: empty() };
+    const result: Record<JobOrigin, SourceCoverage> = { board: empty(), job_site: empty(), user_site: empty(), web_search: empty(), user_link: empty() };
     for (const row of rows) result[row.origin] = { jobs: row.jobs, newCompanies: row.newCompanies };
     return result;
   }

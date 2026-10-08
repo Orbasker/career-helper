@@ -37,6 +37,7 @@ import {
   EMPLOYMENT_TYPES,
   FACT_ORIGINS,
   FEEDBACK_VERDICTS,
+  JOB_SEARCH_STATUSES,
   JOB_SOURCE_KINDS,
   MATCH_RECOMMENDATIONS,
   MATCH_STAGES,
@@ -86,6 +87,7 @@ export const conversationLanguage = pgEnum("conversation_language", CONVERSATION
 export const applicationStatus = pgEnum("application_status", APPLICATION_STATUSES);
 export const applicationEventKind = pgEnum("application_event_kind", APPLICATION_EVENT_KINDS);
 export const applicationEventSource = pgEnum("application_event_source", APPLICATION_EVENT_SOURCES);
+export const jobSearchStatus = pgEnum("job_search_status", JOB_SEARCH_STATUSES);
 
 const id = () => uuid("id").primaryKey().defaultRandom();
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
@@ -607,6 +609,24 @@ export const modelCalls = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("model_calls_created_idx").on(t.createdAt, t.purpose)],
+);
+
+/** Searches a user started themselves; the daily limit counts these. */
+export const jobSearches = pgTable(
+  "job_searches",
+  {
+    id: id(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** What the user asked for, or null to search for their profile. */
+    query: text("query"),
+    status: jobSearchStatus("status").notNull().default("running"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    report: jsonb("report").$type<Record<string, unknown>>(),
+  },
+  (t) => [index("job_searches_user_started_idx").on(t.userId, t.startedAt)],
 );
 
 export const pipelineRuns = pgTable(

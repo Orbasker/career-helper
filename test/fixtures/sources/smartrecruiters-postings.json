@@ -1,0 +1,149 @@
+{
+  "offset": 0,
+  "limit": 5,
+  "totalFound": 5,
+  "content": [
+    {
+      "id": "744000152028049",
+      "name": "xEngineer (Backend oriented), Premium Billing Platform",
+      "uuid": "862247a9-1ef4-4188-a7be-5ac48b3ec1dd",
+      "jobAdId": "f0b24067-0850-4b46-b95e-7b73cd64121b",
+      "defaultJobAd": false,
+      "refNumber": "REF3097W",
+      "company": {
+        "identifier": "Wix2",
+        "name": "Wix"
+      },
+      "releasedDate": "2026-09-27T13:59:55.750Z",
+      "location": {
+        "city": "Tel Aviv-Yafo",
+        "region": "Tel Aviv District",
+        "country": "il",
+        "remote": false,
+        "hybrid": false,
+        "latitude": "32.0852999",
+        "longitude": "34.78176759999999",
+        "fullLocation": "Tel Aviv-Yafo, Tel Aviv District, Israel"
+      },
+      "industry": {
+        "id": "internet",
+        "label": "Internet"
+      },
+      "department": {},
+      "function": {
+        "id": "engineering",
+        "label": "Engineering"
+      },
+      "typeOfEmployment": {
+        "id": "permanent",
+        "label": "Full-time"
+      },
+      "experienceLevel": {
+        "id": "mid_senior_level",
+        "label": "Mid-Senior Level"
+      },
+      "visibility": "PUBLIC",
+      "ref": "https://api.smartrecruiters.com/v1/companies/wix2/postings/744000152028049",
+      "language": {
+        "code": "en",
+        "label": "English",
+        "labelNative": "English (US)"
+      }
+    },
+    {
+      "id": "744000149516299",
+      "name": "xEngineer Team Lead (Backend Oriented) for Viewer",
+      "uuid": "88c8b8ae-2f01-48e4-9acd-87efa854a0f6",
+      "jobAdId": "0192dd25-ce94-4a54-bced-f44780fa4c22",
+      "defaultJobAd": false,
+      "refNumber": "REF12W",
+      "company": {
+        "identifier": "Wix2",
+        "name": "Wix"
+      },
+      "releasedDate": "2026-09-15T07:11:45.560Z",
+      "location": {
+        "city": "Tel Aviv-Yafo",
+        "region": "Tel Aviv District",
+        "country": "il",
+        "address": "Yunitsman Street",
+        "remote": false,
+        "hybrid": false,
+        "latitude": "32.1422208",
+        "longitude": "34.7976038",
+        "fullLocation": "Tel Aviv-Yafo, Tel Aviv District, Israel"
+      },
+      "industry": {
+        "id": "internet",
+        "label": "Internet"
+      },
+      "department": {},
+      "function": {
+        "id": "research",
+        "label": "Research"
+      },
+      "typeOfEmployment": {
+        "id": "permanent",
+        "label": "Full-time"
+      },
+      "experienceLevel": {
+        "id": "mid_senior_level",
+        "label": "Mid-Senior Level"
+      },
+      "visibility": "PUBLIC",
+      "ref": "https://api.smartrecruiters.com/v1/companies/wix2/postings/744000149516299",
+      "language": {
+        "code": "en",
+        "label": "English",
+        "labelNative": "English (US)"
+      }
+    },
+    {
+      "id": "744000149304000",
+      "name": "xEngineer for Wix Headless",
+      "uuid": "5c44aba6-22d6-4feb-8cf8-186b6b6713f0",
+      "jobAdId": "1d9a4592-21c9-4a13-ad66-bac0cb16e095",
+      "defaultJobAd": false,
+      "refNumber": "REF3097W",
+      "company": {
+        "identifier": "Wix2",
+        "name": "Wix"
+      },
+      "releasedDate": "2026-09-14T11:12:52.258Z",
+      "location": {
+        "city": "Tel Aviv-Yafo",
+        "region": "Tel Aviv District",
+        "country": "il",
+        "remote": false,
+        "hybrid": true,
+        "latitude": "32.0852999",
+        "longitude": "34.78176759999999",
+        "fullLocation": "Tel Aviv-Yafo, Tel Aviv District, Israel"
+      },
+      "industry": {
+        "id": "internet",
+        "label": "Internet"
+      },
+      "department": {},
+      "function": {
+        "id": "engineering",
+        "label": "Engineering"
+      },
+      "typeOfEmployment": {
+        "id": "permanent",
+        "label": "Full-time"
+      },
+      "experienceLevel": {
+        "id": "mid_senior_level",
+        "label": "Mid-Senior Level"
+      },
+      "visibility": "PUBLIC",
+      "ref": "https://api.smartrecruiters.com/v1/companies/wix2/postings/744000149304000",
+      "language": {
+        "code": "en",
+        "label": "English",
+        "labelNative": "English (US)"
+      }
+    }
+  ]
+}

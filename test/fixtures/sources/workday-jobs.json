@@ -1,0 +1,199 @@
+{
+  "total": 430,
+  "jobPostings": [
+    {
+      "title": "Senior Silicon Security Architect",
+      "externalPath": "/job/Israel-Yokneam/Senior-Silicon-Security-Architect_JR2017969",
+      "locationsText": "5 Locations",
+      "postedOn": "Posted 30+ Days Ago",
+      "bulletFields": [
+        "JR2017969"
+      ]
+    },
+    {
+      "title": "Senior Security Architect",
+      "externalPath": "/job/Israel-Tel-Aviv/Senior-Security-Architect_JR2018353",
+      "locationsText": "5 Locations",
+      "postedOn": "Posted 30+ Days Ago",
+      "bulletFields": [
+        "JR2018353"
+      ]
+    },
+    {
+      "title": "Senior Software Architect, RISC-V Networking Accelerator",
+      "externalPath": "/job/Israel-Tel-Aviv/Senior-Software-Architect--RISC-V-Networking-Accelerator_JR2020499",
+      "locationsText": "5 Locations",
+      "postedOn": "Posted 30+ Days Ago",
+      "bulletFields": [
+        "JR2020499"
+      ]
+    },
+    {
+      "title": "Senior Manager, Developer Relations",
+      "externalPath": "/job/Israel-Tel-Aviv/Senior-Manager--Developer-Relations_JR2019681",
+      "locationsText": "5 Locations",
+      "postedOn": "Posted 30+ Days Ago",
+      "bulletFields": [
+        "JR2019681"
+      ]
+    },
+    {
+      "title": "Senior Security Architect",
+      "externalPath": "/job/Israel-Tel-Aviv/Senior-Security-Architect_JR2021941-1",
+      "locationsText": "5 Locations",
+      "postedOn": "Posted 30+ Days Ago",
+      "bulletFields": [
+        "JR2021941"
+      ]
+    }
+  ],
+  "facets": [
+    {
+      "facetParameter": "jobFamilyGroup",
+      "descriptor": "Job Category",
+      "values": [
+        {
+          "descriptor": "Engineering",
+          "id": "0c40f6bd1d8f10ae43ffaefd46dc7e78",
+          "count": 367
+        },
+        {
+          "descriptor": "Program Manager",
+          "id": "0c40f6bd1d8f10ae43ffc668c6847e8c",
+          "count": 17
+        },
+        {
+          "descriptor": "Operations",
+          "id": "0c40f6bd1d8f10ae43ffc3fc7d8c7e8a",
+          "count": 16
+        },
+        {
+          "descriptor": "IT - Information Technology",
+          "id": "0c40f6bd1d8f10ae43ffbd1459047e84",
+          "count": 14
+        },
+        {
+          "descriptor": "Sales",
+          "id": "0c40f6bd1d8f10ae43ffcac5bbec7e90",
+          "count": 7
+        }
+      ]
+    },
+    {
+      "facetParameter": "workerSubType",
+      "descriptor": "Job Type",
+      "values": [
+        {
+          "descriptor": "Regular Employee",
+          "id": "0c40f6bd1d8f10adf6dae161b1844a15",
+          "count": 385
+        },
+        {
+          "descriptor": "Management",
+          "id": "0c40f6bd1d8f10adf6dae2cd57444a16",
+          "count": 41
+        },
+        {
+          "descriptor": "New College Graduate",
+          "id": "ab40a98049581037a3ada55b087049b7",
+          "count": 4
+        }
+      ]
+    },
+    {
+      "facetParameter": "timeType",
+      "descriptor": "Time Type",
+      "values": [
+        {
+          "descriptor": "Full time",
+          "id": "5509c0b5959810ac0029943377d47364",
+          "count": 430
+        }
+      ]
+    },
+    {
+      "facetParameter": "locationMainGroup",
+      "values": [
+        {
+          "facetParameter": "locationHierarchy2",
+          "descriptor": "Location Type",
+          "values": [
+            {
+              "descriptor": "Office",
+              "id": "0c3f5f117e9a0101f6422f0fe79d0000",
+              "count": 425
+            },
+            {
+              "descriptor": "Remote",
+              "id": "0c3f5f117e9a0101f63dc469c3010000",
+              "count": 6
+            }
+          ]
+        },
+        {
+          "facetParameter": "locationHierarchy1",
+          "descriptor": "Locations",
+          "values": [
+            {
+              "descriptor": "Israel",
+              "id": "2fcb99c455831013ea52bbe14cf9326c",
+              "count": 417
+            },
+            {
+              "descriptor": "China",
+              "id": "2fcb99c455831013ea529fe151e3323c",
+              "count": 1
+            },
+            {
+              "descriptor": "Germany",
+              "id": "2fcb99c455831013ea52adc65f5d3254",
+              "count": 2
+            }
+          ]
+        },
+        {
+          "facetParameter": "locations",
+          "descriptor": "Sites",
+          "values": [
+            {
+              "descriptor": "Israel, Beer Sheva",
+              "id": "970bf8c909a701bb080521ddd400ae07",
+              "count": 28
+            },
+            {
+              "descriptor": "Israel, Raanana",
+              "id": "970bf8c909a7013ea54a57dcd4008107",
+              "count": 99
+            },
+            {
+              "descriptor": "Israel, Tel Aviv",
+              "id": "c7769ee377291036b08490819096b8bf",
+              "count": 228
+            },
+            {
+              "descriptor": "Israel, Tel Hai",
+              "id": "970bf8c909a7016a7d893ddcd4007c07",
+              "count": 13
+            },
+            {
+              "descriptor": "Israel, Yokneam",
+              "id": "970bf8c909a701c749f87bdcd4008607",
+              "count": 312
+            },
+            {
+              "descriptor": "China, Shanghai",
+              "id": "91336993fab910af6d710b3449b4c33e",
+              "count": 1
+            },
+            {
+              "descriptor": "China, Shenzhen",
+              "id": "91336993fab910af6d7106eea8f4c334",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "userAuthenticated": false
+}

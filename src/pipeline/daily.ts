@@ -2,10 +2,12 @@ import { eq } from "drizzle-orm";
 import { pipelineRuns } from "../db/schema.js";
 import type { Db } from "../db/types.js";
 import type { JobDiscoverer } from "../discovery/plan.js";
+import { profileJobQueries } from "../discovery/queries.js";
 import { runDiscovery, type DiscoveryOptions, type DiscoveryReport } from "../discovery/run.js";
 import type { JobSourceAdapter } from "../ingestion/adapter.js";
 import type { DedupReport } from "../ingestion/dedup.js";
 import { errorMessage } from "../ingestion/ingest.js";
+import { runSiteSearch, type JobSearchSource, type SiteSearchOptions, type SiteSearchReport } from "../ingestion/search.js";
 import { jsonLogger, runFailed, runIngestion, summarize, type IngestLogger } from "../ingestion/run.js";
 import { runDeepMatching, type DeepMatcher, type DeepMatchingReport } from "../matching/deep-match.js";
 import { runCheapMatching, type CheapMatchingReport } from "../matching/run.js";
@@ -13,6 +15,8 @@ import { runNotifications, type NotificationOptions, type NotificationReport, ty
 
 export interface DailyPipelineDeps {
   adapters: readonly JobSourceAdapter<any>[];
+  /** Job sites searched with every profile's queries, alongside web discovery. */
+  searchSources?: readonly JobSearchSource<any>[];
   /** Omitted to run only the basic board sources. */
   discoverer?: JobDiscoverer;
   matcher: DeepMatcher;
@@ -28,6 +32,7 @@ export interface DailyPipelineOptions extends NotificationOptions {
   deepMatchLimit?: number;
   deepMatchCutoffMs?: number;
   discovery?: Omit<DiscoveryOptions, "now" | "deadline"> & { cutoffMs?: number };
+  siteSearch?: Omit<SiteSearchOptions, "now" | "deadline"> & { maxQueries?: number };
   log?: IngestLogger;
 }
 
@@ -35,6 +40,7 @@ export type StageResult<T> = { ok: true; report: T } | { ok: false; error: strin
 
 export interface DailyPipelineReport {
   discovery: StageResult<DiscoveryReport> | null;
+  siteSearch: StageResult<SiteSearchReport> | null;
   ingestion: StageResult<{ sources: ReturnType<typeof summarize>[]; dedup: DedupReport; failed: boolean }>;
   cheapMatching: StageResult<CheapMatchingReport>;
   deepMatching: StageResult<DeepMatchingReport>;
@@ -43,7 +49,7 @@ export interface DailyPipelineReport {
 }
 
 /**
- * Discover → collect → normalize → deduplicate → hard filter → cheap relevance → deep match → notify. Every stage is
+ * Discover and search job sites → collect → normalize → deduplicate → hard filter → cheap relevance → deep match → notify. Every stage is
  * idempotent and runs even when an earlier one failed, so work left over from previous runs still progresses.
  */
 export async function runDailyPipeline(
@@ -78,14 +84,30 @@ export async function runDailyPipeline(
     return result;
   };
 
-  const { discoverer } = deps;
-  const discovery = discoverer
-    ? await stage(
-        "discovery",
-        () => runDiscovery(db, discoverer, deps.adapters, { ...options.discovery, now, deadline: discoveryDeadline }),
-        (r) => r.errors.some((e) => !e.scope.startsWith("page:")),
-      )
-    : null;
+  const { discoverer, searchSources } = deps;
+  const [discovery, siteSearch] = await Promise.all([
+    discoverer
+      ? stage(
+          "discovery",
+          () => runDiscovery(db, discoverer, deps.adapters, { ...options.discovery, now, deadline: discoveryDeadline }),
+          (r) => r.errors.some((e) => !e.scope.startsWith("page:")),
+        )
+      : null,
+    searchSources?.length
+      ? stage(
+          "site_search",
+          async () => {
+            const queries = await profileJobQueries(db, {
+              queriesPerUser: options.discovery?.queriesPerUser,
+              maxQueries: options.siteSearch?.maxQueries,
+              rotation: Math.floor(startedAt / 43_200_000),
+            });
+            return runSiteSearch(db, searchSources, queries, { ...options.siteSearch, now, deadline: discoveryDeadline });
+          },
+          (r) => r.sources.some((source) => source.ingest.errors > 0 && !source.blocked),
+        )
+      : null,
+  ]);
   const ingestion = await stage(
     "ingestion",
     async () => {
@@ -111,7 +133,7 @@ export async function runDailyPipeline(
     (r) => r.errors.length > 0,
   );
 
-  const report: DailyPipelineReport = { discovery, ingestion, cheapMatching, deepMatching, notifications, failed };
+  const report: DailyPipelineReport = { discovery, siteSearch, ingestion, cheapMatching, deepMatching, notifications, failed };
   log({ event: "pipeline.run", failed });
   if (runId) {
     await db

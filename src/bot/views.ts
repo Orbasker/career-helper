@@ -29,6 +29,8 @@ import type {
   PreferenceProposalView,
   ProfileReply,
   ProfileView,
+  SearchOutcome,
+  SearchStart,
   SourceCoverage,
   SourceDocumentView,
   SourceIssue,
@@ -52,7 +54,7 @@ export const mainMenu = (t: Strings) => new Keyboard().text(t.menu.whatsNew).tex
 export const ASK_LANGUAGE = "👋 Hi! Which language should I use with you?\nשלום! באיזו שפה נדבר?";
 
 export function botCommands(t: Strings) {
-  return (["new", "profile", "cvs", "applications", "sources", "sites", "connections", "language", "start", "help"] as const).map((command) => ({
+  return (["new", "search", "profile", "cvs", "applications", "sources", "sites", "connections", "language", "start", "help"] as const).map((command) => ({
     command,
     description: t.commands[command],
   }));
@@ -215,7 +217,9 @@ function provenanceSection(t: Strings, sourceUrl: string, provenance: JobProvena
   const origin =
     provenance.origin === "board"
       ? t.provenance.board(escapeHtml(shortSourceName(provenance.sourceName)))
-      : t.provenance[provenance.origin];
+      : provenance.origin === "job_site"
+        ? t.provenance.jobSite(escapeHtml(provenance.sourceName))
+        : t.provenance[provenance.origin];
   const lines = [
     t.provenance.heading,
     t.provenance.firstSeen(origin, isoDay(provenance.firstCollectedAt)),
@@ -242,6 +246,8 @@ function issueLine(t: Strings, issue: SourceIssue): string {
   switch (issue.kind) {
     case "turned_off":
       return t.jobSources.turnedOff(escapeHtml(issue.source));
+    case "blocked":
+      return t.jobSources.blocked(escapeHtml(issue.source));
     case "unreachable_boards": {
       const shown = issue.boards.slice(0, 5).map(escapeHtml).join(", ");
       const more = issue.boards.length > 5 ? t.jobSources.andMore(issue.boards.length - 5) : "";
@@ -270,6 +276,19 @@ export function sourcesView(t: Strings, overview: SourcesOverview, now = new Dat
     coverage(overview.boardCoverage),
   ];
 
+  const sites = overview.jobSites.filter((site) => site.enabled);
+  const siteSearched = sites.flatMap((site) => (site.lastCollectedAt ? [site.lastCollectedAt.getTime()] : []));
+  const jobSiteLines = sites.length
+    ? [
+        s.jobSitesHeading,
+        s.jobSites(
+          sites.map((site) => escapeHtml(site.name)).join(", "),
+          siteSearched.length ? timeAgo(t, new Date(Math.max(...siteSearched)), now) : null,
+        ),
+        coverage(overview.jobSiteCoverage),
+      ]
+    : [];
+
   const web = overview.webSearch;
   const webLines = [
     s.webHeading,
@@ -284,7 +303,7 @@ export function sourcesView(t: Strings, overview: SourcesOverview, now = new Dat
     siteLines.push(coverage(overview.siteCoverage));
   }
 
-  const sections = [s.title, boardLines.join("\n"), webLines.join("\n"), siteLines.join("\n")];
+  const sections = [s.title, boardLines.join("\n"), ...(jobSiteLines.length ? [jobSiteLines.join("\n")] : []), webLines.join("\n"), siteLines.join("\n")];
   if (overview.issues.length > 0) sections.push(`${s.problems}\n${overview.issues.map((i) => `• ${issueLine(t, i)}`).join("\n")}`);
   sections.push(s.detailsHint);
 
@@ -307,6 +326,34 @@ export function boardsViews(t: Strings, overview: SourcesOverview): View[] {
     });
   if (sections.length === 0) return [{ text: t.jobSources.noBoardsChecked }];
   return packMessages([t.jobSources.boardsListHeading, ...sections]).map((text) => ({ text }));
+}
+
+export function searchStartText(t: Strings, outcome: Exclude<SearchStart, { kind: "not_onboarded" }>, keywords: string | null): string {
+  return outcome.kind === "running" ? t.search.running : t.search.started(keywords ? escapeHtml(keywords) : null);
+}
+
+/** The search summary, then each match as its own message like /new. */
+export function searchResultViews(t: Strings, outcome: SearchOutcome): View[] {
+  const lines = [t.search.doneHeading];
+  for (const source of outcome.sources) {
+    const name = escapeHtml(source.name);
+    lines.push(
+      source.blocked
+        ? t.search.sourceBlocked(name)
+        : source.failed
+          ? t.search.sourceFailed(name)
+          : t.search.source(name, source.listed, source.added),
+    );
+  }
+  if (outcome.webPostings !== null) lines.push(t.search.web(outcome.webPostings));
+  lines.push("", outcome.matches.length ? t.search.matches(outcome.matches.length) : t.search.noMatches);
+  const views: View[] = [{ text: lines.join("\n") }, ...outcome.matches.map((match) => matchListItem(t, match))];
+  const notes = [
+    ...(outcome.remaining > 0 ? [t.search.remaining(outcome.remaining)] : []),
+    ...(outcome.pendingMatches > 0 ? [t.search.pending(outcome.pendingMatches)] : []),
+  ];
+  if (notes.length) views.push({ text: notes.join("\n") });
+  return views;
 }
 
 export function feedbackReasonView(t: Strings, feedbackId: string): { text: string; keyboard: InlineKeyboard } {

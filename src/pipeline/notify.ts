@@ -60,6 +60,8 @@ export interface NotificationOptions {
   now?: () => Date;
   threshold?: NotificationThreshold;
   digestSize?: number;
+  /** Notifies only these users. */
+  userIds?: readonly string[];
 }
 
 export interface NotificationReport {
@@ -120,6 +122,7 @@ export async function runNotifications(
         eq(users.notificationsEnabled, true),
         eq(careerProfiles.status, "confirmed"),
         notAppliedTo(),
+        options.userIds ? inArray(matches.userId, [...options.userIds]) : undefined,
       ),
     )
     .orderBy(asc(matches.createdAt), asc(matches.id));
