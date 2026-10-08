@@ -146,6 +146,11 @@ export function summarizeRun(report: Record<string, unknown> | null): string[] {
   };
   return [
     ...line("Discovery", "discovery", (r) => `${r.searches} searches, ${r.postings} postings, ${r.companies} companies, ${r.boardsAdded?.length ?? 0} boards added`),
+    ...line("Job sites", "siteSearch", (r) =>
+      ((r.sources ?? []) as { source: string; listed: number; blocked: boolean; ingest: { inserted: number; errors: number } }[])
+        .map((s) => `${s.source} ${s.blocked ? "blocked" : `${s.ingest.inserted}/${s.listed} new${s.ingest.errors ? " (errors)" : ""}`}`)
+        .join(", ") || "none",
+    ),
     ...line("Collection", "ingestion", (r) => {
       const sources = (r.sources ?? []) as { inserted: number; errors: number }[];
       const inserted = sources.reduce((sum, s) => sum + s.inserted, 0);

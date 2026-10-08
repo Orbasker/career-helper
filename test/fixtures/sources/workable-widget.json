@@ -1,0 +1,66 @@
+{
+  "name": "Rayzone Group",
+  "description": "<p>Rayzone Group delivers intelligence-based solutions.</p>",
+  "jobs": [
+    {
+      "title": "Field Systems & Integration Engineer - DDRF (Rayzone Group Subsidiary )",
+      "shortcode": "3CF7F81189",
+      "code": "",
+      "employment_type": "Full-time",
+      "telecommuting": false,
+      "department": "DDRF",
+      "url": "https://apply.workable.com/j/3CF7F81189",
+      "shortlink": "https://apply.workable.com/j/3CF7F81189",
+      "application_url": "https://apply.workable.com/j/3CF7F81189/apply",
+      "published_on": "2026-09-16",
+      "created_at": "2026-09-16",
+      "country": "Israel",
+      "city": "Tel Aviv-Yafo",
+      "state": "Tel Aviv District",
+      "education": "",
+      "experience": "",
+      "function": "",
+      "industry": "Information Technology and Services",
+      "locations": [
+        {
+          "country": "Israel",
+          "countryCode": "IL",
+          "city": "Tel Aviv-Yafo",
+          "region": "Tel Aviv District",
+          "hidden": false
+        }
+      ],
+      "description": "<p>Integrate <strong>field systems</strong>.</p><ul><li>RF experience</li></ul>"
+    },
+    {
+      "title": "Asset Management Specialist",
+      "shortcode": "C8C39F90A1",
+      "code": "",
+      "employment_type": "",
+      "telecommuting": true,
+      "department": "R&D",
+      "url": "https://apply.workable.com/j/C8C39F90A1",
+      "shortlink": "https://apply.workable.com/j/C8C39F90A1",
+      "application_url": "https://apply.workable.com/j/C8C39F90A1/apply",
+      "published_on": "2026-05-17",
+      "created_at": "2026-05-17",
+      "country": "Israel",
+      "city": "Tel Aviv-Yafo",
+      "state": "Tel Aviv District",
+      "education": "",
+      "experience": "",
+      "function": "",
+      "industry": "Information Technology and Services",
+      "locations": [
+        {
+          "country": "Israel",
+          "countryCode": "IL",
+          "city": "Tel Aviv-Yafo",
+          "region": "Tel Aviv District",
+          "hidden": false
+        }
+      ],
+      "description": "<p>Own our asset lifecycle.</p>"
+    }
+  ]
+}

@@ -3,6 +3,7 @@ import { MAX_DOCUMENT_BYTES } from "../app/documents.js";
 import type { AppServices, ApplicationView, ApplyOutcome, CvRequestOutcome, ProfileReply } from "../app/services.js";
 import { applicationLink, isApplicationsRequest, parseApplicationDetails } from "../domain/applications.js";
 import { parseCvLibraryRequest } from "../domain/cv-library.js";
+import { parseSearchRequest } from "../domain/search.js";
 import { CONVERSATION_LANGUAGES, type ConversationLanguage, type CvFileFormat } from "../domain/enums.js";
 import { DEFAULT_LANGUAGE, parseLanguageRequest } from "../domain/language.js";
 import { ALL_STRINGS, strings, type Strings } from "../i18n/index.js";
@@ -35,6 +36,8 @@ import {
   profileReplyViews,
   proposalView,
   removeDocumentView,
+  searchResultViews,
+  searchStartText,
   sitesView,
   sourcesView,
   type View,
@@ -288,6 +291,27 @@ export function createBot(
     await ctx.reply(view.text, { ...html, reply_markup: view.keyboard });
   };
   bot.command("sources", showSources);
+
+  const searchNow = async (ctx: BotContext, keywords: string | null) => {
+    const start = await services.search.start(ctx.userId, keywords);
+    if (start.kind === "not_onboarded") {
+      await ctx.reply(ctx.t.messages.notOnboarded, html);
+      return;
+    }
+    await ctx.reply(searchStartText(ctx.t, start, keywords), html);
+    if (start.kind !== "started") return;
+    await typing(ctx);
+    const outcome = await services.search.run(ctx.userId, start.searchId).catch((error) => {
+      console.error("user search failed", { searchId: start.searchId, error });
+      return null;
+    });
+    if (!outcome) {
+      await ctx.reply(ctx.t.search.failed, { ...html, reply_markup: mainMenu(ctx.t) });
+      return;
+    }
+    await sendViews(ctx, searchResultViews(ctx.t, outcome));
+  };
+  bot.command("search", (ctx) => searchNow(ctx, ctx.match.trim() || null));
   const showConnections = async (ctx: BotContext) => {
     const view = connectionsView(ctx.t, await services.connections.summary(ctx.userId));
     await ctx.reply(view.text, { ...html, reply_markup: view.keyboard ?? mainMenu(ctx.t) });
@@ -766,6 +790,11 @@ export function createBot(
     const siteRequest = siteRequestFrom(ctx.message.text);
     if (siteRequest && ctx.hasProfile) {
       await addSite(ctx, siteRequest);
+      return;
+    }
+    const searchRequest = ctx.hasProfile ? parseSearchRequest(ctx.message.text) : null;
+    if (searchRequest) {
+      await searchNow(ctx, searchRequest.keywords);
       return;
     }
     if (SOURCES_REQUEST.test(ctx.message.text)) {

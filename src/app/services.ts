@@ -52,11 +52,11 @@ export interface MatchSummary {
 }
 
 /** How a job reached us, from the user's point of view; another user's saved sites count as web search. */
-export type JobOrigin = "board" | "user_site" | "web_search" | "user_link";
+export type JobOrigin = "board" | "job_site" | "user_site" | "web_search" | "user_link";
 
 export interface JobProvenance {
   origin: JobOrigin;
-  /** The board source's name, e.g. "Greenhouse job boards". */
+  /** The source's name, e.g. "Greenhouse job boards" or "LinkedIn". */
   sourceName: string;
   /** When any copy of the job was first collected. */
   firstCollectedAt: Date;
@@ -374,8 +374,16 @@ export interface BoardSourceView {
   lastCollectedAt: Date | null;
 }
 
+/** A job site searched with the user's roles, e.g. LinkedIn. */
+export interface JobSiteSourceView {
+  name: string;
+  enabled: boolean;
+  lastCollectedAt: Date | null;
+}
+
 export type SourceIssue =
   | { kind: "turned_off"; source: string }
+  | { kind: "blocked"; source: string }
   | { kind: "unreachable_boards"; source: string; boards: string[] }
   | { kind: "collection_failed"; source: string }
   | { kind: "search_failed" }
@@ -385,6 +393,8 @@ export interface SourcesOverview {
   coverageDays: number;
   boardSources: BoardSourceView[];
   boardCoverage: SourceCoverage;
+  jobSites: JobSiteSourceView[];
+  jobSiteCoverage: SourceCoverage;
   webSearch: { enabled: boolean; lastSearchedAt: Date | null; coverage: SourceCoverage };
   sites: JobSiteView[];
   siteCoverage: SourceCoverage;
@@ -431,6 +441,41 @@ export type JobLinkOutcome =
 export interface JobLinkService {
   /** Reads the job posting at a link the user sent and matches it against their profile right away. */
   analyze(userId: string, url: string): Promise<JobLinkOutcome>;
+}
+
+/** `left` is how many more searches the user can start in the current 24 hours. */
+export type SearchStart =
+  | { kind: "started"; searchId: string; left: number }
+  | { kind: "running" }
+  | { kind: "limit"; perDay: number; nextAt: Date }
+  | { kind: "not_onboarded" };
+
+export interface SearchSourceResult {
+  name: string;
+  /** Postings the site returned for the search. */
+  listed: number;
+  /** Postings I hadn't seen before. */
+  added: number;
+  blocked: boolean;
+  failed: boolean;
+}
+
+export interface SearchOutcome {
+  sources: SearchSourceResult[];
+  /** Postings the web search found; null when it did not run. */
+  webPostings: number | null;
+  matches: MatchSummary[];
+  /** Further good matches not shown; the user sees them with /new. */
+  remaining: number;
+  /** Jobs still waiting to be assessed; they arrive in the daily digest. */
+  pendingMatches: number;
+}
+
+export interface SearchService {
+  /** Reserves one of the user's searches for the day; a user runs one search at a time. */
+  start(userId: string, keywords: string | null): Promise<SearchStart>;
+  /** Runs a started search and returns its best new matches, already marked as sent; null when the search is unknown. */
+  run(userId: string, searchId: string): Promise<SearchOutcome | null>;
 }
 
 export interface ApplicationSummary {
@@ -522,4 +567,5 @@ export interface AppServices {
   jobLinks: JobLinkService;
   documents: DocumentService;
   applications: ApplicationService;
+  search: SearchService;
 }

@@ -8,7 +8,7 @@ import { telegramBotToken } from "../src/bot/telegram-env.js";
 import { createDb } from "../src/db/client.js";
 import { discoverySettingsFromEnv } from "../src/discovery/run.js";
 import { PgModelCallRecorder } from "../src/observability/recorder.js";
-import { SOURCE_ADAPTERS } from "../src/ingestion/sources/index.js";
+import { SEARCH_SOURCES, SOURCE_ADAPTERS } from "../src/ingestion/sources/index.js";
 import { runDailyPipeline } from "../src/pipeline/daily.js";
 import { parseNotificationThreshold } from "../src/pipeline/notify.js";
 
@@ -21,6 +21,7 @@ try {
     db,
     {
       adapters: SOURCE_ADAPTERS,
+      searchSources: SEARCH_SOURCES,
       discoverer: enabled ? new AiJobDiscoverer(undefined, recorder) : undefined,
       matcher: new AiDeepMatcher(undefined, undefined, recorder),
       notifier: new TelegramNotifier(new Api(telegramBotToken())),

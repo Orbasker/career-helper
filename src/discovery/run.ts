@@ -1,4 +1,4 @@
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { loadSnapshot } from "../app/postgres/profile.js";
 import { careerProfiles, jobSources, jobs, userJobSites } from "../db/schema.js";
 import type { Db } from "../db/types.js";
@@ -45,6 +45,10 @@ export interface DiscoveryOptions {
   deadline?: Date;
   queriesPerUser?: number;
   maxPages?: number;
+  /** Searches only for these users instead of every confirmed profile. */
+  userIds?: readonly string[];
+  /** Searches for these keywords instead of the roles in the profile. */
+  keywords?: string;
 }
 
 export interface DiscoveryReport {
@@ -113,7 +117,12 @@ export async function runDiscovery(
   const profiles = await db
     .select({ userId: careerProfiles.userId })
     .from(careerProfiles)
-    .where(eq(careerProfiles.status, "confirmed"))
+    .where(
+      and(
+        eq(careerProfiles.status, "confirmed"),
+        options.userIds ? inArray(careerProfiles.userId, [...options.userIds]) : undefined,
+      ),
+    )
     .orderBy(asc(careerProfiles.createdAt));
   const found = new Map<string, Found>();
   for (const { userId } of profiles) {
@@ -126,7 +135,7 @@ export async function runDiscovery(
         .from(userJobSites)
         .where(eq(userJobSites.userId, userId))
         .orderBy(asc(userJobSites.createdAt));
-      const open = searchPlan(profile, [], options.queriesPerUser ?? DEFAULT_QUERIES_PER_USER);
+      const open = searchPlan(profile, [], options.queriesPerUser ?? DEFAULT_QUERIES_PER_USER, options.keywords);
       const plans = sites.length ? [open, { ...open, domains: sites.map((s) => s.domain) }] : [open];
       let searched = 0;
       for (const plan of plans) {

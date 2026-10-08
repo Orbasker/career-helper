@@ -2,11 +2,12 @@
 
 Code: `src/pipeline/`. Entry points: `api/cron/daily.ts` (Vercel Cron) and `bun run daily` (manual).
 
-`runDailyPipeline(db, { adapters, matcher, notifier })` runs these stages in order:
+`runDailyPipeline(db, { adapters, searchSources, matcher, notifier })` runs these stages in order:
 
 | Stage | Code | Notes |
 | --- | --- | --- |
 | Discover | `runDiscovery` (`docs/discovery.md`) | Agent web search and user sites; new postings are ingested as `web_search`, links to ATS boards become basic boards. Nothing new starts after 90s. |
+| Search job sites | `runSiteSearch` (`docs/discovery.md`) | Runs alongside discovery with the same 90s cutoff: LinkedIn, AllJobs, Drushim and JobMaster are searched with every profile's roles (up to 12 distinct queries). A blocked site is reported but doesn't fail the run. |
 | Collect, normalize, deduplicate | `runIngestion` (`docs/job-ingestion.md`) | A failing source is reported; the other sources still run. |
 | Hard filter, cheap relevance | `runCheapMatching` (`docs/matching.md`) | Only groups the user has no match for yet. |
 | Deep match | `runDeepMatching` | Up to 50 matches. No new evaluation starts more than 3.5 minutes after the run began, so notifications still go out within Vercel's 300s function timeout even after a long ingestion. |
@@ -49,6 +50,17 @@ Each user gets at most one digest per run. It lists up to 5 matches, best recomm
 **What's new?** (`/new`) shows undelivered matches first and marks them `notified`, so a match the user already saw is never pushed again.
 
 If Telegram reports that the chat can't be reached (403, e.g. the bot was blocked), the claimed matches are released and `notifications_enabled` is turned off. It turns back on the next time the user messages the bot.
+
+## Searches users start
+
+`/search` runs the same stages for one user right away (`runUserSearch`, `src/pipeline/user-search.ts`), within one webhook invocation:
+
+1. Job sites and the user's web search in parallel, nothing new after 100s.
+2. Deduplication, then cheap matching for that user.
+3. Up to 15 deep matches, nothing new after 200s.
+4. The best qualifying matches (up to 8) are claimed like a digest and sent in the chat instead of waiting for the next morning.
+
+Each user can start 2 searches in any 24 hours, one at a time (`job_searches`, `PgSearchService`). A search that throws is stored as `failed` and doesn't count; one still `running` after 10 minutes is treated as dead.
 
 ## Scheduling
 

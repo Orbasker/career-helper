@@ -34,6 +34,8 @@ export interface DeepMatchingOptions {
   limit?: number;
   /** No new evaluation starts after this time; the rest stay pending for the next run. */
   deadline?: Date;
+  /** Evaluates only these users' matches. */
+  userIds?: readonly string[];
 }
 
 export interface DeepMatchingReport {
@@ -78,6 +80,7 @@ export async function runDeepMatching(
         eq(matches.status, "pending"),
         eq(matches.stageReached, "cheap_relevance"),
         eq(careerProfiles.status, "confirmed"),
+        options.userIds ? inArray(matches.userId, [...options.userIds]) : undefined,
       ),
     )
     .orderBy(desc(matches.relevanceScore), asc(matches.createdAt), asc(matches.id))

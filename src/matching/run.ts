@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, isNull } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull } from "drizzle-orm";
 import { loadSnapshot } from "../app/postgres/profile.js";
 import { careerProfiles, duplicateGroups, jobs, matchEvaluations, matches } from "../db/schema.js";
 import type { Db } from "../db/types.js";
@@ -14,6 +14,8 @@ export interface CheapMatchingOptions {
   now?: () => Date;
   maxJobAgeDays?: number;
   relevanceThreshold?: number;
+  /** Matches only these users instead of every confirmed profile. */
+  userIds?: readonly string[];
 }
 
 export interface CheapMatchingReport {
@@ -50,7 +52,12 @@ export async function runCheapMatching(db: Db, options: CheapMatchingOptions = {
   const profiles = await db
     .select({ userId: careerProfiles.userId, revision: careerProfiles.revision })
     .from(careerProfiles)
-    .where(eq(careerProfiles.status, "confirmed"))
+    .where(
+      and(
+        eq(careerProfiles.status, "confirmed"),
+        options.userIds ? inArray(careerProfiles.userId, [...options.userIds]) : undefined,
+      ),
+    )
     .orderBy(asc(careerProfiles.createdAt));
 
   for (const { userId, revision } of profiles) {

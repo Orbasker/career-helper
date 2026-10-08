@@ -1,8 +1,10 @@
 import type { ProfileSnapshot } from "../domain/profile.js";
+import type { JobQuery } from "../ingestion/search.js";
 import type { PostingCheck } from "./page.js";
 
 export const DEFAULT_QUERIES_PER_USER = 3;
 export const DEFAULT_COUNTRY = "IL";
+const DEFAULT_PLACE = "Israel";
 
 export interface SearchPlan {
   /** Role-and-place queries, e.g. "Backend Engineer jobs Tel Aviv". */
@@ -30,31 +32,37 @@ export interface JobDiscoverer {
 
 /**
  * Builds search queries from the profile: active target roles first, otherwise the current and recent titles,
- * each paired with the user's first location must-have (or the country).
+ * each paired with the user's first location must-have (or the country). `keywords` replaces the roles.
  */
 export function searchPlan(
   profile: ProfileSnapshot,
   domains: readonly string[],
   maxQueries = DEFAULT_QUERIES_PER_USER,
+  keywords?: string,
 ): SearchPlan {
+  const active = profile.preferences.filter((p) => p.status === "active");
+  return {
+    queries: jobQueries(profile, maxQueries, keywords).map((q) => `${q.keywords} jobs ${q.location ?? DEFAULT_PLACE}`),
+    domains: [...domains],
+    avoid: unique(active.filter((p) => p.kind === "dislike").map((p) => p.label)),
+    country: DEFAULT_COUNTRY,
+  };
+}
+
+/** The roles to look for and where, for job sites searched by keywords; no location means anywhere in Israel. */
+export function jobQueries(profile: ProfileSnapshot, maxQueries = DEFAULT_QUERIES_PER_USER, keywords?: string): JobQuery[] {
   const active = profile.preferences.filter((p) => p.status === "active");
   const targetRoles = active
     .filter((p) => p.kind === "target_role")
     .flatMap((p) => (p.value.type === "terms" && p.value.terms.length ? p.value.terms : [p.label]));
   const titles = profile.experiences.map((e) => e.title);
-  const roles = unique([...targetRoles, ...(targetRoles.length ? [] : [profile.profile.headline ?? "", ...titles])]);
-
-  const location = active.flatMap((p) =>
-    p.kind === "hard_constraint" && p.value.type === "location" ? p.value.places : [],
-  )[0];
-  const place = location?.trim() || "Israel";
-
-  return {
-    queries: roles.slice(0, maxQueries).map((role) => `${role} jobs ${place}`),
-    domains: [...domains],
-    avoid: unique(active.filter((p) => p.kind === "dislike").map((p) => p.label)),
-    country: DEFAULT_COUNTRY,
-  };
+  const roles = keywords?.trim()
+    ? [keywords.trim()]
+    : unique([...targetRoles, ...(targetRoles.length ? [] : [profile.profile.headline ?? "", ...titles])]);
+  const place = active
+    .flatMap((p) => (p.kind === "hard_constraint" && p.value.type === "location" ? p.value.places : []))[0]
+    ?.trim();
+  return roles.slice(0, maxQueries).map((role) => ({ keywords: role, location: place || null }));
 }
 
 function unique(values: string[]): string[] {

@@ -1,0 +1,210 @@
+{
+ "ResultList": [
+  {
+   "SendCVButtonModel": {
+    "Text": "שלח/י קורות חיים",
+    "ExternalLink": "",
+    "ButtonLink": "https://www.drushim.co.il/sendcv.aspx?jobcode=38385437"
+   },
+   "Code": 38385437,
+   "Company": {
+    "Job2Link": false,
+    "CompanyDisplayName": "matrix (בנקאות)",
+    "ToUrl": "דרושים-4002163-ערן/",
+    "CompanyLogoLink": "https://webapi.drushim.co.il/logos/4002163/page/638838712717473511.png",
+    "HotJobLogoLink": "https://webapi.drushim.co.il/logos/4002163/page/638838712717473511.png",
+    "HotJobBannerLink": "",
+    "Code": 4002163,
+    "NameInHebrew": "matrix (בנקאות)"
+   },
+   "JobContent": {
+    "Name": "דרוש/ה מפתח/ת Backend עם ניסיון בדיגיטל",
+    "Filters": [],
+    "Salary": 0,
+    "SalaryRangeText": null,
+    "JobCode": 38385437,
+    "FullName": "דרוש/ה מפתח/ת Backend עם ניסיון בדיגיטל - 79447",
+    "Scopes": [
+     {
+      "Code": 1,
+      "NameInHebrew": "משרה מלאה"
+     },
+     {
+      "Code": 6,
+      "NameInHebrew": "היברידי"
+     }
+    ],
+    "Categories": [
+     {
+      "Link": "/jobs/cat6/",
+      "Code": 6,
+      "NameInHebrew": "הייטק-תוכנה"
+     }
+    ],
+    "Requirements": "תואר ראשון במדעי המחשב או בהנדסת תעשיה וניהול עם התמחות במערכות מידע או תואר רלוונטי אחר<br/>6 שנות ניסיון לפחות בפיתוח JAVA - חובה<br/>ניסיון עם פרויקטים בסביבת דיגיטל Mobile ו - WEB חובה<br/>ניסיון בפיתוח Microservices כולל עבודה עם SpringBoot<br/>ניסיון בעבודה עם שרת TOMCAT – יתרון",
+    "Description": "לארגון מוביל ומתקדם טכנולוגית דרוש/ה מפתח/ת Backend עם ניסיון בדיגיטל.<br/>עבודה במשרה מלאה במתכונת היברידית.<br/><br/>התפקיד כולל:<br/>כתיבת קוד עבור מגוון רכיבי צד שרת מבוססי JAVA  <br/>תמיכה בשרתי LEGACY רכיבי צד שרת מבוססי JAVA<br/>ביצוע Code Review הדדי בין מפתחים<br/>ביצוע בקרה על התוצרים<br/>בנייה ופריסה של תוצרים תוך כדי שימוש בכלי אוטומציה<br/>עבודה ב- Agile וב- Squad",
+    "Experience": {
+     "Code": 4,
+     "NameInHebrew": "5-6 שנים"
+    },
+    "Addresses": [
+     {
+      "CityId": 371,
+      "City": "חולון",
+      "CityEnglish": "\tHolon\t",
+      "GeoLexId": 539086,
+      "Longitude": 34.787384,
+      "Latitude": 32.015833,
+      "RegionIds": [
+       3
+      ]
+     },
+     {
+      "CityId": 372,
+      "City": "בת ים",
+      "CityEnglish": "\tBat Yam\t",
+      "GeoLexId": 539116,
+      "Longitude": 34.748019,
+      "Latitude": 32.013186,
+      "RegionIds": [
+       3
+      ]
+     },
+     {
+      "CityId": 376,
+      "City": "רמת גן",
+      "CityEnglish": "\tRamat Gan\t",
+      "GeoLexId": 539120,
+      "Longitude": 34.824785,
+      "Latitude": 32.068424,
+      "RegionIds": [
+       2
+      ]
+     }
+    ],
+    "DeclarationAllGenders": "משרה זו פונה לנשים וגברים כאחד.",
+    "JobBenefits": [],
+    "JobSuitabilities": []
+   },
+   "JobInfo": {
+    "Lang": 1,
+    "JumpDateString": "לפני 2 שעות",
+    "JumpDate": "2026-09-29T10:57:56.117",
+    "CanDisplayLinks": true,
+    "HasFilter": false,
+    "RecommendedStatisticsRowId": 0,
+    "SeekerJobStatus": 0,
+    "G4JobScript": null,
+    "AllowNoCV": false,
+    "Link": "/job/38385437/ddf818d5/",
+    "JobCode": 38385437,
+    "Hash": "DDF818D5",
+    "EmployerJobCode": "79447",
+    "Date": "2026-09-10T09:30:46.563",
+    "DisplayDate": "2026-10-08T10:58:55.6464042+03:00",
+    "Preferred": true,
+    "TopJob": false,
+    "IsExpired": false,
+    "STSJobCode": 30415855,
+    "Hot": false,
+    "IsClassifiedJob": false,
+    "IsCorona": false,
+    "IsRecommender": false
+   }
+  },
+  {
+   "SendCVButtonModel": {
+    "Text": "שלח/י קורות חיים",
+    "ExternalLink": "",
+    "ButtonLink": "https://www.drushim.co.il/sendcv.aspx?jobcode=38605799"
+   },
+   "Code": 38605799,
+   "Company": {
+    "Job2Link": false,
+    "CompanyDisplayName": "דאטה וויי - Dataway",
+    "ToUrl": "דרושים-4165449-דאטהוויי-dataway/",
+    "CompanyLogoLink": "https://webapi.drushim.co.il/logos/4165449/page/",
+    "HotJobLogoLink": "https://webapi.drushim.co.il/logos/4165449/page/",
+    "HotJobBannerLink": "",
+    "Code": 4165449,
+    "NameInHebrew": "דאטה וויי - Dataway"
+   },
+   "JobContent": {
+    "Name": "מפתח/ת BI (Backend & Frontend)",
+    "Filters": [],
+    "Salary": 0,
+    "SalaryRangeText": null,
+    "JobCode": 38605799,
+    "FullName": "מפתח/ת BI (Backend & Frontend) - JB-1316",
+    "Scopes": [
+     {
+      "Code": 1,
+      "NameInHebrew": "משרה מלאה"
+     }
+    ],
+    "Categories": [
+     {
+      "Link": "/jobs/cat6/",
+      "Code": 6,
+      "NameInHebrew": "הייטק-תוכנה"
+     },
+     {
+      "Link": "/jobs/cat10/",
+      "Code": 10,
+      "NameInHebrew": "הנדסה"
+     }
+    ],
+    "Requirements": "מהנדס/ת תעשיה וניהול התמחות במערכות מידע או תואר ראשון בסטטיסטיקה/הנדסת נתונים/ מדעי הנתונים<br/>ניסיון בפיתוח פתרונות BI מקצה לקצה (Backend ו-Frontend).<br/>ניסיון של לפחות 5 שנים בעבודת BI , בדגש על פיתוח ב.Power BI ובניית תשתיות בבסיסי נתונים רלציונים (ORACLE/SqlServer)<br/>ניסיון באיפיון תהליכי ETL ופיתוח אינטגרציות ביו מערכות.<br/>שליטה מלאה ב-SQL.ניסיון בכתיבת שאילתות ופרוצדורות ברמה גבוהה<br/>ידע וניסיון מעמיק ב  DAX וב.TABULAR<br/>הבנה גבוהה של מידול נתונים.<br/>ניסיון פיתוח ב-Python.<br/>יכולת לנסח בבהירות דרישות שמגיעות מהמשתמשים, לאפיין פיתרון וליישמו מקצה לקצה.<br/>היכרות עם תהליכים עסקיים בתחומי הייצור, הרכש וניהול פרויקטים - יתרון<br/>היכרות עם SAP – יתרון.<br/><br/>כישורים נוספים:<br/>ראיה והבנה תהליכית טובה.<br/>יכולת הבחנה בין עיקר לטפל<br/>כישורים אנליטיים מצוינים ויכולת לפתור בעיות מורכבות.<br/>קליטה מהירה ויכולת עבודה עצמאית.<br/>תקשורת טובה עם הצוות , המשתמשים, וספקי המידע ויכולת לתפקד בסביבה דינמית.<br/>אחריות, סדר ויכולת הובלת משימות מקצה לקצה.",
+    "Description": "למוסד בטחוני דרוש/ה מפתח/ת BI (Backend & Frontend)<br/>התפקיד כולל:<br/>אנו מחפשים מפתח/ת BI מנוסה שיצטרף/תצטרף לצוות ה-BI שלנו, עם יכולות חזקות הן בפיתוח Backend והן בפיתוח Frontend, לצד יכולת אנליטית גבוהה וחשיבה עסקית.<br/>במסגרת התפקיד, המועמד הנבחר יהיה אחראי על פיתוח ויישום פתרונות BI  בארגון באמצעות  Power BI On-Premises , פייתון וכלי AI<br/>התפקיד כולל בניית תשתית נתונים, פיתוח דוחות, שיפור תצוגות נתונים ומודלים, וביצוע אנליזות נתונים על מנת להניע החלטות עסקיות מבוססות נתונים.<br/>אחריות עיקריות:<br/>1. פיתוח דוחות ודשבורדים:<br/>יצירה ופיתוח דוחות ודשבורדים ב-Power BI לפי דרישות המשתמשים והצוותים העסקיים.<br/>בניית וויזואליזציות נתונים אינטראקטיביות ומניעות לפעולה.<br/>2. מידול הנתונים:<br/>תכנון ובניית תשתיות בבסיסי נתונים רלציונים (ORACLE/SqlServer) באמצעות SQL/Python כולל שיפורים ותחזוקה של תשתיות קיימות<br/>תכנון ובניית מודלים נתונים ב Tabular  וב Power bi Desktop<br/>ביצוע אופטימיזציה של מודלי נתונים לשיפור ביצועים.<br/>3. שימוש ב-DAX:<br/>פיתוח נוסחאות DAX  מתקדמות לצורך חישובים וסטטיסטיקות מורכבות.<br/>4.עבודה עם מקורות מידע שונים:<br/>חיבור למקורות נתונים שונים כגון SQLServer,Oracle,Text files, Excel,  והכנתם לשימוש.<br/>ניתוח והבנת הנתונים והבטחת שלמות ונכונותם.",
+    "Experience": {
+     "Code": 2,
+     "NameInHebrew": "1-2 שנים"
+    },
+    "Addresses": [
+     {
+      "CityId": 433,
+      "City": "באר יעקב",
+      "CityEnglish": "\tBeer Yaakov\t",
+      "GeoLexId": 539421,
+      "Longitude": 34.83904,
+      "Latitude": 31.943507,
+      "RegionIds": [
+       16
+      ]
+     }
+    ],
+    "DeclarationAllGenders": "משרה זו פונה לנשים וגברים כאחד.",
+    "JobBenefits": [],
+    "JobSuitabilities": []
+   },
+   "JobInfo": {
+    "Lang": 1,
+    "JumpDateString": "לפני 1 שעות",
+    "JumpDate": "2026-10-04T11:30:48.763",
+    "CanDisplayLinks": true,
+    "HasFilter": false,
+    "RecommendedStatisticsRowId": 0,
+    "SeekerJobStatus": 0,
+    "G4JobScript": null,
+    "AllowNoCV": false,
+    "Link": "/job/38605799/5c97e4d5/",
+    "JobCode": 38605799,
+    "Hash": "5C97E4D5",
+    "EmployerJobCode": "JB-1316",
+    "Date": "2026-10-04T11:30:48.763",
+    "DisplayDate": "2026-10-08T11:58:55.6464042+03:00",
+    "Preferred": true,
+    "TopJob": false,
+    "IsExpired": false,
+    "STSJobCode": 30525591,
+    "Hot": false,
+    "IsClassifiedJob": false,
+    "IsCorona": false,
+    "IsRecommender": false
+   }
+  }
+ ],
+ "TotalPagesNumber": 4,
+ "NextPageNumber": 1,
+ "TotalSearchResultCount": 52
+}

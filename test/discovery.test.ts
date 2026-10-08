@@ -254,7 +254,7 @@ describe("runDiscovery", () => {
     expect(discoverer.extracted).not.toContain("https://startup.example/careers/backend");
 
     const [greenhouse] = await db.select().from(jobSources).where(eq(jobSources.key, "greenhouse"));
-    expect(greenhouse!.config).toEqual({ boards: ["newco"] });
+    expect(greenhouse!.config).toEqual({ boards: [{ token: "newco", addedAt: expect.any(String) }] });
     const found = await db.select({ title: jobs.title, company: jobs.company, url: jobs.sourceUrl }).from(jobs).orderBy(jobs.title);
     expect(found).toEqual([
       { title: "Backend Engineer", company: "Startup Ltd", url: "https://startup.example/careers/backend" },
@@ -366,7 +366,7 @@ describe("job sites in the bot", () => {
     await send(textUpdate("/addsite job-boards.greenhouse.io/newco"));
     expect(sent()[0]!.text).toContain("company job board");
     const [greenhouse] = await db.select().from(jobSources).where(eq(jobSources.key, "greenhouse"));
-    expect(greenhouse!.config).toEqual({ boards: ["newco"] });
+    expect(greenhouse!.config).toEqual({ boards: [{ token: "newco", addedAt: expect.any(String) }] });
 
     await send(textUpdate("/sites"));
     const list = sent()[0]!;
