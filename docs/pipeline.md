@@ -60,10 +60,10 @@ If Telegram reports that the chat can't be reached (403, e.g. the bot was blocke
 3. Up to 15 deep matches, nothing new after 200s.
 4. The best qualifying matches (up to 8) are claimed like a digest and sent in the chat instead of waiting for the next morning.
 
-Each user can start 2 searches in any 24 hours, one at a time (`job_searches`, `PgSearchService`). A search that throws is stored as `failed` and doesn't count; one still `running` after 10 minutes is treated as dead.
+Users can search as often as they like, one search at a time (`job_searches`, `PgSearchService`). A search that throws is stored as `failed`; one still `running` after 10 minutes is marked `failed` so it no longer blocks a new one.
 
 ## Scheduling
 
-Vercel Cron calls `GET /api/cron/daily` at 05:00 UTC (`vercel.json`). The handler requires `Authorization: Bearer $CRON_SECRET`; Vercel sends this automatically when `CRON_SECRET` is set.
+Vercel Cron calls `GET /api/cron/daily` twice a day, at 05:00 and 15:00 UTC (`vercel.json`). The handler requires `Authorization: Bearer $CRON_SECRET`; Vercel sends this automatically when `CRON_SECRET` is set.
 
 Required Vercel env vars: `DATABASE_URL`, `TELEGRAM_BOT_TOKEN` and `CRON_SECRET`. AI Gateway authenticates with OIDC.

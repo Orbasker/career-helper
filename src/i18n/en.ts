@@ -32,7 +32,7 @@ export const en = {
     profile: "Your career profile",
     cvs: "Your CVs and the default for each language",
     applications: "Jobs you applied to and where they stand",
-    search: "Search for jobs now (twice a day)",
+    search: "Search for jobs now",
     sources: "Where I search for jobs",
     sites: "Job sites I search for you",
     connections: "Who you know at matched companies",
@@ -156,7 +156,7 @@ export const en = {
       "• Send an updated CV (PDF, DOCX or TXT) anytime — I'll show what it adds to your profile before saving anything.",
       "• /cvs — your CVs: rename, replace or remove them, and choose the default for each language",
       "• /applications — jobs you applied to: update where each one stands or add notes. Log one I didn't find with /applied",
-      "• /search — search every job site and the web for you right now (twice a day). Add words to look for something specific, e.g. <i>/search product manager</i>",
+      "• /search — search every job site and the web for you right now (I also search for you twice a day). Add words to look for something specific, e.g. <i>/search product manager</i>",
       "• /sources — where I search for jobs and what I found there",
       "• /sites — job sites I search for you (add one with /addsite example.co.il)",
       "• /connections — import your LinkedIn connections to see who you know at each company",
@@ -344,11 +344,8 @@ export const en = {
   search: {
     started: (keywords: string | null) =>
       `🔎 Searching job sites and the web for ${keywords ? `<b>${keywords}</b>` : "jobs that fit your profile"}. It takes a few minutes; I'll send what I find here.`,
-    left: (n: number) => (n === 0 ? "That was your last search for today." : `You have ${plural(n, "more search", "more searches")} today.`),
     running: "I'm already searching for you. I'll send the results here when it's done.",
-    limit: (perDay: number, when: string) =>
-      `You've used your ${perDay} searches for today. You can search again ${when}. I still search for you every morning.`,
-    failed: "Sorry, the search failed. It doesn't count toward your daily searches, so try again in a little while.",
+    failed: "Sorry, the search failed. Try again in a little while.",
     doneHeading: "<b>Search done</b>",
     source: (name: string, listed: number, added: number) => `• ${name}: ${plural(listed, "posting", "postings")}, ${added} new`,
     sourceBlocked: (name: string) => `• ${name}: blocked my search this time`,
@@ -357,9 +354,7 @@ export const en = {
     matches: (n: number) => (n === 1 ? "Here's a match that fits you:" : `Here are ${n} matches that fit you:`),
     noMatches: "No new matches that fit you this time.",
     remaining: (n: number) => `${plural(n, "more match", "more matches")} in /new.`,
-    pending: (n: number) => `I'm still assessing ${plural(n, "job", "jobs")}; good ones arrive in your daily digest.`,
-    at: (time: string) => `at ${time}`,
-    tomorrowAt: (time: string) => `tomorrow at ${time}`,
+    pending: (n: number) => `I'm still assessing ${plural(n, "job", "jobs")}; good ones arrive in your next digest.`,
   },
 
   provenance: {

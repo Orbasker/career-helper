@@ -443,11 +443,9 @@ export interface JobLinkService {
   analyze(userId: string, url: string): Promise<JobLinkOutcome>;
 }
 
-/** `left` is how many more searches the user can start in the current 24 hours. */
 export type SearchStart =
-  | { kind: "started"; searchId: string; left: number }
+  | { kind: "started"; searchId: string }
   | { kind: "running" }
-  | { kind: "limit"; perDay: number; nextAt: Date }
   | { kind: "not_onboarded" };
 
 export interface SearchSourceResult {
@@ -472,7 +470,7 @@ export interface SearchOutcome {
 }
 
 export interface SearchService {
-  /** Reserves one of the user's searches for the day; a user runs one search at a time. */
+  /** Starts a search unless one of the user's searches is still running. */
   start(userId: string, keywords: string | null): Promise<SearchStart>;
   /** Runs a started search and returns its best new matches, already marked as sent; null when the search is unknown. */
   run(userId: string, searchId: string): Promise<SearchOutcome | null>;

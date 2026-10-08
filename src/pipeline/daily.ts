@@ -100,7 +100,7 @@ export async function runDailyPipeline(
             const queries = await profileJobQueries(db, {
               queriesPerUser: options.discovery?.queriesPerUser,
               maxQueries: options.siteSearch?.maxQueries,
-              rotation: Math.floor(startedAt / 86_400_000),
+              rotation: Math.floor(startedAt / 43_200_000),
             });
             return runSiteSearch(db, searchSources, queries, { ...options.siteSearch, now, deadline: discoveryDeadline });
           },

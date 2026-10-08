@@ -58,7 +58,7 @@ A link to a Greenhouse, Lever or Ashby board is added as a basic board for every
 
 A job site is a `JobSearchSource` (`src/ingestion/search.ts`): it is searched by keywords rather than collected whole. `runSiteSearch(db, sources, queries)` runs every query on every enabled site, sites in parallel and each site's requests one at a time:
 
-1. **Queries** (`profileJobQueries`, `src/discovery/queries.ts`): the same roles and place as the web search (`jobQueries`), without repeats across users, at most 12 per daily run. A query's place is passed to the site when it can filter by it; otherwise the hard filters handle location.
+1. **Queries** (`profileJobQueries`, `src/discovery/queries.ts`): the same roles and place as the web search (`jobQueries`), without repeats across users, at most 12 per scheduled run, starting from a different profile each run. A query's place is passed to the site when it can filter by it; otherwise the hard filters handle location.
 2. **Search.** Up to 25 postings per query, newest first. A failing query is reported as `query:<keywords>` and the next one runs.
 3. **Known postings are skipped.** Postings already stored for that source (same `external_id`) are never fetched again.
 4. **Details.** Sites whose results lack the description (LinkedIn, JobMaster) fetch each new posting's page, at most 40 per site per run; the rest are counted as `deferred` and picked up next time. Pages that are gone (404/410) or closed are dropped.

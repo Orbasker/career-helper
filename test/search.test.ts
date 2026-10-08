@@ -300,8 +300,7 @@ describe("/search in the bot", () => {
     await send("/search");
 
     const replies = sent();
-    expect(replies[0]).toContain("jobs that fit your profile");
-    expect(replies[0]).toContain(en.search.left(1));
+    expect(replies[0]).toBe(en.search.started(null));
     expect(site.queries).toEqual([{ keywords: "Backend Engineer", location: null }]);
     expect(replies[1]).toContain(en.search.doneHeading);
     expect(replies[1]).toContain(en.search.source("LinkedIn", 2, 2));
@@ -313,7 +312,7 @@ describe("/search in the bot", () => {
     expect(search).toMatchObject({ userId, query: null, status: "completed" });
   });
 
-  it("searches for the keywords the user gives and allows two searches a day", async () => {
+  it("searches for the keywords the user gives and lets the user search as often as they like", async () => {
     site.results = () => [];
 
     await send("/search product manager");
@@ -321,21 +320,12 @@ describe("/search in the bot", () => {
     expect(sent()[0]).toContain("<b>product manager</b>");
     expect(sent()[1]).toContain(en.search.noMatches);
 
-    clock = new Date(NOW.getTime() + 3_600_000);
-    await send("find me jobs");
-    expect(sent()[0]).toContain(en.search.left(0));
-
-    clock = new Date(NOW.getTime() + 2 * 3_600_000);
-    await send("/search");
-    expect(sent()).toEqual([en.search.limit(2, en.search.tomorrowAt("10:00"))]);
-    expect(site.queries).toHaveLength(2);
-
-    clock = new Date(NOW.getTime() + 86_400_000);
-    await send("/search");
-    expect(site.queries).toHaveLength(3);
+    for (const text of ["find me jobs", "/search", "/search"]) await send(text);
+    expect(site.queries).toHaveLength(4);
+    expect((await db.select().from(jobSearches)).map((s) => s.status)).toEqual(["completed", "completed", "completed", "completed"]);
   });
 
-  it("runs one search at a time and does not count a failed search", async () => {
+  it("runs one search at a time per user", async () => {
     await db.insert(jobSearches).values({ userId, startedAt: new Date(NOW.getTime() - 60_000) });
     await send("/search");
     expect(sent()).toEqual([en.search.running]);
@@ -349,14 +339,11 @@ describe("/search in the bot", () => {
     expect((await db.select().from(jobSearches)).map((s) => s.status).sort()).toEqual(["completed", "failed"]);
   });
 
-  it("treats a search still running after 10 minutes as failed so it neither blocks nor counts", async () => {
-    await db.insert(jobSearches).values([
-      { userId, startedAt: new Date(NOW.getTime() - 60 * 60_000) },
-      { userId, startedAt: new Date(NOW.getTime() - 30 * 60_000), status: "completed" },
-    ]);
+  it("treats a search still running after 10 minutes as failed so it no longer blocks a new one", async () => {
+    await db.insert(jobSearches).values({ userId, startedAt: new Date(NOW.getTime() - 60 * 60_000) });
     await send("/search");
-    expect(sent()[0]).toContain(en.search.left(0));
-    expect((await db.select().from(jobSearches)).map((s) => s.status).sort()).toEqual(["completed", "completed", "failed"]);
+    expect(sent()[0]).toBe(en.search.started(null));
+    expect((await db.select().from(jobSearches)).map((s) => s.status).sort()).toEqual(["completed", "failed"]);
   });
 
   it("asks users without a profile to set one up", async () => {

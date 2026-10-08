@@ -328,24 +328,8 @@ export function boardsViews(t: Strings, overview: SourcesOverview): View[] {
   return packMessages([t.jobSources.boardsListHeading, ...sections]).map((text) => ({ text }));
 }
 
-const ISRAEL_TIME = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit" });
-const ISRAEL_DAY = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" });
-
-/** "at 14:05" today or "tomorrow at 14:05", in Israel time. */
-export function whenText(t: Strings, date: Date, now = new Date()): string {
-  const time = ISRAEL_TIME.format(date);
-  return ISRAEL_DAY.format(date) === ISRAEL_DAY.format(now) ? t.search.at(time) : t.search.tomorrowAt(time);
-}
-
-export function searchStartText(t: Strings, outcome: Exclude<SearchStart, { kind: "not_onboarded" }>, keywords: string | null, now = new Date()): string {
-  switch (outcome.kind) {
-    case "started":
-      return `${t.search.started(keywords ? escapeHtml(keywords) : null)}\n${t.search.left(outcome.left)}`;
-    case "running":
-      return t.search.running;
-    case "limit":
-      return t.search.limit(outcome.perDay, whenText(t, outcome.nextAt, now));
-  }
+export function searchStartText(t: Strings, outcome: Exclude<SearchStart, { kind: "not_onboarded" }>, keywords: string | null): string {
+  return outcome.kind === "running" ? t.search.running : t.search.started(keywords ? escapeHtml(keywords) : null);
 }
 
 /** The search summary, then each match as its own message like /new. */

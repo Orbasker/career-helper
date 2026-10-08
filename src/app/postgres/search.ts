@@ -1,18 +1,15 @@
-import { and, asc, eq, gt, lt, ne } from "drizzle-orm";
+import { and, eq, lt } from "drizzle-orm";
 import { careerProfiles, jobSearches, users } from "../../db/schema.js";
 import type { Db } from "../../db/types.js";
 import { errorMessage } from "../../ingestion/ingest.js";
 import { runUserSearch, type UserSearchDeps, type UserSearchOptions } from "../../pipeline/user-search.js";
 import type { SearchOutcome, SearchService, SearchStart } from "../services.js";
 
-export const SEARCHES_PER_DAY = 2;
-const DAY_MS = 86_400_000;
-/** A search still `running` after this long died with its function invocation, so it is marked failed and not counted. */
+/** A search still `running` after this long died with its function invocation, so it is marked failed and no longer blocks a new one. */
 const STALE_SEARCH_MS = 10 * 60_000;
 const MAX_KEYWORDS_LENGTH = 100;
 
 export interface SearchServiceOptions extends UserSearchOptions {
-  perDay?: number;
 }
 
 export class PgSearchService implements SearchService {
@@ -28,7 +25,6 @@ export class PgSearchService implements SearchService {
 
   async start(userId: string, keywords: string | null): Promise<SearchStart> {
     const now = this.now();
-    const perDay = this.options.perDay ?? SEARCHES_PER_DAY;
     return this.db.transaction(async (tx) => {
       const [profile] = await tx
         .select({ id: careerProfiles.id })
@@ -47,29 +43,17 @@ export class PgSearchService implements SearchService {
           ),
         );
 
-      const recent = await tx
-        .select({ status: jobSearches.status, startedAt: jobSearches.startedAt })
+      const [running] = await tx
+        .select({ id: jobSearches.id })
         .from(jobSearches)
-        .where(
-          and(
-            eq(jobSearches.userId, userId),
-            ne(jobSearches.status, "failed"),
-            gt(jobSearches.startedAt, new Date(now.getTime() - DAY_MS)),
-          ),
-        )
-        .orderBy(asc(jobSearches.startedAt));
-      if (recent.some((s) => s.status === "running")) {
-        return { kind: "running" };
-      }
-      if (recent.length >= perDay) {
-        return { kind: "limit", perDay, nextAt: new Date(recent[recent.length - perDay]!.startedAt.getTime() + DAY_MS) };
-      }
+        .where(and(eq(jobSearches.userId, userId), eq(jobSearches.status, "running")));
+      if (running) return { kind: "running" };
       const query = keywords?.replace(/\s+/g, " ").trim().slice(0, MAX_KEYWORDS_LENGTH) || null;
       const [search] = await tx
         .insert(jobSearches)
         .values({ userId, query, startedAt: now })
         .returning({ id: jobSearches.id });
-      return { kind: "started", searchId: search!.id, left: perDay - recent.length - 1 };
+      return { kind: "started", searchId: search!.id };
     });
   }
 
