@@ -10,6 +10,7 @@ import type { MatchRecommendation } from "../src/domain/enums.js";
 import type { JobSourceAdapter } from "../src/ingestion/adapter.js";
 import type { DeepMatcher, DeepMatchJob, DeepMatchVerdict } from "../src/matching/deep-match.js";
 import { runDailyPipeline } from "../src/pipeline/daily.js";
+import { runMatchAndNotify } from "../src/pipeline/frequent.js";
 import {
   RecipientUnavailableError,
   parseNotificationThreshold,
@@ -259,6 +260,25 @@ describe("runDailyPipeline", () => {
 
     expect(report.deepMatching).toMatchObject({ ok: true, report: { evaluated: 0 } });
     expect(report.notifications).toMatchObject({ ok: true, report: { matchesNotified: 1 } });
+  });
+
+  it("deep-matches the backlog and notifies between daily runs", async () => {
+    await createUser();
+    const daily = await run([boardAdapter(() => POSTINGS)], { deepMatchLimit: 0 });
+    expect(daily.notifications).toMatchObject({ ok: true, report: { digestsSent: 0 } });
+
+    const deps = { matcher: new TitleMatcher(VERDICTS), notifier };
+    const report = await runMatchAndNotify(db, deps, { now, log });
+
+    expect(report.failed).toBe(false);
+    expect(report.deepMatching).toMatchObject({ ok: true, report: { evaluated: 4, recommended: 3 } });
+    expect(notifier.digests).toEqual([
+      { chatId: 10, titles: ["People Operations Lead", "HR Business Partner"], remaining: 0 },
+    ]);
+
+    const again = await runMatchAndNotify(db, deps, { now, log });
+    expect(again.deepMatching).toMatchObject({ ok: true, report: { evaluated: 0 } });
+    expect(notifier.digests).toHaveLength(1);
   });
 
   it("counts matches shown by What's new? as delivered", async () => {

@@ -12,6 +12,10 @@
     {
       "path": "/api/cron/daily",
       "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/cron/match-notify",
+      "schedule": "7,22,37,52 * * * *"
     }
   ]
 }
