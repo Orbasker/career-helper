@@ -235,6 +235,28 @@ describe("scoreRelevance", () => {
     expect(scoreRelevance(other, withTarget).score).toBeGreaterThanOrEqual(scoreRelevance(other, without).score);
   });
 
+  it("ranks a long posting sharing only generic words below one whose title names a target role", () => {
+    const target = pref("target_role", { type: "terms", terms: ["HR Director"] }, { label: "HR Director" });
+    const profile = buildRelevanceProfile(hrSnapshot([target]));
+    const generic = scoreRelevance(
+      job({ title: "Engineering Manager, Analytics", description: `${PEOPLE_OPS_DESCRIPTION} `.repeat(20) }),
+      profile,
+    );
+    const hebrew = scoreRelevance(job({ title: "מנהל/ת משאבי אנוש", description: "תיאור המשרה" }), profile);
+
+    expect(generic.passed).toBe(true);
+    expect(generic.score).toBeLessThanOrEqual(0.5);
+    expect(hebrew.targetRoles).toEqual(["HR Director"]);
+    expect(hebrew.score).toBeGreaterThan(0.9);
+  });
+
+  it("does not count place names as overlap", () => {
+    const profile = buildRelevanceProfile(hrSnapshot());
+    expect(scoreRelevance(job({ title: "Backend Engineer - Tel Aviv, Israel", description: BACKEND_DESCRIPTION }), profile).matchedTerms).toEqual(
+      expect.not.arrayContaining(["tel", "aviv", "israel"]),
+    );
+  });
+
   it("damps but does not eliminate disliked titles, and rewards satisfied nice-to-haves", () => {
     const dislike = pref("dislike", { type: "terms", terms: ["recruiter"] }, { label: "Pure recruiting" });
     const remote = pref("soft_preference", { type: "work_mode", modes: ["remote"] }, { label: "Remote" });

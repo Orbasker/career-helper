@@ -2,14 +2,18 @@ import type { CareerFactKind } from "../domain/enums.js";
 import type { PreferenceSnapshot, ProfileSnapshot } from "../domain/profile.js";
 import { TITLE_ABBREVIATIONS, normalizeText } from "../ingestion/normalize.js";
 import { structuredMatch } from "./hard-filters.js";
+import { PLACE_WORDS } from "./places.js";
 import type { MatchJob } from "./types.js";
 
 export const RELEVANCE_THRESHOLD = 0.2;
 
 const TITLE_HIT_MULTIPLIER = 2;
 const SATURATION = 16;
+const UNTITLED_CAP = 0.5;
+const TITLE_SATURATION = 8;
 const TARGET_ROLE_PHRASE_BOOST = 0.35;
 const TARGET_ROLE_WORD_BOOST = 0.15;
+const TARGET_ROLE_FLOOR = 0.8;
 const SOFT_PREFERENCE_BOOST = 0.05;
 const DISLIKE_FACTOR = 0.5;
 const MAX_REPORTED_TERMS = 12;
@@ -32,6 +36,19 @@ const STOPWORDS = new Set(
     "entry junior mid senior lead principal staff head manager director vice president chief associate intern"
   ).split(" "),
 );
+
+/** Common Hebrew job-title words in the English the profile vocabulary uses, allowing for attached prefixes and gendered forms. */
+const HEBREW_TERMS: [RegExp, string][] = [
+  [/(?<=^| )[ובלהמש]?משאבי אנוש(?= |$)/g, "human resources"],
+  [/(?<=^| )[ובלהמש]?משא ן(?= |$)/g, "human resources"],
+  [/(?<=^| )[ובלהמש]?הון אנושי(?= |$)/g, "human capital"],
+  [/(?<=^| )סמנכ ל(?: ית)?(?= |$)/g, "vice president"],
+  [/(?<=^| )מנהל(?:ת| ת| ית)?(?= |$)/g, "manager"],
+  [/(?<=^| )רכז(?:ת| ת| ית)?(?= |$)/g, "coordinator"],
+  [/(?<=^| )[ובלה]?גיוס(?= |$)/g, "recruiting"],
+  [/(?<=^| )[ובלה]?אגף(?= |$)/g, "division"],
+  [/(?<=^| )חטיבתי(?:ת)?(?= |$)/g, "divisional"],
+];
 
 export interface RelevanceProfile {
   terms: Map<string, number>;
@@ -91,7 +108,9 @@ export function buildRelevanceProfile(snapshot: ProfileSnapshot): RelevanceProfi
 /**
  * Recall-oriented score in [0, 1]: overlap between the profile's vocabulary and the job's title and description,
  * boosted by target roles and satisfied soft preferences, damped by dislikes. A title that differs from past
- * roles is never penalized, so career-adjacent roles survive on description overlap alone.
+ * roles is never penalized, so career-adjacent roles survive on description overlap alone, but the score is capped by how
+ * much the title overlaps so long postings full of generic words rank below jobs whose title fits, and a title naming a
+ * target role always ranks near the top.
  */
 export function scoreRelevance(job: MatchJob, profile: RelevanceProfile, threshold = RELEVANCE_THRESHOLD): RelevanceResult {
   const titleText = ` ${expand(job.title)} `;
@@ -100,14 +119,18 @@ export function scoreRelevance(job: MatchJob, profile: RelevanceProfile, thresho
   const descriptionTerms = tokenize(job.description);
 
   let weight = 0;
+  let titleWeight = 0;
   const matched: [string, number][] = [];
   for (const [term, termWeight] of profile.terms) {
-    const hit = titleTerms.has(term) ? termWeight * TITLE_HIT_MULTIPLIER : descriptionTerms.has(term) ? termWeight : 0;
+    const inTitle = titleTerms.has(term);
+    const hit = inTitle ? termWeight * TITLE_HIT_MULTIPLIER : descriptionTerms.has(term) ? termWeight : 0;
     if (!hit) continue;
+    if (inTitle) titleWeight += hit;
     weight += hit;
     matched.push([term, hit]);
   }
   let score = 1 - Math.exp(-weight / SATURATION);
+  score = Math.min(score, UNTITLED_CAP + (1 - UNTITLED_CAP) * (1 - Math.exp(-titleWeight / TITLE_SATURATION)));
 
   const targetRoles: string[] = [];
   let roleBoost = 0;
@@ -120,7 +143,7 @@ export function scoreRelevance(job: MatchJob, profile: RelevanceProfile, thresho
     if (boost) targetRoles.push(role.label);
     roleBoost = Math.max(roleBoost, boost);
   }
-  score += roleBoost;
+  if (roleBoost) score = Math.max(score, TARGET_ROLE_FLOOR) + roleBoost;
 
   const softPreferences: string[] = [];
   for (const preference of profile.softPreferences) {
@@ -160,7 +183,7 @@ export function termForms(text: string | null | undefined): Map<string, string> 
   const forms = new Map<string, string>();
   if (!text) return forms;
   for (const word of expand(text).split(" ")) {
-    if (word.length < 2 || /^\d+$/.test(word) || STOPWORDS.has(word)) continue;
+    if (word.length < 2 || /^\d+$/.test(word) || STOPWORDS.has(word) || PLACE_WORDS.has(word)) continue;
     const term = stem(word);
     if (!forms.has(term)) forms.set(term, word);
   }
@@ -184,7 +207,7 @@ function phraseSet(preference: PreferenceSnapshot): PhraseSet {
 }
 
 function expand(text: string): string {
-  return normalizeText(text)
+  return HEBREW_TERMS.reduce((expanded, [pattern, english]) => expanded.replace(pattern, english), normalizeText(text))
     .split(" ")
     .map((word) => TITLE_ABBREVIATIONS[word] ?? word)
     .join(" ");
