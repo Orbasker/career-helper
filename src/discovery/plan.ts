@@ -60,7 +60,9 @@ export function jobQueries(profile: ProfileSnapshot, maxQueries = DEFAULT_QUERIE
     ? [keywords.trim()]
     : unique([...targetRoles, ...(targetRoles.length ? [] : [profile.profile.headline ?? "", ...titles])]);
   const place = active
-    .flatMap((p) => (p.kind === "hard_constraint" && p.value.type === "location" ? p.value.places : []))[0]
+    .flatMap((p) =>
+      p.kind === "hard_constraint" && p.value.type === "location" && !p.value.between ? p.value.places : [],
+    )[0]
     ?.trim();
   return roles.slice(0, maxQueries).map((role) => ({ keywords: role, location: place || null }));
 }

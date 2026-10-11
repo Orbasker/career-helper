@@ -17,6 +17,10 @@ export const preferenceValueSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("location"),
     places: z.array(z.string()),
+    between: z
+      .boolean()
+      .nullable()
+      .describe("true when the user gave a range, e.g. 'from Rehovot to Caesarea': places holds the two ends, anywhere between them is fine"),
     maxCommuteMinutes: z.number().int().nullable(),
   }),
   z.object({ type: z.literal("work_mode"), modes: z.array(z.enum(WORK_MODES)) }),
@@ -139,9 +143,12 @@ export type Interpretation = z.infer<typeof interpretationSchema>;
 export function toPreferenceValue(value: z.infer<typeof preferenceValueSchema>): PreferenceValue {
   switch (value.type) {
     case "location":
-      return value.maxCommuteMinutes === null
-        ? { type: "location", places: value.places }
-        : { type: "location", places: value.places, maxCommuteMinutes: value.maxCommuteMinutes };
+      return {
+        type: "location",
+        places: value.places,
+        ...(value.between ? { between: true } : {}),
+        ...(value.maxCommuteMinutes === null ? {} : { maxCommuteMinutes: value.maxCommuteMinutes }),
+      };
     case "compensation": {
       const { min, max, ...rest } = value;
       return { ...rest, ...(min === null ? {} : { min }), ...(max === null ? {} : { max }) };
