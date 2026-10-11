@@ -66,9 +66,14 @@
         padding: 14px 14px 12px;
       }
       .job-title { font-weight: 600; font-size: 16px; }
-      [dir="auto"] { unicode-bidi: plaintext; text-align: left; }
-      html[dir="rtl"] [dir="auto"]:not(.description) { text-align: right; }
+      .card [dir] { unicode-bidi: isolate; }
+      .description { text-align: start; }
+      html[dir="ltr"] .page-aligned { text-align: left; }
+      html[dir="rtl"] .page-aligned { text-align: right; }
+      input[type="search"] { text-align: start; }
+      input[type="search"]:placeholder-shown { direction: inherit; }
       .place { color: var(--hint); font-size: 14px; }
+      .place-part { display: inline-block; margin-inline-end: 0.3em; }
       .badges { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 4px; }
       .badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--bg2); }
       .badge.strong_fit { background: #1f9d55; color: #fff; }

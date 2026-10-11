@@ -10,6 +10,7 @@ import {
   type ExploreTab,
   type HoldReason,
 } from "../src/miniapp/types.js";
+import { textDirection } from "./bidi.js";
 import { WEB_STRINGS, type WebStrings } from "./strings.js";
 
 interface TelegramWebApp {
@@ -134,11 +135,12 @@ function App() {
     <main>
       <header>
         <h1>{t.title}</h1>
-        <input type="search" placeholder={t.search} value={query} onInput={(e) => setQuery(e.currentTarget.value)} />
+        <input type="search" dir="auto" placeholder={t.search} value={query} onInput={(e) => setQuery(e.currentTarget.value)} />
         <nav class="chips">
           {TABS.filter((key) => key === "matches" || counts[key] > 0).map((key) => (
             <button class={key === tab ? "chip active" : "chip"} onClick={() => choose(key)}>
-              {t.tabs[key]} <span class="count">{counts[key]}</span>
+              <bdi>{t.tabs[key]}</bdi>
+              <span class="count">{counts[key]}</span>
             </button>
           ))}
         </nav>
@@ -149,11 +151,13 @@ function App() {
       {reasons.length > 1 && (
         <nav class="chips reasons">
           <button class={reason === null ? "chip small active" : "chip small"} onClick={() => setReason(null)}>
-            {t.allReasons} <span class="count">{inTab.length}</span>
+            <bdi>{t.allReasons}</bdi>
+            <span class="count">{inTab.length}</span>
           </button>
           {reasons.map(([key, group]) => (
             <button class={key === reason ? "chip small active" : "chip small"} onClick={() => (setReason(key), setLimit(PAGE))}>
-              {t.reason(group.reason)} <span class="count">{group.count}</span>
+              <bdi>{t.reason(group.reason)}</bdi>
+              <span class="count">{group.count}</span>
             </button>
           ))}
         </nav>
@@ -207,25 +211,37 @@ function JobCard(props: {
     request.then(setDetails, () => detailsCache.delete(item.matchId));
   }, [open, item.matchId, details]);
 
-  const place = [item.company, item.location].filter(Boolean).join(" · ");
   return (
     <li class={open ? "card open" : "card"}>
       <button class="card-head" onClick={props.onToggle}>
-        <span class="job-title" dir="auto">{item.title}</span>
-        {place && <span class="place" dir="auto">{place}</span>}
+        <span class="job-title page-aligned" dir={textDirection(item.title)}>
+          {item.title}
+        </span>
+        {(item.company || item.location) && (
+          <span class="place page-aligned">
+            {[item.company, item.location]
+              .filter((part): part is string => Boolean(part))
+              .map((part, i) => (
+                <span class="place-part" key={i}>
+                  {i > 0 && "· "}
+                  <bdi>{part}</bdi>
+                </span>
+              ))}
+          </span>
+        )}
         <span class="badges">
           {item.recommendation && item.tab === "matches" && (
             <span class={`badge ${item.recommendation}`}>{t.recommendation[item.recommendation]}</span>
           )}
           {item.reasons.map((reason) => (
-            <span class="badge reason">{t.reason(reason)}</span>
+            <bdi class="badge reason">{t.reason(reason)}</bdi>
           ))}
           {item.applied && <span class="badge applied">{t.appliedDone}</span>}
           <span class="meta">
-            {item.sourceName} · {ago(item.foundAt, props.language)}
+            <bdi>{item.sourceName}</bdi> · {ago(item.foundAt, props.language)}
           </span>
         </span>
-        {item.explanation && <span class={open ? "explanation" : "explanation clamp"} dir="auto">{item.explanation}</span>}
+        {item.explanation && <span class={open ? "explanation" : "explanation clamp"} dir={textDirection(item.explanation)}>{item.explanation}</span>}
       </button>
 
       {open && (
@@ -236,7 +252,7 @@ function JobCard(props: {
           {details && (
             <section>
               <h3>{t.description}</h3>
-              <p class={fullText ? "description" : "description clamp-long"} dir="auto">{details.description}</p>
+              <p class={fullText ? "description" : "description clamp-long"} dir={textDirection(details.description)}>{details.description}</p>
               {!fullText && details.description.length > 400 && (
                 <button class="link" onClick={() => setFullText(true)}>
                   {t.readMore}
@@ -268,7 +284,7 @@ function Section(props: { title: string; lines: string[] }) {
       <h3>{props.title}</h3>
       <ul class="bullets">
         {props.lines.map((line) => (
-          <li dir="auto">{line}</li>
+          <li dir={textDirection(line)}>{line}</li>
         ))}
       </ul>
     </section>
