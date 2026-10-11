@@ -107,7 +107,7 @@ describe("profile change mapping", () => {
           kind: "hard_constraint",
           dimension: "location",
           label: "Max 40 min commute",
-          value: { type: "location", places: ["Tel Aviv"], maxCommuteMinutes: 40 },
+          value: { type: "location", places: ["Tel Aviv"], between: null, maxCommuteMinutes: 40 },
           replaces: "p1",
         },
       ],

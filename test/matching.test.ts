@@ -145,6 +145,32 @@ describe("applyHardFilters", () => {
     });
   });
 
+  it("matches any known city between the two ends of a location range", () => {
+    const range = [
+      pref("hard_constraint", { type: "location", places: ["Rehovot", "Caesarea"], between: true }, { label: "Rehovot to Caesarea" }),
+    ];
+    const passes = (location: string) => applyHardFilters(job({ location }), range).passed;
+
+    for (const location of ["Tel Aviv", "Petah Tikva", "Rishon LeTsiyon", "Ramat Gan, Givatayim, Tel Aviv", "נתניה", "Hadera", "Rehovot"]) {
+      expect(passes(location), location).toBe(true);
+    }
+    for (const location of ["Jerusalem", "Haifa, Kiryat Ata, Nazareth", "Ashdod", "Beer Sheva", "Berlin, Germany"]) {
+      expect(passes(location), location).toBe(false);
+    }
+    expect(passes("Ashdod, Ashkelon, Rishon LeTsiyon")).toBe(true);
+    expect(applyHardFilters(job({ location: "Center District, Israel" }), range).passed).toBe(true);
+    expect(applyHardFilters(job({ location: "Haifa" }), range).failures).toEqual([
+      { preferenceId: range[0]!.id, label: "Rehovot to Caesarea", reason: "located in Haifa" },
+    ]);
+  });
+
+  it("matches a city in any spelling", () => {
+    const rishon = [pref("hard_constraint", { type: "location", places: ["Rishon LeZion"] })];
+    expect(applyHardFilters(job({ location: "Rishon LeTsiyon" }), rishon).passed).toBe(true);
+    expect(applyHardFilters(job({ location: "ראשון לציון" }), rishon).passed).toBe(true);
+    expect(applyHardFilters(job({ location: "Holon" }), rishon).passed).toBe(false);
+  });
+
   it("rejects on seniority only when the title states a level", () => {
     const leadership = [pref("hard_constraint", { type: "seniority", levels: ["director", "executive"] })];
 

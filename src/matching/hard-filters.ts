@@ -2,6 +2,7 @@ import type { SeniorityLevel } from "../domain/enums.js";
 import type { PreferenceSnapshot } from "../domain/profile.js";
 import type { PreferenceValue } from "../domain/types.js";
 import { normalizeCompany, normalizeLocation, normalizeText, normalizeTitle } from "../ingestion/normalize.js";
+import { ISRAELI_CITY_NAMES, findPlace, isBetween, placesIn } from "./places.js";
 import type { MatchJob } from "./types.js";
 
 export interface ConstraintFailure {
@@ -15,35 +16,7 @@ export interface HardFilterResult {
   failures: ConstraintFailure[];
 }
 
-const CITIES_BY_COUNTRY: Record<string, string[]> = citiesByCountry({
-  israel: [
-    "tel aviv",
-    "jerusalem",
-    "haifa",
-    "herzliya",
-    "raanana",
-    "ra'anana",
-    "petah tikva",
-    "ramat gan",
-    "givatayim",
-    "bnei brak",
-    "holon",
-    "rishon lezion",
-    "rehovot",
-    "netanya",
-    "kfar saba",
-    "hod hasharon",
-    "rosh haayin",
-    "modiin",
-    "modi'in",
-    "beer sheva",
-    "be'er sheva",
-    "yokneam",
-    "caesarea",
-    "or yehuda",
-    "airport city",
-  ],
-});
+const CITIES_BY_COUNTRY: Record<string, readonly string[]> = { israel: ISRAELI_CITY_NAMES };
 
 const SENIORITY_PATTERNS: [RegExp, SeniorityLevel][] = [
   [/\b(?:intern|internship|trainee|graduate|new grad|entry level)\b/, "entry"],
@@ -84,7 +57,7 @@ export function structuredMatch(value: PreferenceValue, job: MatchJob): boolean 
     case "employment_type":
       return job.employmentType && value.types.length ? value.types.includes(job.employmentType) : null;
     case "location":
-      return locationMatch(value.places, job);
+      return locationMatch(value.places, job, value.between ?? false);
     case "seniority": {
       const levels = inferSeniority(job.title);
       return levels.length && value.levels.length ? levels.some((level) => value.levels.includes(level)) : null;
@@ -106,8 +79,11 @@ function isDislikedCompany(preference: PreferenceSnapshot, job: MatchJob): boole
   return preference.value.terms.some((term) => normalizeCompany(term) === company);
 }
 
-/** Remote postings satisfy any location; a country also covers its known cities. */
-function locationMatch(places: readonly string[], job: MatchJob): boolean | null {
+/**
+ * Remote postings satisfy any location; a country also covers its known cities. With `between`, the first two places
+ * bound a range and any known city between them qualifies.
+ */
+function locationMatch(places: readonly string[], job: MatchJob, between: boolean): boolean | null {
   const wanted = places.map(normalizeLocation).filter((place): place is string => place !== null);
   if (!wanted.length || !job.location) return null;
 
@@ -115,10 +91,18 @@ function locationMatch(places: readonly string[], job: MatchJob): boolean | null
   const text = ` ${normalizeText(job.location)} `;
   if (job.workMode === "remote" || jobPlaces.includes("remote") || text.includes(" remote ")) return true;
 
+  const mentioned = placesIn(job.location);
+  const [from, to] = between ? places.map(findPlace) : [];
+  if (from && to) {
+    if (mentioned.length) return mentioned.some((place) => isBetween(from, to, place));
+    if (text.includes(" israel ")) return null;
+  }
+
   const covers = (place: string) =>
     jobPlaces.includes(place) ||
     text.includes(` ${place} `) ||
-    (CITIES_BY_COUNTRY[place] ?? []).some((city) => jobPlaces.includes(city) || text.includes(` ${city} `));
+    mentioned.some((city) => city.name === findPlace(place)?.name) ||
+    (CITIES_BY_COUNTRY[place] ?? []).some((city) => mentioned.some((m) => m.name === city));
   return wanted.some(covers);
 }
 
@@ -135,8 +119,4 @@ function failureReason(value: PreferenceValue, job: MatchJob): string {
     default:
       return "does not match";
   }
-}
-
-function citiesByCountry(cities: Record<string, string[]>): Record<string, string[]> {
-  return Object.fromEntries(Object.entries(cities).map(([country, names]) => [country, names.map(normalizeText)]));
 }

@@ -123,6 +123,17 @@ describe("searchPlan", () => {
     });
   });
 
+  it("searches all of Israel when the location is a range", () => {
+    const plan = searchPlan(
+      profile([
+        { id: "1", kind: "target_role", dimension: "role", label: "HR Director", value: { type: "terms", terms: ["HR Director"] }, status: "active" },
+        { id: "2", kind: "hard_constraint", dimension: "location", label: "Rehovot to Caesarea", value: { type: "location", places: ["Rehovot", "Caesarea"], between: true }, status: "active" },
+      ]),
+      [],
+    );
+    expect(plan.queries).toEqual(["HR Director jobs Israel"]);
+  });
+
   it("falls back to the headline and titles in Israel, capped", () => {
     expect(searchPlan(profile([]), [], 1).queries).toEqual(["Backend Engineer – Python, AWS jobs Israel"]);
   });
