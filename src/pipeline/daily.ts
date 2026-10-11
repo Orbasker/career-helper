@@ -48,6 +48,18 @@ export interface DailyPipelineReport {
   failed: boolean;
 }
 
+/** Runs one stage, turning a throw into `{ ok: false }` so later stages still run, and logs the result. */
+export async function runStage<T>(name: string, run: () => Promise<T>, log: IngestLogger): Promise<StageResult<T>> {
+  let result: StageResult<T>;
+  try {
+    result = { ok: true, report: await run() };
+  } catch (error) {
+    result = { ok: false, error: errorMessage(error) };
+  }
+  log({ event: `pipeline.${name}`, ...result });
+  return result;
+}
+
 /**
  * Discover and search job sites → collect → normalize → deduplicate → hard filter → cheap relevance → deep match → notify. Every stage is
  * idempotent and runs even when an earlier one failed, so work left over from previous runs still progresses.
@@ -71,16 +83,8 @@ export async function runDailyPipeline(
     .catch((error) => (log({ event: "pipeline.audit_failed", error: errorMessage(error) }), null));
 
   const stage = async <T>(name: string, run: () => Promise<T>, hasErrors: (report: T) => boolean) => {
-    let result: StageResult<T>;
-    try {
-      const report = await run();
-      if (hasErrors(report)) failed = true;
-      result = { ok: true, report };
-    } catch (error) {
-      failed = true;
-      result = { ok: false, error: errorMessage(error) };
-    }
-    log({ event: `pipeline.${name}`, ...result });
+    const result = await runStage(name, run, log);
+    if (!result.ok || hasErrors(result.report)) failed = true;
     return result;
   };
 

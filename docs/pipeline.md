@@ -64,6 +64,10 @@ Users can search as often as they like, one search at a time (`job_searches`, `P
 
 ## Scheduling
 
-Vercel Cron calls `GET /api/cron/daily` twice a day, at 05:00 and 15:00 UTC (`vercel.json`). The handler requires `Authorization: Bearer $CRON_SECRET`; Vercel sends this automatically when `CRON_SECRET` is set.
+Vercel Cron calls `GET /api/cron/daily` twice a day, at 05:00 and 15:00 UTC (`vercel.json`).
+
+Between those runs, `GET /api/cron/match-notify` runs every 15 minutes (at :07, :22, :37 and :52, clear of the daily runs). It runs only the deep match and notify stages (`runMatchAndNotify`, `src/pipeline/frequent.ts`), with up to 20 deep matches per run (about $10/day at most) and the same 3.5-minute cutoff. This clears the deep-match backlog left by the daily runs, which spend most of their time budget on discovery and ingestion, and sends new matches within about 15 minutes of being evaluated. These runs are not stored in `pipeline_runs`; the endpoint returns its report and logs `event: "pipeline.match_and_notify"`.
+
+Both handlers require `Authorization: Bearer $CRON_SECRET`; Vercel sends this automatically when `CRON_SECRET` is set.
 
 Required Vercel env vars: `DATABASE_URL`, `TELEGRAM_BOT_TOKEN` and `CRON_SECRET`. AI Gateway authenticates with OIDC.
