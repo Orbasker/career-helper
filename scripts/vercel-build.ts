@@ -2,7 +2,7 @@ import { parseEnv } from "@neon/env";
 import { Api } from "grammy";
 import config from "../neon.js";
 import { registerCommands } from "../src/bot/bot.js";
-import { ALLOWED_UPDATES, WEBHOOK_PATH, telegramBotToken, webhookSecret } from "../src/bot/telegram-env.js";
+import { ALLOWED_UPDATES, WEBHOOK_PATH, miniAppUrl, telegramBotToken, webhookSecret } from "../src/bot/telegram-env.js";
 import { runMigrations } from "../src/db/migrations.js";
 
 if (process.env.VERCEL_ENV !== "production") {
@@ -22,4 +22,9 @@ const api = new Api(token);
 const url = `https://${host}${WEBHOOK_PATH}`;
 await api.setWebhook(url, { secret_token: webhookSecret(token), allowed_updates: [...ALLOWED_UPDATES] });
 await registerCommands(api);
+const appUrl = miniAppUrl();
+if (appUrl) {
+  await api.setChatMenuButton({ menu_button: { type: "web_app", text: "📋 Jobs", web_app: { url: appUrl } } });
+  console.log(`Telegram menu button opens ${appUrl}`);
+}
 console.log(`Telegram webhook set to ${url}`);

@@ -54,7 +54,7 @@ export const mainMenu = (t: Strings) => new Keyboard().text(t.menu.whatsNew).tex
 export const ASK_LANGUAGE = "👋 Hi! Which language should I use with you?\nשלום! באיזו שפה נדבר?";
 
 export function botCommands(t: Strings) {
-  return (["new", "search", "profile", "cvs", "applications", "sources", "sites", "connections", "language", "start", "help"] as const).map((command) => ({
+  return (["new", "browse", "search", "profile", "cvs", "applications", "sources", "sites", "connections", "language", "start", "help"] as const).map((command) => ({
     command,
     description: t.commands[command],
   }));
@@ -645,6 +645,11 @@ export function addSiteReply(t: Strings, outcome: AddSiteOutcome): string {
 export interface View {
   text: string;
   keyboard?: InlineKeyboard;
+}
+
+/** Opens the Mini App with every job found for the user. */
+export function browseView(t: Strings, appUrl: string): View {
+  return { text: t.messages.browse, keyboard: new InlineKeyboard().webApp(t.buttons.browse, appUrl) };
 }
 
 const bullets = (items: string[]) => items.map((i) => `• ${escapeHtml(i)}`).join("\n");

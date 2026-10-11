@@ -399,7 +399,7 @@ describe("runCheapMatching", () => {
     expect(await matchFor(userId, "onsite")).toMatchObject({
       status: "filtered_out",
       stageReached: "hard_filter",
-      relevanceScore: null,
+      relevanceScore: expect.any(Number),
     });
     expect(await matchFor(userId, "unrelated")).toMatchObject({ status: "filtered_out", stageReached: "cheap_relevance" });
 

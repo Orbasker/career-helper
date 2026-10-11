@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Jobs</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+      :root {
+        --bg: var(--tg-theme-bg-color, #ffffff);
+        --bg2: var(--tg-theme-secondary-bg-color, #f2f3f5);
+        --text: var(--tg-theme-text-color, #111111);
+        --hint: var(--tg-theme-hint-color, #8a8f98);
+        --link: var(--tg-theme-link-color, #2481cc);
+        --accent: var(--tg-theme-button-color, #2481cc);
+        --accent-text: var(--tg-theme-button-text-color, #ffffff);
+        --section: var(--tg-theme-section-bg-color, var(--bg));
+        --radius: 14px;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg2);
+        color: var(--text);
+        font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      button { font: inherit; color: inherit; cursor: pointer; }
+      main { padding: 0 12px 32px; max-width: 720px; margin: 0 auto; }
+      header { position: sticky; top: 0; z-index: 2; background: var(--bg2); padding: 12px 0 4px; }
+      h1 { font-size: 22px; margin: 4px 2px 10px; }
+      input[type="search"] {
+        width: 100%;
+        padding: 10px 14px;
+        border: none;
+        border-radius: 12px;
+        background: var(--section);
+        color: var(--text);
+        font: inherit;
+        outline: none;
+      }
+      .chips { display: flex; gap: 8px; overflow-x: auto; padding: 10px 0 6px; scrollbar-width: none; }
+      .chips::-webkit-scrollbar { display: none; }
+      .chip {
+        flex: none;
+        border: none;
+        border-radius: 999px;
+        padding: 7px 13px;
+        background: var(--section);
+        white-space: nowrap;
+      }
+      .chip.small { padding: 5px 11px; font-size: 13px; }
+      .chip.active { background: var(--accent); color: var(--accent-text); }
+      .count { opacity: 0.7; margin-inline-start: 4px; font-variant-numeric: tabular-nums; }
+      .hint { color: var(--hint); font-size: 13px; margin: 4px 4px 8px; }
+      .state { color: var(--hint); text-align: center; padding: 48px 16px; }
+      .cards { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+      .card { background: var(--section); border-radius: var(--radius); overflow: hidden; }
+      .card-head {
+        display: grid;
+        gap: 4px;
+        width: 100%;
+        text-align: start;
+        background: none;
+        border: none;
+        padding: 14px 14px 12px;
+      }
+      .job-title { font-weight: 600; font-size: 16px; }
+      [dir="auto"] { unicode-bidi: plaintext; text-align: left; }
+      html[dir="rtl"] [dir="auto"]:not(.description) { text-align: right; }
+      .place { color: var(--hint); font-size: 14px; }
+      .badges { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 4px; }
+      .badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--bg2); }
+      .badge.strong_fit { background: #1f9d55; color: #fff; }
+      .badge.good_fit { background: #2481cc; color: #fff; }
+      .badge.stretch { background: #d97706; color: #fff; }
+      .badge.applied { background: #6d28d9; color: #fff; }
+      .meta { color: var(--hint); font-size: 12px; }
+      .explanation { font-size: 14px; margin-top: 4px; }
+      .clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+      .card-body { padding: 0 14px 14px; display: grid; gap: 12px; }
+      .card-body h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--hint); margin: 0 0 4px; }
+      .bullets { margin: 0; padding-inline-start: 18px; font-size: 14px; }
+      .description { white-space: pre-line; font-size: 14px; margin: 0; }
+      .clamp-long { max-height: 9.5em; overflow: hidden; mask-image: linear-gradient(#000 70%, transparent); }
+      .link { background: none; border: none; color: var(--link); padding: 4px 0; }
+      .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+      .actions button { border: none; border-radius: 10px; padding: 9px 12px; background: var(--bg2); }
+      .actions .primary { background: var(--accent); color: var(--accent-text); }
+      .more { display: block; margin: 14px auto 0; border: none; background: var(--section); border-radius: 999px; padding: 9px 18px; }
+      .toast {
+        position: fixed;
+        inset-inline: 0;
+        bottom: 24px;
+        margin: auto;
+        width: fit-content;
+        max-width: 90%;
+        background: rgba(0, 0, 0, 0.82);
+        color: #fff;
+        padding: 9px 16px;
+        border-radius: 999px;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="%SCRIPT%"></script>
+  </body>
+</html>
