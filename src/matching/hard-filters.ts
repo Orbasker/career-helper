@@ -79,9 +79,12 @@ function isDislikedCompany(preference: PreferenceSnapshot, job: MatchJob): boole
   return preference.value.terms.some((term) => normalizeCompany(term) === company);
 }
 
+const REMOTE_WORDS = /\b(?:remote|first|fully|work from home|anywhere|hybrid)\b/g;
+
 /**
- * Remote postings satisfy any location; a country also covers its known cities. With `between`, the first two places
- * bound a range and any known city between them qualifies.
+ * Remote postings in Israel or with no stated place satisfy any location, while remote postings tied to somewhere else
+ * are left undecided. A country also covers its known cities. With `between`, the first two places bound a range and
+ * any known city between them qualifies.
  */
 function locationMatch(places: readonly string[], job: MatchJob, between: boolean): boolean | null {
   const wanted = places.map(normalizeLocation).filter((place): place is string => place !== null);
@@ -89,9 +92,12 @@ function locationMatch(places: readonly string[], job: MatchJob, between: boolea
 
   const jobPlaces = job.location.split(/[;|•/]/).map(normalizeLocation);
   const text = ` ${normalizeText(job.location)} `;
-  if (job.workMode === "remote" || jobPlaces.includes("remote") || text.includes(" remote ")) return true;
-
   const mentioned = placesIn(job.location);
+  if (job.workMode === "remote" || jobPlaces.includes("remote") || text.includes(" remote ")) {
+    const elsewhere = text.replace(REMOTE_WORDS, " ").trim();
+    return !elsewhere || mentioned.length || text.includes(" israel ") ? true : null;
+  }
+
   const [from, to] = between ? places.map(findPlace) : [];
   if (from && to) {
     if (mentioned.length) return mentioned.some((place) => isBetween(from, to, place));

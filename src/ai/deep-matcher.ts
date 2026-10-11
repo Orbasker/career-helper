@@ -13,13 +13,14 @@ import type { PreferenceSnapshot, ProfileSnapshot } from "../domain/profile.js";
 import type { FitEvidence } from "../domain/types.js";
 import { strings } from "../i18n/index.js";
 import { employerRelation } from "../matching/employer.js";
+import { structuredMatch } from "../matching/hard-filters.js";
 import { replyLanguageRule } from "./language.js";
 import { noopRecorder, tracked, type ModelCallRecorder } from "./tracking.js";
 import { isRecommended, type DeepMatcher, type DeepMatchJob, type DeepMatchVerdict } from "../matching/deep-match.js";
 
 export const DECISION_MODEL = "typesafe-ai/jev";
 export const EXPLANATION_MODEL = "anthropic/claude-sonnet-5.5";
-export const DEEP_MATCH_PROMPT_VERSION = "deep-match-v4";
+export const DEEP_MATCH_PROMPT_VERSION = "deep-match-v5";
 const MAX_DESCRIPTION_CHARS = 20_000;
 const VETO_PROBABILITY = 0.5;
 
@@ -117,7 +118,7 @@ export class AiDeepMatcher implements DeepMatcher {
   }): Promise<DeepMatchVerdict> {
     const { text: profileText, aliases } = renderProfile(profile);
     const jobText = renderJob(job);
-    const decision = await this.decide(profile, profileText, jobText, language);
+    const decision = await this.decide(profile, job, profileText, jobText, language);
 
     if (!isRecommended(decision.recommendation)) {
       return {
@@ -142,11 +143,12 @@ export class AiDeepMatcher implements DeepMatcher {
 
   private async decide(
     profile: ProfileSnapshot,
+    job: DeepMatchJob,
     profileText: string,
     jobText: string,
     language: ConversationLanguage,
   ): Promise<FitDecision> {
-    const vetoQuestions = buildVetoQuestions(profile, language);
+    const vetoQuestions = buildVetoQuestions(profile, job, language);
     const questions: Record<string, Experimental_DecisionQuestion> = {
       recommendation: { type: "choice", instructions: RECOMMENDATION_INSTRUCTIONS, criteria: RECOMMENDATIONS },
     };
@@ -175,8 +177,10 @@ export class AiDeepMatcher implements DeepMatcher {
   }
 }
 
+/** Must-haves the job's structured fields already satisfy are not asked again, so the model cannot misread them. */
 function buildVetoQuestions(
   profile: ProfileSnapshot,
+  job: DeepMatchJob,
   language: ConversationLanguage,
 ): Map<string, { question: Experimental_DecisionQuestion; veto: Veto }> {
   const t = strings(language).matching;
@@ -186,7 +190,7 @@ function buildVetoQuestions(
     questions.set(id, { question: { type: "boolean", instructions }, veto });
 
   active
-    .filter((p) => p.kind === "hard_constraint")
+    .filter((p) => p.kind === "hard_constraint" && structuredMatch(p.value, job) !== true)
     .forEach((p: PreferenceSnapshot, i) =>
       add(
         `mustHave${i + 1}`,
