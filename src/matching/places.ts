@@ -95,6 +95,13 @@ for (const [name, lat, lon, aliases] of ISRAELI_CITIES) {
 
 export const ISRAELI_CITY_NAMES: readonly string[] = [...PLACES.keys()];
 
+/** Words that only name a place, such as "tel" and "aviv", so they never count as career vocabulary. */
+export const PLACE_WORDS: ReadonlySet<string> = new Set([
+  "israel",
+  "ישראל",
+  ...ALIASES.flatMap(([alias]) => alias.split(" ")),
+]);
+
 /** The known city a place name refers to, in any spelling. */
 export function findPlace(name: string): Place | null {
   const text = normalizeText(name);
