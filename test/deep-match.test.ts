@@ -257,7 +257,7 @@ describe("AiDeepMatcher", () => {
 
     const verdict = await matcher.evaluate({ profile: snapshot, job: peopleOpsJob, language: "en" });
 
-    expect(matcher).toMatchObject({ model: "jev-mock + sonnet-mock", promptVersion: "deep-match-v4" });
+    expect(matcher).toMatchObject({ model: "jev-mock + sonnet-mock", promptVersion: "deep-match-v5" });
     expect(Object.keys(jev.calls[0]!.questions)).toEqual(["recommendation", "mustHave1", "outsidePath"]);
     expect(jev.calls[0]!.questions.mustHave1).toMatchObject({ type: "boolean" });
     expect(JSON.stringify(jev.calls[0]!.questions.mustHave1)).toContain("At least 25k ILS");
@@ -267,6 +267,30 @@ describe("AiDeepMatcher", () => {
     expect(llm.prompts[0]).not.toContain("the hiring company.</employer>");
     expect(verdict).toMatchObject({ recommendation: "good_fit", confidence: "high" });
     expect(verdict.evidence.fitEvidence[0]?.careerFactIds).toEqual(["fact-1"]);
+  });
+
+  it("does not ask about must-haves the job's structured fields already satisfy", async () => {
+    const range = {
+      id: "pref-range",
+      kind: "hard_constraint" as const,
+      dimension: "location" as const,
+      label: "Location range: Rehovot to Caesarea",
+      value: { type: "location" as const, places: ["Rehovot", "Caesarea"], between: true },
+      status: "active" as const,
+    };
+    const jev = decisionModel((options) =>
+      Object.fromEntries(
+        Object.keys(options.questions).map((id) => [id, id === "recommendation" ? choice("good_fit", 0.85) : { type: "boolean", probability: 0.1 }]),
+      ),
+    );
+    const matcher = new AiDeepMatcher(jev.model, languageModel(JSON.stringify(output())).model);
+    const profile = { ...snapshot, preferences: [...snapshot.preferences, range] };
+
+    await matcher.evaluate({ profile, job: peopleOpsJob, language: "en" });
+    await matcher.evaluate({ profile, job: { ...peopleOpsJob, location: "Remote - USA", workMode: "remote" }, language: "en" });
+
+    expect(JSON.stringify(jev.calls[0]!.questions)).not.toContain("Rehovot");
+    expect(JSON.stringify(jev.calls[1]!.questions)).toContain("Rehovot");
   });
 
   it("tells the LLM when the job is at the candidate's current employer", async () => {
