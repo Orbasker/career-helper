@@ -32,7 +32,8 @@ const EMPTY_EVIDENCE: MatchEvidence = { fitEvidence: [], gaps: [], risks: [], tr
 
 /**
  * Runs the hard-filter and cheap-relevance stages for every confirmed profile against each canonical job it has
- * not seen yet. Survivors stay `pending` at `cheap_relevance` for the deep matcher; the rest are `filtered_out`.
+ * not seen yet. Survivors stay `pending` at `cheap_relevance` for the deep matcher; the rest are `filtered_out`. Jobs a
+ * must-have blocks still get a relevance score so the user can browse the closest ones.
  */
 export async function runCheapMatching(db: Db, options: CheapMatchingOptions = {}): Promise<CheapMatchingReport> {
   const now = options.now ?? (() => new Date());
@@ -101,8 +102,8 @@ async function matchUser(
 
   const results = candidates.map((job) => {
     const hard = applyHardFilters(job, snapshot.preferences);
-    const relevance = hard.passed ? scoreRelevance(job, relevanceProfile, threshold) : null;
-    return { job, hard, relevance, passed: relevance?.passed ?? false };
+    const relevance = scoreRelevance(job, relevanceProfile, threshold);
+    return { job, hard, relevance, passed: hard.passed && relevance.passed };
   });
 
   for (let i = 0; i < results.length; i += WRITE_BATCH_SIZE) {
@@ -111,13 +112,13 @@ async function matchUser(
       const rows = await tx
         .insert(matches)
         .values(
-          batch.map(({ job, relevance, passed }) => ({
+          batch.map(({ job, hard, relevance, passed }) => ({
             userId,
             duplicateGroupId: job.groupId,
             jobId: job.jobId,
             status: passed ? ("pending" as const) : ("filtered_out" as const),
-            stageReached: relevance ? ("cheap_relevance" as const) : ("hard_filter" as const),
-            relevanceScore: relevance?.score ?? null,
+            stageReached: hard.passed ? ("cheap_relevance" as const) : ("hard_filter" as const),
+            relevanceScore: relevance.score,
           })),
         )
         .onConflictDoNothing({ target: [matches.userId, matches.duplicateGroupId] })
@@ -126,7 +127,7 @@ async function matchUser(
       const kept = batch.filter((r) => matchIds.has(r.job.groupId));
 
       const evaluations = kept.flatMap(({ job, hard, relevance }) =>
-        cheapEvaluations(matchIds.get(job.groupId)!, hard, relevance, threshold, profileRevision),
+        cheapEvaluations(matchIds.get(job.groupId)!, hard, hard.passed ? relevance : null, threshold, profileRevision),
       );
       if (evaluations.length) await tx.insert(matchEvaluations).values(evaluations);
       return kept;

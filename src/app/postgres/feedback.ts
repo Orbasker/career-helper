@@ -40,6 +40,11 @@ export class PgFeedbackService implements FeedbackService {
           .update(matches)
           .set({ status: match.notifiedAt ? "notified" : "ready" })
           .where(eq(matches.id, matchId));
+      } else if (match.status === "filtered_out" || match.status === "pending") {
+        await tx
+          .update(matches)
+          .set({ status: "notified", notifiedAt: match.notifiedAt ?? this.now() })
+          .where(eq(matches.id, matchId));
       }
       return { feedbackId: row!.id };
     });

@@ -10,6 +10,7 @@
 | `/start` (confirmed profile) | — | Welcome back + main menu. |
 | `/profile` or **👤 My profile** | `conversation.showProfile` | Current confirmed profile: roles, facts, skills, preferences. |
 | `/new` or **What's new?** | `matches.whatsNew` | Up to 5 matches with a **Details** button: undelivered `ready` matches first (best recommendation first), then recent `notified` ones. The `ready` matches shown become `notified`, so the daily digest does not repeat them. |
+| `/browse`, **📋 Browse all jobs** or the chat menu button | — | Opens the Mini App (`docs/mini-app.md`) with every job found for the user. The button sits under the last card of **What's new?** and of search results. |
 | **Details** | `matches.details` | Job, fit evidence, transferable skills, gaps, where it was found (source type, first seen, other URLs of the same job), feedback, CV and **🔗 Original posting** buttons. |
 | 👍 / 👎 | `feedback.record` | Appends feedback (repeating the latest verdict is a no-op). 👎 dismisses the match and asks what put the user off; 👍 after 👎 restores it. See `docs/feedback-learning.md`. |
 | Reason button | `feedback.addReasonTag` / `feedback.awaitReasonText` | Adds a reason tag, or waits up to 10 minutes for a typed reason. |

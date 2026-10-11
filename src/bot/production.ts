@@ -10,7 +10,7 @@ import { parseNotificationThreshold } from "../pipeline/notify.js";
 import { PgModelCallRecorder } from "../observability/recorder.js";
 import { gatewaySpend } from "../observability/report.js";
 import { createBot } from "./bot.js";
-import { adminTelegramIds } from "./telegram-env.js";
+import { adminTelegramIds, miniAppUrl } from "./telegram-env.js";
 
 /** The bot with real AI services, model-call recording and operator commands. */
 export function createProductionBot(token: string, db: Db) {
@@ -31,5 +31,8 @@ export function createProductionBot(token: string, db: Db) {
       },
     },
   );
-  return createBot(token, services, undefined, undefined, { adminTelegramIds: adminTelegramIds() });
+  return createBot(token, services, undefined, undefined, {
+    adminTelegramIds: adminTelegramIds(),
+    appUrl: miniAppUrl() ?? undefined,
+  });
 }

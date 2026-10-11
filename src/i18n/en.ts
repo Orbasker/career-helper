@@ -29,6 +29,7 @@ export const en = {
 
   commands: {
     new: "Latest job matches",
+    browse: "Browse every job I found, including near misses",
     profile: "Your career profile",
     cvs: "Your CVs and the default for each language",
     applications: "Jobs you applied to and where they stand",
@@ -61,6 +62,7 @@ export const en = {
     deleteConnections: "🗑 Delete my connections",
     analyze: "🔍 Analyze",
     showBoards: "🏢 Show boards",
+    browse: "📋 Browse all jobs",
     manageSites: "⭐ Manage my sites",
     addSite: "⭐ Add a site",
     confirmProfile: "✅ Confirm profile",
@@ -152,6 +154,7 @@ export const en = {
     help: [
       "<b>What I can do</b>",
       "• /new — your latest matches",
+      "• /browse — every job I found in one list, including the ones I held back and why",
       "• /profile — your career profile",
       "• Send an updated CV (PDF, DOCX or TXT) anytime — I'll show what it adds to your profile before saving anything.",
       "• /cvs — your CVs: rename, replace or remove them, and choose the default for each language",
@@ -166,6 +169,8 @@ export const en = {
       "• Tell me anything to update your profile (e.g. \"no more than 40 minutes commute\", \"add that I managed X\").",
     ].join("\n"),
     error: "Something went wrong on my side. Please try again in a moment.",
+    browse: "Want to see everything, including jobs I held back and why? Open the full list:",
+    browseUnavailable: "The full job list isn't available right now.",
     connectionsHowTo: [
       "<b>Import your LinkedIn connections</b>",
       "I'll show you who you know at each company I match you with.",

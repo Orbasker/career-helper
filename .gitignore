@@ -5,3 +5,4 @@ node_modules/
 .context/
 .claude/settings.local.json
 .vercel
+public/

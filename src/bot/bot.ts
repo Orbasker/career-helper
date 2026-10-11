@@ -11,6 +11,7 @@ import { decodeCallback, encodeCallback, type DocumentAction } from "./callbacks
 import {
   ASK_LANGUAGE,
   addSiteReply,
+  browseView,
   applicationCardView,
   applicationsViews,
   boardsViews,
@@ -109,6 +110,8 @@ const MENU_REPLIES = new Set<ProfileReply["kind"]>(["onboarding_done", "edit_app
 export interface BotOptions {
   /** Telegram user ids allowed to use operator commands such as /stats. */
   adminTelegramIds?: readonly number[];
+  /** The Mini App listing every job found for the user; the browse button is hidden without it. */
+  appUrl?: string;
 }
 
 export function createBot(
@@ -224,16 +227,28 @@ export function createBot(
     }
   };
 
+  const offerBrowse = async (ctx: BotContext) => {
+    if (!options.appUrl) return;
+    const view = browseView(ctx.t, options.appUrl);
+    await ctx.reply(view.text, { ...html, reply_markup: view.keyboard });
+  };
+
+  /** Puts the browse button under the last view, or sends it on its own when that view has no inline keyboard. */
+  const sendWithBrowse = async (ctx: BotContext, views: View[]) => {
+    const last = views.at(-1);
+    if (options.appUrl && last?.keyboard) last.keyboard.row().webApp(ctx.t.buttons.browse, options.appUrl);
+    await sendViews(ctx, views);
+    if (!last?.keyboard) await offerBrowse(ctx);
+  };
+
   const sendLatest = async (ctx: BotContext) => {
     const latest = await services.matches.whatsNew(ctx.userId, LATEST_MATCHES_LIMIT);
     if (latest.length === 0) {
       await ctx.reply(ctx.t.messages.noMatches, { ...html, reply_markup: mainMenu(ctx.t) });
+      await offerBrowse(ctx);
       return;
     }
-    for (const match of latest) {
-      const view = matchListItem(ctx.t, match);
-      await ctx.reply(view.text, { ...html, reply_markup: view.keyboard });
-    }
+    await sendWithBrowse(ctx, latest.map((match) => matchListItem(ctx.t, match)));
   };
 
   const analyzeJobLink = async (ctx: BotContext, link: string, several: boolean) => {
@@ -275,6 +290,10 @@ export function createBot(
 
   bot.command("help", showHelp);
   bot.command("new", sendLatest);
+  bot.command("browse", async (ctx) => {
+    if (options.appUrl) await offerBrowse(ctx);
+    else await ctx.reply(ctx.t.messages.browseUnavailable, { ...html, reply_markup: mainMenu(ctx.t) });
+  });
   bot.hears(ALL_STRINGS.map((t) => t.menu.whatsNew), sendLatest);
   bot.command("profile", showProfile);
 
@@ -309,7 +328,7 @@ export function createBot(
       await ctx.reply(ctx.t.search.failed, { ...html, reply_markup: mainMenu(ctx.t) });
       return;
     }
-    await sendViews(ctx, searchResultViews(ctx.t, outcome));
+    await sendWithBrowse(ctx, searchResultViews(ctx.t, outcome));
   };
   bot.command("search", (ctx) => searchNow(ctx, ctx.match.trim() || null));
   const showConnections = async (ctx: BotContext) => {
