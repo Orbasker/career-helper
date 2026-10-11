@@ -1,4 +1,6 @@
 {
+  "buildCommand": "bun run vercel-build",
+  "outputDirectory": "public",
   "functions": {
     "api/telegram.ts": {
       "includeFiles": "assets/fonts/**"
